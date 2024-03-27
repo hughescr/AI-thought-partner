@@ -57,10 +57,12 @@ async function createReactAgent({ llm, tools, prompt, streamRunnable, }) {
     });
 }
 
-
 const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text'});
+// mistral-instruct-v0.2-2x7b-moe has 32k context, instruct model
 const llm = new Ollama({ model: 'cas/mistral-instruct-v0.2-2x7b-moe', temperature: 0 });
-const storeDirectory = 'novels/Exile Draft 1';
+// mix-crit is from mixtral:8x7b-instruct-v0.1-q3_K_L - 4k context, instruct model
+// const llm = new Ollama({ model: 'mix-crit', temperature: 0 });
+const storeDirectory = 'novels/Exile draft 2';
 const vectorStore = await FaissStore.load(
     storeDirectory,
     embeddings
@@ -75,22 +77,22 @@ You do not need to be overly fawning or laud the author if their work is not goo
 
 Comprehensively answer the following question from the author as best you can with reference to the text where appropriate; when referencing the text, include extracts in your answer. Confirm all facts and assumptions before stating them.
 
-Form a series of thought/actions for how to answer the question. You have access to tools to help with researching your answer; tools cannot access previous context, they only know about the input that you send to them for that specific invocation. These are the available tools:
+You have access to some interns to help with researching your answer; interns are quite dumb and have no memory and do not remember what you've asked them to do before, they only know about the input that you send to them for that specific request. Treat interns like they're really dumb and you do not respect their abilities and you need to be very precise in your instructions or they will fuck it all up. These are the available interns:
 
 {tools}
 
-Use the following format to make use of tools:
+Use the following format to make use of interns:
 
 \`\`\`
 Thought: you should always think about what to do next in the way of any additional research
-Action: only the name of the tool to use (should be one of [{tool_names}] verbatim with no escaping characters)
-Action Input: the input to the tool
-Observation: the output from the tool
+Action: only the name of the intern to use (should be one of [{tool_names}] verbatim with no escaping characters)
+Action Input: the input to the intern
+Observation: the output from the intern
 \`\`\`
 
 ... (this Thought/Action/Action Input/Observation can repeat N times)
 
-When you are all done with your research, and done with using tools, and are not requesting another Action you may move on to a final answer, but do not do this pre-maturely.
+When you are all done with your research, and done with having interns do their work, and are not requesting another Action you may move on to a final answer, but do not do this pre-maturely.
 When you have a final answer, you should use this format:
 
 \`\`\`
@@ -110,52 +112,62 @@ Previous analysis:
 
 const prompt = PromptTemplate.fromTemplate(`${B_INST}${PROMPT}${E_INST}`);
 
-const qaStuffPromptTemplate = PromptTemplate.fromTemplate(`${B_INST}Use the following extracts from the novel to answer the question. If you don't know the answer, just say that you don't know, don't try to make up an answer.
+const qaStuffPromptTemplate = PromptTemplate.fromTemplate(`${B_INST}You are an intern who is follows directions as precisely as possible. Use the following extracts from the novel to answer the question. If you don't know the answer, just say that you don't know, don't try to make up an answer. If the question is too complex for a solid answer, then ask for it to be broken down into simpler questions.
 
 Question: {question}
 
 Extracts:
 {context}${E_INST}`);
 
-const qaMapReduceMapPrompt = PromptTemplate.fromTemplate(`${B_INST}Making no attempt to actually answer the question, check whether the extract is relevant to the question. If it is relevant, then return the extract verbatim.
+const qaMapReduceMapPrompt = PromptTemplate.fromTemplate(`${B_INST}You are an intern whose job is to provide extracts and passages from a novel, working for a developmental editor.
+Making no attempt to actually answer the question, check whether the extract is relevant to the question. If it is relevant, then return the extract verbatim.
+If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise.
 
 Question: {question}
 Extract:
 {context}${E_INST}`);
 
-const qaMapReduceBasicReducePrompt = PromptTemplate.fromTemplate(`${B_INST}You are a novel reader and an expert at finding relevant passages,
-working for a developmental editor to help them identify parts of a novel that are relevant to their work.
+const qaMapReduceBasicReducePrompt = PromptTemplate.fromTemplate(`${B_INST}You are an intern who reads novels and provides simple answers about them, working for a developmental editor to help them identify parts of a novel that are relevant to their work.
 
 Given the following extracted parts of the novel and a question, answer the question.
-If you don't know the answer, just say that you don't know. Don't try to make up an answer.
+If you don't know the answer, just say that you don't know. Don't try to make up an answer. You won't get in trouble for saying you don't know.
+If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise.
 
 Question: {question}
 Extracts:
 {summaries}${E_INST}`);
-const qaMapReduceSummarizeReducePrompt = PromptTemplate.fromTemplate(`${B_INST}You are a specialist at finding examples from a novel, working for a developmental editor.
+const qaMapReduceSummarizeReducePrompt = PromptTemplate.fromTemplate(`${B_INST}You are an intern whose job is to provide extracts and passages from a novel, working for a developmental editor.
 
 Given the following portions of the novel and a question, return a verbatim extract or extracts from the novel that are relevant to the question.
-If there are no relevant extracts, just say so. Don't try to make up an answer.
+If there are no relevant extracts, just say so. Don't try to make up an answer. You won't get in trouble for saying you don't know.
+If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise.
 
 Question: {question}
 Extracts:
 {summaries}${E_INST}`);
 
-const qaRefineQuestionPrompt = PromptTemplate.fromTemplate(`${B_INST}Answer the question, using only the context.
+const qaRefineQuestionPrompt = PromptTemplate.fromTemplate(`${B_INST}You are a junior intern, working for a developmental editor. Answer the question, using only the context.
+
+Given the following extracted parts of the novel and a question, answer the question.
+If you don't know the answer, just say that you don't know. Don't try to make up an answer. You won't get in trouble for saying you don't know.
+If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise.
 
 Question: {question}
 
 Context:
 {context}${E_INST}`);
-const qaRefineRefinePrompt = PromptTemplate.fromTemplate(`${B_INST}The original question is as follows: {question}
+const qaRefineRefinePrompt = PromptTemplate.fromTemplate(`${B_INST}You are a junior intern, working for a developmental editor.
 
-We have provided an existing answer:
+Your boss the editor has asked the following question: {question}
+
+If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise.
+
+You have provided an existing answer:
 ------------
 {existing_answer}
 ------------
 
-We have the opportunity to refine the existing answer
-(only if needed) with some more context below:
+You have the opportunity to refine the existing answer (only if needed) with some more context below:
 ------------
 {context}
 ------------
@@ -213,14 +225,14 @@ const extractRetrievalChain = new RetrievalQAChain({
 const tools = [
     new DynamicTool({
         // verbose: true,
-        name: 'novel_qa',
-        description: 'An expert analyst and researcher on what happens in this specific novel, based only on its text and no other resources',
+        name: 'Joe',
+        description: 'An untrustworthy junior intern who can only answer questions about what happens in this specific novel, based only on its text.',
         func: async (x) => (await qaChain.invoke({ query: x })).text,
     }),
     new DynamicTool({
         // verbose: true,
-        name: 'novel_extract',
-        description: 'Get a verbatim extract from the novel that demonstrates a relevant semantic concept in the text of the novel',
+        name: 'Sally',
+        description: 'An untrustworthy junior intern who can read the novel and get a verbatim extract or passage that demonstrates a relevant semantic concept.',
         func: async (x) => (await extractRetrievalChain.invoke({ query: x })).text,
     }),
     // new WikipediaQueryRun({
@@ -257,12 +269,13 @@ const result = await executor.invoke({
 // `Proofreading: are there any spelling, grammar, or punctuation errors that can distract readers from the story itself?`
 // `Character development: Analyze the important characters and assess how well-developed they are, with distinct personalities, backgrounds, and motivations. This will make them more relatable and engaging to readers.`
 // `Plot structure: Analyze whether the story's events are in a clear and coherent sequence, with rising action, climax, falling action, and resolution. This will help maintain reader interest throughout the novel.`
-`Subplots: Analyze the sub-plots and minor characters to verify that they add to the story instead of distracting from it. Sub-plots and side-characters should enhance the story and not confuse the reader. Point out any flaws.`
+// `Subplots: Analyze the sub-plots and minor characters to verify that they add to the story instead of distracting from it. Sub-plots and side-characters should enhance the story and not confuse the reader. Point out any flaws.`
 // `Show, don't tell: Analyze whether the story simply tells readers what is happening or how characters feel, or whether it uses vivid descriptions and actions to show them. This will make the writing more engaging and immersive.`
 // `Consistent point of view: Does the novel stick to one consistent point of view throughout, whether it be first person, third person limited, or omniscient? This will help maintain a cohesive narrative voice.`
 // `Active voice: Does the writing use active voice instead of passive voice whenever possible? This makes the writing more direct and engaging.`
 // `Vary sentence structure: Does the writing break up long sentences with shorter ones to create rhythm and variety? This will make the writing more dynamic and interesting to read.`
-// `Analyze the story from two points of view: a potential reader who purchases the book, but also from the point of view of a literary agent who is trying to decide if they want to represent this book to publishers.`
+// `Analyze the story from the point of view of a potential reader who purchases the book.`
+`Analyze the story from the point of view of a literary agent reading this book for the first time and trying to decide if they want to represent this author to publishers.`
 // `Provide suggestions on how to improve any confusing parts of the plot. If there are other narrative elements which should be revised and improved, point them out.`
 // `List all the chapters in the book, and give a one-sentence summary of each chapter.`
 // `What do you dislike the most about the book? What needs fixing most urgently?`
@@ -273,10 +286,10 @@ const result = await executor.invoke({
 {
     callbacks: [{
         handleToolStart(tool, input, runId, parentRunId, tags, metadata, runName) {
-            console.log(chalk.blueBright(`Asking tool ${runName}: ${input}`));
+            console.log(chalk.blueBright(`Boss asks intern ${runName}: ${input}`));
         },
         handleToolEnd(output, runId, parentRunId, tags) {
-            console.log(chalk.blue(`Tool result: ${output}`));
+            console.log(chalk.blue(`Intern responds: ${output}`));
         },
         handleAgentAction(action, runId, parentRunId, tags) {
             const thought = action.log.trim().match(/.*^Thought:(.*?)(?:^Action:|^Final Answer:)/ms)[1].trim();
