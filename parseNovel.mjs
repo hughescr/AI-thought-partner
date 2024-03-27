@@ -5,7 +5,7 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { inspect } from 'node:util';
 import cliProgress from 'cli-progress';
 
-const book = 'Exile Draft 1';
+const book = 'Exile draft 2';
 
 const loader = new TextLoader(`novels/${book}.txt`);
 const docs = await loader.load();
