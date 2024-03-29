@@ -1,23 +1,24 @@
 import { OllamaEmbeddings } from '@langchain/community/embeddings/ollama';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
+import { PDFLoader } from "langchain/document_loaders/fs/pdf";
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { inspect } from 'node:util';
 import cliProgress from 'cli-progress';
 
-const book = 'Exile draft 2';
+const book = 'Fighters_pages';
 
-const loader = new TextLoader(`novels/${book}.txt`);
+const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: false, });
 const docs = await loader.load();
 
 const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 2048,
+    chunkSize: 4096,
     chunkOverlap: 128,
 });
 
 const splits = await splitter.splitDocuments(docs);
 
-const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', requestOptions: { numGpu: 1 }});
+const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048 });
 
 let vectorStore;
 
