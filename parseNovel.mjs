@@ -6,14 +6,15 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { inspect } from 'node:util';
 import cliProgress from 'cli-progress';
 
-const book = 'Fighters_pages';
+const book = 'Christmas Town draft 2';
 
-const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: false, });
+// const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: false, });
+const loader = new TextLoader(`novels/${book}.txt`);
 const docs = await loader.load();
 
 const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 4096,
-    chunkOverlap: 128,
+    chunkSize: 1024,
+    chunkOverlap: 64,
 });
 
 const splits = await splitter.splitDocuments(docs);
