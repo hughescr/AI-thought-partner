@@ -4,6 +4,7 @@ import { OllamaEmbeddings } from '@langchain/community/embeddings/ollama';
 import { Ollama } from '@langchain/community/llms/ollama';
 import { Bedrock } from "@langchain/community/llms/bedrock";
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
+import { HydeRetriever } from "langchain/retrievers/hyde";
 
 import { RetrievalQAChain, MapReduceDocumentsChain, StuffDocumentsChain, LLMChain, loadQARefineChain, loadQAStuffChain } from 'langchain/chains';
 import { DynamicTool } from '@langchain/core/tools';
@@ -16,6 +17,8 @@ import { RunnablePassthrough, RunnableSequence, } from "@langchain/core/runnable
 import { renderTextDescription } from "langchain/tools/render";
 import { ReActSingleInputOutputParser } from "./node_modules/langchain/dist/agents/react/output_parser.js";
 import { RunnableSingleActionAgent } from "./node_modules/langchain/dist/agents/agent.js";
+
+const [B_INST, E_INST] = ['<s> [INST]', '[/INST]'];
 
 function formatLogToString(intermediateSteps, observationPrefix = "Observation: ", llmPrefix = "Thought: ") {
     const formattedSteps = intermediateSteps.reduce((thoughts, { action, observation }) => thoughts +
@@ -55,7 +58,7 @@ async function createReactAgent({ llm, tools, prompt, streamRunnable, }) {
     });
 }
 
-const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048 });
+const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048, baseUrl: 'http://127.0.0.1:11435' });
 
 // Mistral 7b-instruct in the cloud on amazon - cheap and fast, but not so smrt; 32k context 8k outputs
 // const llm = new Bedrock({
@@ -66,10 +69,10 @@ const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 204
 // });
 
 // mistral-instruct-v0.2-2x7b-moe has 32k context, instruct model
-const llm = new Ollama({ model: 'cas/mistral-instruct-v0.2-2x7b-moe', temperature: 0, numCtx: 32768 });
+// const llm = new Ollama({ model: 'cas/mistral-instruct-v0.2-2x7b-moe', temperature: 0, numCtx: 32768 });
 
 // mix-crit is from mixtral:8x7b-instruct-v0.1-q3_K_L - 32k context, instruct model
-// const llm = new Ollama({ model: 'mix-crit', temperature: 0, numCtx: 32768 });
+const llm = new Ollama({ model: 'mix-crit', temperature: 0, numCtx: 32768 });
 
 // Same guy, but in the cloud - faster but more $
 // const llm = new Bedrock({
@@ -79,29 +82,39 @@ const llm = new Ollama({ model: 'cas/mistral-instruct-v0.2-2x7b-moe', temperatur
 //     maxTokens: 4096,
 // });
 
-const storeDirectory = 'novels/Exile draft 2';
+const storeDirectory = 'novels/Christmas Town draft 2';
 // const storeDirectory = 'novels/Fighters_pages';
 const vectorStore = await FaissStore.load(
     storeDirectory,
     embeddings
 );
 
-const [B_INST, E_INST] = ['<s>[INST]', '[/INST]'];
+// const retriever = vectorStore.asRetriever({ k: 15 });
+const retriever = new HydeRetriever({
+    // verbose: true,
+    vectorStore,
+    llm,
+    k: 90,
+    promptTemplate: PromptTemplate.fromTemplate(`${B_INST}Provide 3 alternate phrasings of the question, and then write a passage to answer the question.
+Question: {question}${E_INST}`)
+});
+
 const PROMPT = `You are a professional developmental editor, working for the author of a novel to help them improve drafts of their unpublished novel before they submit it to literary agents hoping to get published.
 
-The author will not see anything except for your final answer. Everything else is just internal work which they won't see.
+The author will not see anything except for your final answer. Everything else is just internal work which they won't see - if you want them to see it, include it in your final answer.
 
 You can assume that the author is intimately familiar with the entire novel that they wrote. Your access to the novel is only through your interns though - you are too important to read it directly yourself.
 
-You do not need to be overly fawning or laud the author if their work is not good; find the book's flaws when they exist, and help fix them.
+Find the book's flaws when they exist, and help fix them - that is the whole point. Analyze any flaws rigorously.
 
-Comprehensively answer the following question from the author as best you can with reference to the text where appropriate; when referencing the text, include extracts in your answer. Confirm all facts and assumptions through your interns before stating them. When you quote from the novel text, use triple-backticks around the quote like this:
+Comprehensively answer the following question from the author as best you can with reference to the text where appropriate; when referencing the text, include extracts in your answer. Confirm all facts and assumptions through your interns before stating them - ask follow-up questions when appropriate. When you quote from the novel text, include an XML tag around it like:
 
-\`\`\`
-<here is the text from the novel>
-\`\`\`
+<quote>
+[actual quote from the novel here]
+</quote>
 
-You have interns to help with researching your answer; interns are quite dumb and have no memory and do not remember what you've asked them to do before, they only know about the question that you send to them for that specific request - so make the questions long and detailed an include all the context that they need within the question. Interns like long detailed questions, the longer and the more detailed, the better! They will also not read the entire novel, but only some sections of it which seem semantically relevant to your question. There is no real way to reference which sections. If you ask an intern the same question multiple times, you will get exactly the same answer each time. Rephrase the question to get different answers. These are the available interns:
+You have interns to help with researching your answer; interns do not remember what you've asked them to do before, they only know about the question that you send to them for that specific request. Interns also are terrible at answering multi-part questions. So ask one simple question, get the response, then ask another question, instead of combining questions together in one query.
+Interns like long precisely worded questions, the longer and the more precisely worded, the better! They will also not read the entire novel, but only some sections of it which seem semantically relevant to your question. There is no real way to reference which sections. If you ask an intern the same question multiple times, you will get exactly the same answer each time. Rephrase the question to get different answers. These are the available interns:
 
 {tools}
 
@@ -109,7 +122,7 @@ Use the following format to make use of interns:
 
 \`\`\`
 Thought: you should always think about what to do next in the way of any additional research
-Action: only the name of the intern to use (should be one of [{tool_names}] verbatim with no escaping characters)
+Action: only the name of the intern to use (should be one of [{tool_names}] verbatim with no escaping characters, omit if not requesting an Action)
 Action Input: the input to the intern
 Observation: the output from the intern (wait for the intern to respond)
 \`\`\`
@@ -161,6 +174,45 @@ I didn't really understand that question, it's too complex. Could you break it d
 Editor's question: {question}
 
 Extracts:
+{context}${E_INST}`);
+
+const extractStuffPromptTemplate = PromptTemplate.fromTemplate(`${B_INST}You are an intern whose job is to provide a single verbatim extract or passage from a novel, working for a developmental editor.
+
+Given the following extracts of the novel and a question, return a condensed extract from the novel that is the most relevant to the question.
+
+Make it clear this is only one single extract, and there might be others that are relevant, but you're lazy so you're only returning one. Let your boss know that they can ask for other extracts because you only provide one at a time.
+
+If there are no relevant extracts, just say so. Don't try to make up an answer. You won't get in trouble for saying you don't know, and the correct answer in that case is that you do not know. You can do that by responding like this (omitting any extract), for example:
+
+\`\`\`
+SORRY: I could not find any relevant extract, sorry! Perhaps try re-phrasing the question?
+\`\`\`
+
+If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise - dont give a half-assed answer. You are encouraged to learn by asking questions back to your boss. You can do that by responding like this (omitting any extract), for example:
+
+\`\`\`
+SORRY: The question is vague, so I'm not sure how to answer it. Please could you be more precise in what you'd like me to find?
+\`\`\`
+
+If you are asked for more than one extract or the extract you choose does not cover the entire question, then let your boss know that you can only provide one extract at a time, and for further extracts, they should rephrase the question (and that you are only including a single extract), for example:
+
+\`\`\`
+SORRY: I can only provide a single extract, but you asked for more than one. Please ask for only one at a time, and rephrase the question each time to get more.
+My commentary: Reason for choosing this extract, and explanations of whom the pronouns in the extract refer to if it's not obvious
+Verbatim extract: The single most relevant short extract goes here
+\`\`\`
+
+When you find an appropriate extract, you should include your own commentary on the extract, along with the verbatim text, for example:
+
+\`\`\`
+My commentary: Reason for choosing this extract, and explanations of whom the pronouns in the extract refer to if it's not obvious
+Verbatim extract: put the novel extract itself here
+\`\`\`
+
+When there is an appropriate extract, always return it as demonstrated above. Do not forget to include the actual extract from your response when there is one.
+
+Question: {question}
+Extracts to choose from:
 {context}${E_INST}`);
 
 const mapReduceMapPrompt = PromptTemplate.fromTemplate(`${B_INST}You are an intern who follows directions as precisely as possible, working for a developmental editor.
@@ -254,7 +306,7 @@ If the context isn't useful, return the original answer.${E_INST}`);
 
 const qaChain = new RetrievalQAChain({
     // verbose: true,
-    retriever: vectorStore.asRetriever(25),
+    retriever,
     // combineDocumentsChain: loadQAMapReduceChain(llm, {
     //     verbose: true,
     //     combineMapPrompt: mapReduceMapPrompt,
@@ -302,16 +354,16 @@ function loadQAMapReduceChain(llm, params = {}) {
 
 const extractRetrievalChain = new RetrievalQAChain({
     // verbose: true,
-    retriever: vectorStore.asRetriever(20),
+    retriever,
 
-    combineDocumentsChain: loadQAMapReduceChain(llm, {
-        // verbose: true,
-        combineMapPrompt: mapReduceMapPrompt,
-        combinePrompt: mapReduceExtractReducePrompt,
-        ensureMapStep: false,
-        maxTokens: 28000, // Leave some headroom for instructions, etc
-        maxIterations: 1,
-    }),
+    // combineDocumentsChain: loadQAMapReduceChain(llm, {
+    //     // verbose: true,
+    //     combineMapPrompt: mapReduceMapPrompt,
+    //     combinePrompt: mapReduceExtractReducePrompt,
+    //     ensureMapStep: false,
+    //     maxTokens: 28000, // Leave some headroom for instructions, etc
+    //     maxIterations: 5,
+    // }),
 
     // combineDocumentsChain: loadQARefineChain(llm, {
     //     verbose: true,
@@ -319,10 +371,10 @@ const extractRetrievalChain = new RetrievalQAChain({
     //     refinePrompt: refineQARefinePrompt,
     // }),
 
-    // combineDocumentsChain: loadQAStuffChain(llm, {
-    //     verbose: true,
-    //     prompt: qaStuffPromptTemplate,
-    // }),
+    combineDocumentsChain: loadQAStuffChain(llm, {
+        // verbose: true,
+        prompt: extractStuffPromptTemplate,
+    }),
 
     llm,
 });
@@ -337,7 +389,7 @@ const tools = [
     new DynamicTool({
         // verbose: true,
         name: 'Sally Extractor',
-        description: 'A junior intern who can read the novel and provide a single short extract that demonstrates a relevant semantic concept. She will let you know if she thinks there are problems with her answer. She is best for very specific extracts about specific details. If you need multiple extracts, you should ask her for only one at a time, and ask her multiple times with rephrased questions each time.',
+        description: 'A junior intern who can read the novel and provide a single short extract per invocation that demonstrates a relevant semantic concept. She will let you know if she thinks there are problems with her answer. She is best for very specific extracts about specific details. If you need multiple extracts, you should ask her for only one at a time, and ask her multiple times with rephrased questions each time.',
         func: async (x) => (await extractRetrievalChain.invoke({ query: x })).text,
     }),
     // new WikipediaQueryRun({
@@ -369,6 +421,8 @@ const internLookup = {};
 const input = // `What do you think of this novel?`
     // `Identify sentences which are too long or complex and are hard to understand.`
     // `What would be a good, engaging title for this novel?`
+    // `Who are the main characters in the novel?`
+    // `Does Bathrobe Grouch have a real name?`
     // `Give a brief precis of the novel: list genre, describe the major characters, and provide an overall plot summary.`
     // `Analyze the story, and let me know if you think this is similar to any other well-known stories in its genre, or in another genre.`
     // `Proofreading: are there any spelling, grammar, or punctuation errors that can distract readers from the story itself?`
@@ -378,7 +432,7 @@ const input = // `What do you think of this novel?`
     // `Show, don't tell: Analyze whether the story simply tells readers what is happening or how characters feel, or whether it uses vivid descriptions and actions to show them. This will make the writing more engaging and immersive.`
     // `Consistent point of view: Does the novel stick to one consistent point of view throughout, whether it be first person, third person limited, or omniscient? This will help maintain a cohesive narrative voice.`
     // `Active voice: Does the writing use active voice instead of passive voice whenever possible? This makes the writing more direct and engaging.`
-    `Vary sentence structure: Does the writing break up long sentences with shorter ones to create rhythm and variety? This will make the writing more dynamic and interesting to read.`
+    // `Vary sentence structure: Does the writing break up long sentences with shorter ones to create rhythm and variety? This will make the writing more dynamic and interesting to read.`
     // `Analyze the story from the point of view of a potential reader who purchases the book.`
     // `Analyze the story from the point of view of a literary agent reading this book for the first time and trying to decide if they want to represent this author to publishers.`
     // `Provide suggestions on how to improve any confusing parts of the plot. If there are other narrative elements which should be revised and improved, point them out.`
@@ -387,10 +441,16 @@ const input = // `What do you think of this novel?`
     // `Who is the ideal audience for this book? What will they enjoy about it? What might they dislike about it? How can the story be adjusted to make it appear to a wider audience?`
     // `Identify any repetitive or superfluous elements in the book.`
     // `Identify any subplots which don't lead anywhere and just distract from the main story.`
+    // `Write a dust-jacket blurb describing this book, with some invented (but realistic) quotes from reviewers about how good the book is. Do not include any extracts from the book itself.`
+    // `Who turns out to have killed Tyler in the end?`
+    `Write query letter to a potential publisher, explaining the novel and its potential market.`
+    // `Provide an extract from the novel showing how the murder of Tyler is solved.`
 ;
 
 
 console.log(chalk.greenBright(`Question: ${input}`));
+
+// const result = { output: (await extractRetrievalChain.invoke({ query: input })).text };
 
 const result = await executor.invoke({ input },
 {
