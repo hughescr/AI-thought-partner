@@ -99,21 +99,24 @@ const retriever = new HydeRetriever({
 Question: {question}${E_INST}`)
 });
 
-const PROMPT = `You are a professional developmental editor, working for the author of a novel to help them improve drafts of their unpublished novel before they submit it to literary agents hoping to get published.
+const PROMPT = `You are a professional developmental editor, working for the author of a novel to improve drafts of their unpublished novel before they submit it to literary agents.
 
-The author will not see anything except for your final answer. Everything else is just internal work which they won't see - if you want them to see it, include it in your final answer.
+The author will not see anything except for your final answer. They won't see your conversations with interns nor your internal thinking - if you want them to see anything, include it in your final answer.
 
 You can assume that the author is intimately familiar with the entire novel that they wrote. Your access to the novel is only through your interns though - you are too important to read it directly yourself.
 
-Find the book's flaws when they exist, and help fix them - that is the whole point. Analyze any flaws rigorously.
+Find the book's flaws when they exist, and help fix them - that is the whole point. Analyze any flaws rigorously and point them out to the author.
 
-Comprehensively answer the following question from the author as best you can with reference to the text where appropriate; when referencing the text, include extracts in your answer. Confirm all facts and assumptions through your interns before stating them - ask follow-up questions when appropriate. When you quote from the novel text, include an XML tag around it like:
+Comprehensively answer the following question from the author as best you can with reference to the text where appropriate; when referencing the text, include extracts in your answer. When you quote from the novel text, include an XML tag around it like:
 
 <quote>
 [actual quote from the novel here]
 </quote>
 
+Confirm all facts and assumptions through your interns before stating them and ask follow-up questions when appropriate. This is especially true of your final answer - confirm with your interns that it is accurate before replying to the author.
+
 You have interns to help with researching your answer; interns do not remember what you've asked them to do before, they only know about the question that you send to them for that specific request. Interns also are terrible at answering multi-part questions. So ask one simple question, get the response, then ask another question, instead of combining questions together in one query.
+
 Interns like long precisely worded questions, the longer and the more precisely worded, the better! They will also not read the entire novel, but only some sections of it which seem semantically relevant to your question. There is no real way to reference which sections. If you ask an intern the same question multiple times, you will get exactly the same answer each time. Rephrase the question to get different answers. These are the available interns:
 
 {tools}
@@ -130,6 +133,7 @@ Observation: the output from the intern (wait for the intern to respond)
 ... (this Thought/Action/Action Input/Observation can repeat N times)
 
 You should generally not use interns to do creative work, suggest solutions, or do complex analysis. Do that work yourself without using any tool. Only use interns to gather information about the novel, its characters, plot, scenes and so forth.
+Ask follow-up questions of your interns as necessary - do not take their initial answer as being exhaustive or conclusive; interns often miss things the first time you ask.
 
 When you are all done with your research, and done with having interns do their work, and are not requesting another Action you may move on to a final answer, but do not do this pre-maturely.
 When you have a final answer, you should use this format:
@@ -426,7 +430,7 @@ const input = // `What do you think of this novel?`
     // `Give a brief precis of the novel: list genre, describe the major characters, and provide an overall plot summary.`
     // `Analyze the story, and let me know if you think this is similar to any other well-known stories in its genre, or in another genre.`
     // `Proofreading: are there any spelling, grammar, or punctuation errors that can distract readers from the story itself?`
-    // `Character development: Analyze the important characters and assess how well-developed they are, with distinct personalities, backgrounds, and motivations. This will make them more relatable and engaging to readers.`
+    `Character development: Analyze the important characters and assess how well-developed they are, with distinct personalities, backgrounds, and motivations. This will make them more relatable and engaging to readers.`
     // `Plot structure: Analyze whether the story's events are in a clear and coherent sequence, with rising action, climax, falling action, and resolution. This will help maintain reader interest throughout the novel.`
     // `Subplots: Analyze the sub-plots and minor characters to verify that they add to the story instead of distracting from it. Sub-plots and side-characters should enhance the story and not confuse the reader. Point out any flaws.`
     // `Show, don't tell: Analyze whether the story simply tells readers what is happening or how characters feel, or whether it uses vivid descriptions and actions to show them. This will make the writing more engaging and immersive.`
@@ -443,7 +447,7 @@ const input = // `What do you think of this novel?`
     // `Identify any subplots which don't lead anywhere and just distract from the main story.`
     // `Write a dust-jacket blurb describing this book, with some invented (but realistic) quotes from reviewers about how good the book is. Do not include any extracts from the book itself.`
     // `Who turns out to have killed Tyler in the end?`
-    `Write query letter to a potential publisher, explaining the novel and its potential market.`
+    // `Write query letter to a potential publisher, explaining the novel and its potential market.`
     // `Provide an extract from the novel showing how the murder of Tyler is solved.`
 ;
 
