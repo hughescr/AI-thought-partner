@@ -18,7 +18,7 @@ import { renderTextDescription } from "langchain/tools/render";
 import { ReActSingleInputOutputParser } from "./node_modules/langchain/dist/agents/react/output_parser.js";
 import { RunnableSingleActionAgent } from "./node_modules/langchain/dist/agents/agent.js";
 
-const [B_INST, E_INST] = ['<s> [INST]', '[/INST]'];
+const [B_INST, E_INST] = ['<s>[INST] ', ' [/INST] '];
 
 function formatLogToString(intermediateSteps, observationPrefix = "Observation: ", llmPrefix = "Thought: ") {
     const formattedSteps = intermediateSteps.reduce((thoughts, { action, observation }) => thoughts +
@@ -121,7 +121,7 @@ Interns like long precisely worded questions, the longer and the more precisely 
 
 {tools}
 
-Use the following format to make use of interns:
+Use the following format to make use of interns. After initiating an action, wait for the Observation before continuing:
 
 \`\`\`
 Thought: you should always think about what to do next in the way of any additional research
