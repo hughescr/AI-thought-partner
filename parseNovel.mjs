@@ -8,8 +8,8 @@ import cliProgress from 'cli-progress';
 
 const book = 'Christmas Town draft 2';
 
-// const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: false, });
-const loader = new TextLoader(`novels/${book}.txt`);
+const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: true, });
+// const loader = new TextLoader(`novels/${book}.txt`);
 const docs = await loader.load();
 
 const splitter = new RecursiveCharacterTextSplitter({
