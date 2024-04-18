@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import _ from 'lodash';
 
 import { OllamaEmbeddings } from '@langchain/community/embeddings/ollama';
 import { Ollama } from '@langchain/community/llms/ollama';
@@ -6,17 +7,18 @@ import { Bedrock } from "@langchain/community/llms/bedrock";
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { HydeRetriever } from "langchain/retrievers/hyde";
 
-import { RetrievalQAChain, MapReduceDocumentsChain, StuffDocumentsChain, LLMChain, loadQARefineChain, loadQAStuffChain } from 'langchain/chains';
+import { StuffDocumentsChain, LLMChain, loadQAStuffChain } from 'langchain/chains';
+import { RunnableSequence, RunnablePassthrough } from '@langchain/core/runnables';
 import { DynamicTool } from '@langchain/core/tools';
 
 import { AgentExecutor } from 'langchain/agents';
 
 import { PromptTemplate } from '@langchain/core/prompts';
 
-import { RunnablePassthrough, RunnableSequence, } from "@langchain/core/runnables";
 import { renderTextDescription } from "langchain/tools/render";
 import { ReActSingleInputOutputParser } from "./node_modules/langchain/dist/agents/react/output_parser.js";
 import { RunnableSingleActionAgent } from "./node_modules/langchain/dist/agents/agent.js";
+import { StringOutputParser, JsonOutputParser } from 'langchain/schema/output_parser';
 
 const [B_INST, E_INST] = ['<s>[INST] ', ' [/INST] '];
 
@@ -58,7 +60,7 @@ async function createReactAgent({ llm, tools, prompt, streamRunnable, }) {
     });
 }
 
-const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048, baseUrl: 'http://127.0.0.1:11435' });
+const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048, baseUrl: 'http://127.0.0.1:11434' });
 
 // Mistral 7b-instruct in the cloud on amazon - cheap and fast, but not so smrt; 32k context 8k outputs
 // const llm = new Bedrock({
@@ -68,11 +70,20 @@ const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 204
 //     maxTokens: 8192,
 // });
 
-// mistral-instruct-v0.2-2x7b-moe has 32k context, instruct model
-// const llm = new Ollama({ model: 'cas/mistral-instruct-v0.2-2x7b-moe', temperature: 0, numCtx: 32768 });
+// mistral7b-instruct has 32k training ctx but ollama sets it to 2k so need to override that here
+// Prompt parse: ~550-600 t/s; generation: ~50-60 t/s
+const fastestLLM = new Ollama({ model: 'mistral:instruct', temperature: 0, numCtx: 32768, raw: true, baseUrl: 'http://127.0.0.1:11435' });
+const fastestLLMJSON = new Ollama({ model: 'mistral:instruct', temperature: 0, numCtx: 32768, raw: true, format: 'json', baseUrl: 'http://127.0.0.1:11435' });
 
-// mix-crit is from mixtral:8x7b-instruct-v0.1-q3_K_L - 32k context, instruct model
-const llm = new Ollama({ model: 'mix-crit', temperature: 0, numCtx: 32768 });
+// mixtral:8x7b-instruct-v0.1-q5_K_M - 32k context
+// Prompt parse: ~150-200 t/s; generation: ~20-25 t/s
+const slowLLM = new Ollama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', temperature: 0, numCtx: 32768, raw: true, baseUrl: 'http://127.0.0.1:11436' });
+const slowLLMJSON = new Ollama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', temperature: 0, numCtx: 32768, raw: true, format: 'json', baseUrl: 'http://127.0.0.1:11436' });
+
+// mixtral:8x22b-instruct-v0.1-q4_0 - 65k training context but ollama sets it to 2k, has special tokens for tools and shit
+// Prompt parse: ~60-80 t/s; generation ~11-12 t/s
+const slowestLLM = new Ollama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, raw: true, baseUrl: 'http://127.0.0.1:11437' });
+const slowestLLMJSON = new Ollama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, raw: true, format: 'json', baseUrl: 'http://127.0.0.1:11437' });
 
 // Same guy, but in the cloud - faster but more $
 // const llm = new Bedrock({
@@ -90,14 +101,24 @@ const vectorStore = await FaissStore.load(
 );
 
 // const retriever = vectorStore.asRetriever({ k: 15 });
-const retriever = new HydeRetriever({
+const qaRetriever = new HydeRetriever({
     // verbose: true,
     vectorStore,
-    llm,
-    k: 90,
-    promptTemplate: PromptTemplate.fromTemplate(`${B_INST}Provide 3 alternate phrasings of the question, and then write a passage to answer the question.
+    llm: fastestLLM, // Basic task to write the prompt so do it quickly
+    k: 50,
+    promptTemplate: PromptTemplate.fromTemplate(`${B_INST}Provide 3 alternate phrasings of the question, and then write a short paragraph to answer the question.
 Question: {question}${E_INST}`)
 });
+
+const extractRetriever = new HydeRetriever({
+    // verbose: true,
+    vectorStore,
+    llm: fastestLLM, // Basic task to write the prompt so do it quickly
+    k: 15,
+    promptTemplate: PromptTemplate.fromTemplate(`${B_INST}Provide 3 alternate phrasings of the question, and then write a short paragraph to answer the question.
+Question: {question}${E_INST}`)
+});
+
 
 const PROMPT = `You are a professional developmental editor, working for the author of a novel to improve drafts of their unpublished novel before they submit it to literary agents.
 
@@ -157,7 +178,14 @@ const prompt = PromptTemplate.fromTemplate(`${B_INST}${PROMPT}${E_INST}`);
 
 const qaStuffPromptTemplate = PromptTemplate.fromTemplate(`${B_INST}You are an intern who answers questions for a developmental editor.
 
-You found the following extracts from a semantic index of the novel, read only these extracts to answer the question in your own words. There might be other relevant parts, but you didn't read them.
+You are given extracts from a semantic index of the novel in JSON format like
+
+[
+    {{ "loc": <where the extract is located within the novel>, "text": <the text of the extract> }},
+    ...
+]
+
+Consider only these extracts to answer the question in your own words, encoded in JSON. There might be other relevant parts of the novel, but you didn't read them.
 
 You should digest these extracts and ANSWER THE QUESTION, and not just regurgitate verbatim quotes.
 
@@ -166,235 +194,123 @@ Make it clear in every answer that you're only reading a few shorts extracts fro
 If you don't know the answer, or the answer cannot be found in the extracts, just say that you don't know, don't try to make up an answer. You won't get in trouble for saying you don't know. you can do that by responding like this (and not including an extract), for example:
 
 \`\`\`
-I'm sorry, but I don't really know how to answer that question from the short passages that I read. Can you give me more guidance as to what other parts of the novel to read?
+{{ "warning": "I'm sorry, but I don't really know how to answer that question from the short passages that I read. Can you give me more guidance as to what other parts of the novel to read?" }}
 \`\`\`
 
 If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise. You are encouraged to learn by asking questions. You can do that like this (and without including an extract), for example:
 
 \`\`\`
-I didn't really understand that question, it's too complex. Could you break it down into simpler questions, and ask them one at a time?
+{{ "warning": "I didn't really understand that question, it's too complex. Could you break it down into simpler questions, and ask them one at a time?" }}
 \`\`\`
 
-Editor's question: {question}
+When you respond, do so in JSON like this:
 
+\`\`\`
+{{ "answer": <your answer> }}
+\'\'\'
+
+Begin!
+
+Editor's question: {question}
 Extracts:
 {context}${E_INST}`);
 
-const extractStuffPromptTemplate = PromptTemplate.fromTemplate(`${B_INST}You are an intern whose job is to provide a single verbatim extract or passage from a novel, working for a developmental editor.
+const extractStuffPromptTemplate = PromptTemplate.fromTemplate(`${B_INST}You are an intern whose job is to provide verbatim extracts or passage from a novel, working for a developmental editor.
 
-Given the following extracts of the novel and a question, return a condensed extract from the novel that is the most relevant to the question.
+You are given extract from a semantic index of the novel in JSON format like
 
-Make it clear this is only one single extract, and there might be others that are relevant, but you're lazy so you're only returning one. Let your boss know that they can ask for other extracts because you only provide one at a time.
+[
+    {{ "loc": <where the extract is located within the novel>, "text": <the text of the extract> }},
+    ...
+]
+
+Given these extracts and a question, return a single extract from the novel that is the most relevant to the question.
+
+Make it clear this is only a single of extract, and there might be other extracts that are relevant, but you're lazy so you're only returning this one. Let your boss know that they can ask for other extracts if they want more.
 
 If there are no relevant extracts, just say so. Don't try to make up an answer. You won't get in trouble for saying you don't know, and the correct answer in that case is that you do not know. You can do that by responding like this (omitting any extract), for example:
 
 \`\`\`
-SORRY: I could not find any relevant extract, sorry! Perhaps try re-phrasing the question?
+{{ "warning": "SORRY: I could not find any relevant extract, sorry! Perhaps try re-phrasing the question?" }}
 \`\`\`
 
 If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise - dont give a half-assed answer. You are encouraged to learn by asking questions back to your boss. You can do that by responding like this (omitting any extract), for example:
 
 \`\`\`
-SORRY: The question is vague, so I'm not sure how to answer it. Please could you be more precise in what you'd like me to find?
+{{ "warning": "SORRY: The question is vague, so I'm not sure how to answer it. Please could you be more precise in what you'd like me to find?" }}
 \`\`\`
 
-If you are asked for more than one extract or the extract you choose does not cover the entire question, then let your boss know that you can only provide one extract at a time, and for further extracts, they should rephrase the question (and that you are only including a single extract), for example:
+If the extract you choose does not cover the entire question, then let your boss know that you can only provide one extract at a time, and for further extracts, they should rephrase the question (and that you are only including a single extract), for example:
 
 \`\`\`
-SORRY: I can only provide a single extract, but you asked for more than one. Please ask for only one at a time, and rephrase the question each time to get more.
-My commentary: Reason for choosing this extract, and explanations of whom the pronouns in the extract refer to if it's not obvious
-Verbatim extract: The single most relevant short extract goes here
+{{ "warning": "SORRY: I can only provide one single extract, but you asked for more. Please ask for one at a time, and rephrase the question each time to get more.",
+"commentary": <Reason for choosing this extract, and explanations of whom any pronouns in the extract refer to if it's not obvious>,
+"extract": <text of the extract goes here> }}
 \`\`\`
 
-When you find an appropriate extract, you should include your own commentary on the extract, along with the verbatim text, for example:
+When you find an appropriate extract, you don't need a warning, but you should include your own commentary on the extract, along with the verbatim text, for example:
 
 \`\`\`
-My commentary: Reason for choosing this extract, and explanations of whom the pronouns in the extract refer to if it's not obvious
-Verbatim extract: put the novel extract itself here
+{{ "commentary": <Reason for choosing this extract, and explanations of whom any pronouns in the extract refer to if it's not obvious>,
+"extract": <text of the extract goes here> }}
 \`\`\`
 
 When there is an appropriate extract, always return it as demonstrated above. Do not forget to include the actual extract from your response when there is one.
 
-Question: {question}
+Editor's question: {question}
 Extracts to choose from:
 {context}${E_INST}`);
 
-const mapReduceMapPrompt = PromptTemplate.fromTemplate(`${B_INST}You are an intern who follows directions as precisely as possible, working for a developmental editor.
-Making no attempt to actually answer the question, just determine whether the extract is relevant to the question. If it is relevant, then return the extract verbatim.
+const sortDocsFormatAsJSON = (documents) => {
+    return JSON.stringify(
+        _.chain(documents)
+        .sortBy(['metadata.source', 'metadata.loc.pageNumber', 'metadata.loc.lines.from'])
+        .map((doc) => ({
+            loc: doc.metadata.loc,
+            text: doc.pageContent,
+        }))
+        .value()
+    );
+};
 
-Question: {question}
-Extract:
-{context}${E_INST}`);
+const qaChain = RunnableSequence.from([
+    {
+        context: qaRetriever.pipe(sortDocsFormatAsJSON),
+        question: new RunnablePassthrough(),
+    },
 
-const mapReduceQAReducePrompt = PromptTemplate.fromTemplate(`${B_INST}You are an intern who answers questions for a developmental editor.
+    qaStuffPromptTemplate,
 
-You have read only the following extracts from the novel to answer the question in your own words. There might be other relevant part, but you didn't read them.
+    fastestLLMJSON,
 
-You should digest these extracts and ANSWER THE QUESTION, and not just regurgitate verbatim quotes.
+    new JsonOutputParser(),
+]);
 
-Make it clear in every answer that you're only reading a few shorts extracts from the novel, and you might be overlooking parts of the novel which you didn't actually read. Let your boss know that they can ask you to read further if necessary to confirm things.
+const extractRetrievalChain = RunnableSequence.from([
+    {
+        context: extractRetriever.pipe(sortDocsFormatAsJSON),
+        question: new RunnablePassthrough(),
+    },
 
-If you don't know the answer, or the answer cannot be found in the extracts, just say that you don't know, don't try to make up an answer. You won't get in trouble for saying you don't know.
+    extractStuffPromptTemplate,
 
-If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise. You are encouraged to learn by asking questions.
+    fastestLLMJSON,
 
-Editor's question: {question}
-
-Extracts:
-{summaries}${E_INST}`);
-const mapReduceExtractReducePrompt = PromptTemplate.fromTemplate(`${B_INST}You are an intern whose job is to provide a single verbatim extract or passage from a novel, working for a developmental editor.
-
-Given the following extracts of the novel and a question, return a condensed extract from the novel that is the most relevant to the question.
-
-Make it clear this is only one single extract, and there might be others that are relevant, but you're lazy so you're only returning one. Let your boss know that they can ask for other extracts because you only provide one at a time.
-
-If there are no relevant extracts, just say so. Don't try to make up an answer. You won't get in trouble for saying you don't know. You can do that by responding like this (omitting any extract), for example:
-
-\`\`\`
-My commentary: I could not find any relevant extract, sorry! Perhaps try re-phrasing the question?
-\`\`\`
-
-If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise. You are encouraged to learn by asking questions. You can do that by responding like this (omitting any extract), for example:
-
-\`\`\`
-My commentary: The question is vague, so I'm not sure how to answer it. Please could you be more precise in what you'd like me to find?
-\`\`\`
-
-If you are asked for more than one extract, then let your boss know that you can only provide one extract at a time, and for further extracts, they should rephrase the question (and that you are only including a single extract), for example:
-
-\`\`\`
-My commentary: I can only provide a single extract, but you asked for more than one. Please ask for only one at a time, and rephrase the question each time to get more.
-\`\`\`
-
-When returning an extract, you can include your own commentary on the extract, along with the verbatim text, for example:
-
-\`\`\`
-My commentary: This extract shows how things work
-Verbatim extract: The thingamajig slots into the socket, and then turns to power the motor.
-\`\`\`
-
-Question: {question}
-Extracts:
-{summaries}${E_INST}`);
-
-const refineQAInitialPrompt = PromptTemplate.fromTemplate(`${B_INST}You are an intern who follows directions as precisely as possible, working for a developmental editor. Answer the question, using only the context.
-
-Given the following extracted parts of the novel and a question, answer the question.
-
-If you don't know the answer, just say that you don't know. Don't try to make up an answer. You won't get in trouble for saying you don't know.
-
-If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise. You are encouraged to learn by asking questions.
-
-Question: {question}
-
-Context:
-{context}${E_INST}`);
-const refineQARefinePrompt = PromptTemplate.fromTemplate(`${B_INST}You are an intern who follows directions as precisely as possible, working for a developmental editor.
-
-Your boss the editor has asked the following question: {question}
-
-If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise. You are encouraged to learn by asking questions.
-
-You have provided an existing answer:
-------------
-{existing_answer}
-------------
-
-You have the opportunity to refine the existing answer (only if needed) with some more context below:
-------------
-{context}
-------------
-
-Given the new context, refine the original answer to better answer the question.
-If the context isn't useful, return the original answer.${E_INST}`);
-
-const qaChain = new RetrievalQAChain({
-    // verbose: true,
-    retriever,
-    // combineDocumentsChain: loadQAMapReduceChain(llm, {
-    //     verbose: true,
-    //     combineMapPrompt: mapReduceMapPrompt,
-    //     combinePrompt: mapReduceQAReducePrompt,
-    // }),
-
-    // combineDocumentsChain: loadQARefineChain(llm, {
-    //     verbose: true,
-    //     questionPrompt: refineQAInitialPrompt,
-    //     refinePrompt: refineQARefinePrompt,
-    // }),
-
-    combineDocumentsChain: loadQAStuffChain(llm, {
-        // verbose: true,
-        prompt: qaStuffPromptTemplate,
-    }),
-
-    llm,
-});
-
-function loadQAMapReduceChain(llm, params = {}) {
-    const { combineMapPrompt, combinePrompt, verbose, combineLLM, returnIntermediateSteps, maxTokens, maxIterations, ensureMapStep, } = params;
-    const llmChain = new LLMChain({ prompt: combineMapPrompt, llm, verbose });
-    const combineLLMChain = new LLMChain({
-        prompt: combinePrompt,
-        llm: combineLLM ?? llm,
-        verbose,
-    });
-    const combineDocumentChain = new StuffDocumentsChain({
-        llmChain: combineLLMChain,
-        documentVariableName: "summaries",
-        verbose,
-    });
-    const chain = new MapReduceDocumentsChain({
-        llmChain,
-        combineDocumentChain,
-        returnIntermediateSteps,
-        verbose,
-        maxTokens,
-        maxIterations,
-        ensureMapStep,
-    });
-    return chain;
-}
-
-const extractRetrievalChain = new RetrievalQAChain({
-    // verbose: true,
-    retriever,
-
-    // combineDocumentsChain: loadQAMapReduceChain(llm, {
-    //     // verbose: true,
-    //     combineMapPrompt: mapReduceMapPrompt,
-    //     combinePrompt: mapReduceExtractReducePrompt,
-    //     ensureMapStep: false,
-    //     maxTokens: 28000, // Leave some headroom for instructions, etc
-    //     maxIterations: 5,
-    // }),
-
-    // combineDocumentsChain: loadQARefineChain(llm, {
-    //     verbose: true,
-    //     questionPrompt: refineQAInitialPrompt,
-    //     refinePrompt: refineQARefinePrompt,
-    // }),
-
-    combineDocumentsChain: loadQAStuffChain(llm, {
-        // verbose: true,
-        prompt: extractStuffPromptTemplate,
-    }),
-
-    llm,
-});
+    new JsonOutputParser(),
+]);
 
 const tools = [
     new DynamicTool({
         // verbose: true,
         name: 'Joe Analyst',
         description: 'A junior intern who answers questions about what happens after reading only some sections of the novel that he thinks might be relevant, and not the entire novel. He will let you know if he thinks there are problems with his answer. He is best for broad questions about the novel.',
-        func: async (x) => (await qaChain.invoke({ query: x })).text,
+        func: async (x) => JSON.stringify(await qaChain.invoke(x)),
     }),
     new DynamicTool({
         // verbose: true,
         name: 'Sally Extractor',
         description: 'A junior intern who can read the novel and provide a single short extract per invocation that demonstrates a relevant semantic concept. She will let you know if she thinks there are problems with her answer. She is best for very specific extracts about specific details. If you need multiple extracts, you should ask her for only one at a time, and ask her multiple times with rephrased questions each time.',
-        func: async (x) => (await extractRetrievalChain.invoke({ query: x })).text,
+        func: async (x) => JSON.stringify(await extractRetrievalChain.invoke(x)),
     }),
     // new WikipediaQueryRun({
     //     topKResults: 3,
@@ -409,7 +325,7 @@ const tools = [
 // const result = retrievalQAChain.invoke({ query: `Who are the main characters in the novel?` });
 
 const agent = await createReactAgent({
-    llm,
+    llm: slowLLM,
     tools,
     prompt,
  });
@@ -431,6 +347,7 @@ const input = // `What do you think of this novel?`
     // `Analyze the story, and let me know if you think this is similar to any other well-known stories in its genre, or in another genre.`
     // `Proofreading: are there any spelling, grammar, or punctuation errors that can distract readers from the story itself?`
     `Character development: Analyze the important characters and assess how well-developed they are, with distinct personalities, backgrounds, and motivations. This will make them more relatable and engaging to readers.`
+    // `Find me an extract from the novel that shows character development of the main protagonist.`
     // `Plot structure: Analyze whether the story's events are in a clear and coherent sequence, with rising action, climax, falling action, and resolution. This will help maintain reader interest throughout the novel.`
     // `Subplots: Analyze the sub-plots and minor characters to verify that they add to the story instead of distracting from it. Sub-plots and side-characters should enhance the story and not confuse the reader. Point out any flaws.`
     // `Show, don't tell: Analyze whether the story simply tells readers what is happening or how characters feel, or whether it uses vivid descriptions and actions to show them. This will make the writing more engaging and immersive.`
@@ -454,7 +371,7 @@ const input = // `What do you think of this novel?`
 
 console.log(chalk.greenBright(`Question: ${input}`));
 
-// const result = { output: (await extractRetrievalChain.invoke({ query: input })).text };
+// const result = { output: JSON.stringify(await extractRetrievalChain.invoke(input)) };
 
 const result = await executor.invoke({ input },
 {
