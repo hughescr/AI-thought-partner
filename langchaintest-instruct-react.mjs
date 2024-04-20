@@ -335,13 +335,13 @@ const tools = [
     new DynamicTool({
         // verbose: true,
         name: 'Joe Analyst',
-        description: 'A junior intern who answers questions about what happens after reading only some sections of the novel that he thinks might be relevant, and not the entire novel. He will let you know if he thinks there are problems with his answer. He is best for broad questions about the novel.',
+        description: 'An intern who answers questions about what happens in the novel. He is best for broad questions about the novel.',
         func: async (x) => JSON.stringify(await qaChain.invoke(x)),
     }),
     new DynamicTool({
         // verbose: true,
         name: 'Sally Extractor',
-        description: 'A junior intern who can read the novel and provide a single short extract per invocation that demonstrates a relevant semantic concept. She will let you know if she thinks there are problems with her answer. She is best for very specific extracts about specific details. If you need multiple extracts, you should ask her for only one at a time, and ask her multiple times with rephrased questions each time.',
+        description: 'An intern who can read the novel and provide a single short extract up to a paragraph or so long. She is best for very specific verbatim extracts about specific details.',
         func: async (x) => JSON.stringify(await extractRetrievalChain.invoke(x)),
     }),
     // new WikipediaQueryRun({
