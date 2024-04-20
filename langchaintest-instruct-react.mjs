@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import _ from 'lodash';
 
 import { OllamaEmbeddings } from '@langchain/community/embeddings/ollama';
-import { Ollama } from '@langchain/community/llms/ollama';
+import { ChatOllama } from '@langchain/community/chat_models/ollama';
 import { Bedrock } from "@langchain/community/llms/bedrock";
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { HydeRetriever } from "langchain/retrievers/hyde";
@@ -13,14 +13,12 @@ import { DynamicTool } from '@langchain/core/tools';
 
 import { AgentExecutor } from 'langchain/agents';
 
-import { PromptTemplate } from '@langchain/core/prompts';
+import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 
 import { renderTextDescription } from "langchain/tools/render";
 import { ReActSingleInputOutputParser } from "./node_modules/langchain/dist/agents/react/output_parser.js";
 import { RunnableSingleActionAgent } from "./node_modules/langchain/dist/agents/agent.js";
 import { StringOutputParser, JsonOutputParser } from 'langchain/schema/output_parser';
-
-const [B_INST, E_INST] = ['<s>[INST] ', ' [/INST] '];
 
 function formatLogToString(intermediateSteps, observationPrefix = "Observation: ", llmPrefix = "Thought: ") {
     const formattedSteps = intermediateSteps.reduce((thoughts, { action, observation }) => thoughts +
@@ -72,18 +70,32 @@ const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 204
 
 // mistral7b-instruct has 32k training ctx but ollama sets it to 2k so need to override that here
 // Prompt parse: ~550-600 t/s; generation: ~50-60 t/s
-const fastestLLM = new Ollama({ model: 'mistral:instruct', temperature: 0, numCtx: 32768, raw: true, baseUrl: 'http://127.0.0.1:11435' });
-const fastestLLMJSON = new Ollama({ model: 'mistral:instruct', temperature: 0, numCtx: 32768, raw: true, format: 'json', baseUrl: 'http://127.0.0.1:11435' });
+const fastestLLMChat = new ChatOllama({ model: 'mistral:instruct', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11435' });
+const fastestLLMJSON = new ChatOllama({ model: 'mistral:instruct', temperature: 0, numCtx: 32768, format: 'json', baseUrl: 'http://127.0.0.1:11435' });
+const fastestLLMInstruct = new ChatOllama({ model: 'mistral:instruct', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11435' });
+
+// llama3 llama3:8b-instruct-q5_K_M has 8k ctx
+const llama3LLMChat = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', temperature: 0, numCtx: 8192, baseUrl: 'http://127.0.0.1:11435' });
+const llama3LLMJSON = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', temperature: 0, numCtx: 8192, format: 'json', baseUrl: 'http://127.0.0.1:11435' });
+const llama3LLMInstruct = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', temperature: 0, numCtx: 8192, baseUrl: 'http://127.0.0.1:11435' });
 
 // mixtral:8x7b-instruct-v0.1-q5_K_M - 32k context
 // Prompt parse: ~150-200 t/s; generation: ~20-25 t/s
-const slowLLM = new Ollama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', temperature: 0, numCtx: 32768, raw: true, baseUrl: 'http://127.0.0.1:11436' });
-const slowLLMJSON = new Ollama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', temperature: 0, numCtx: 32768, raw: true, format: 'json', baseUrl: 'http://127.0.0.1:11436' });
+const slowLLMChat = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11436' });
+const slowLLMJSON = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', temperature: 0, numCtx: 32768, format: 'json', baseUrl: 'http://127.0.0.1:11436' });
+const slowLLMInstruct = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11436' });
+
+// command-r:35b-v0.1-q6_K has 128k training ctx but ollama sets it to 2k so need to override that here
+// Prompt parse: ~20t/s; generation: ~4 t/s
+const commandRLLMChat = new ChatOllama({ model: 'command-r:35b-v0.1-q6_K', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11436' });
+const commandRLLMJSON = new ChatOllama({ model: 'command-r:35b-v0.1-q6_K', temperature: 0, numCtx: 32768, format: 'json', baseUrl: 'http://127.0.0.1:11436' });
+const commandRLLMInstruct = new ChatOllama({ model: 'command-r:35b-v0.1-q6_K', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11436' });
 
 // mixtral:8x22b-instruct-v0.1-q4_0 - 65k training context but ollama sets it to 2k, has special tokens for tools and shit
 // Prompt parse: ~60-80 t/s; generation ~11-12 t/s
-const slowestLLM = new Ollama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, raw: true, baseUrl: 'http://127.0.0.1:11437' });
-const slowestLLMJSON = new Ollama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, raw: true, format: 'json', baseUrl: 'http://127.0.0.1:11437' });
+const slowestLLMChat = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, baseUrl: 'http://127.0.0.1:11437' });
+const slowestLLMJSON = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, format: 'json', baseUrl: 'http://127.0.0.1:11437' });
+const slowestLLMInstruct = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, baseUrl: 'http://127.0.0.1:11437' });
 
 // Same guy, but in the cloud - faster but more $
 // const llm = new Bedrock({
@@ -100,14 +112,18 @@ const vectorStore = await FaissStore.load(
     embeddings
 );
 
+const hydePrompt = ChatPromptTemplate.fromMessages([
+    SystemMessagePromptTemplate.fromTemplate('Provide 3 alternate phrasings of the query, and then write a short paragraph which responds to the query.'),
+    HumanMessagePromptTemplate.fromTemplate('Query: {question}'),
+]);
+
 // const retriever = vectorStore.asRetriever({ k: 15 });
 const qaRetriever = new HydeRetriever({
     // verbose: true,
     vectorStore,
     llm: fastestLLM, // Basic task to write the prompt so do it quickly
     k: 50,
-    promptTemplate: PromptTemplate.fromTemplate(`${B_INST}Provide 3 alternate phrasings of the question, and then write a short paragraph to answer the question.
-Question: {question}${E_INST}`)
+    promptTemplate: hydePrompt,
 });
 
 const extractRetriever = new HydeRetriever({
@@ -115,151 +131,166 @@ const extractRetriever = new HydeRetriever({
     vectorStore,
     llm: fastestLLM, // Basic task to write the prompt so do it quickly
     k: 15,
-    promptTemplate: PromptTemplate.fromTemplate(`${B_INST}Provide 3 alternate phrasings of the question, and then write a short paragraph to answer the question.
-Question: {question}${E_INST}`)
+    promptTemplate: hydePrompt,
 });
 
-
-const PROMPT = `You are a professional developmental editor, working for the author of a novel to improve drafts of their unpublished novel before they submit it to literary agents.
-
-The author will not see anything except for your final answer. They won't see your conversations with interns nor your internal thinking - if you want them to see anything, include it in your final answer.
-
-You can assume that the author is intimately familiar with the entire novel that they wrote. Your access to the novel is only through your interns though - you are too important to read it directly yourself.
+const mainAgentPromptTemplate = ChatPromptTemplate.fromMessages([
+    SystemMessagePromptTemplate.fromTemplate(
+`You are a professional developmental editor, working for the author of a novel to improve the latest draft of their unpublished novel before they submit it to literary agents.
 
 Find the book's flaws when they exist, and help fix them - that is the whole point. Analyze any flaws rigorously and point them out to the author.
 
-Comprehensively answer the following question from the author as best you can with reference to the text where appropriate; when referencing the text, include extracts in your answer. When you quote from the novel text, include an XML tag around it like:
+In each iteration, you first will come up with a plan or thought, and you will output it like this:
 
-<quote>
-[actual quote from the novel here]
-</quote>
+\`\`\`
+Thought: you should always think about what additional research might help better answer the question
+\`\`\`
 
-Confirm all facts and assumptions through your interns before stating them and ask follow-up questions when appropriate. This is especially true of your final answer - confirm with your interns that it is accurate before replying to the author.
+After providing the thought, you will choose either to use a tool to gather more information, or whether you have enough information for a final answer.
 
-You have interns to help with researching your answer; interns do not remember what you've asked them to do before, they only know about the question that you send to them for that specific request. Interns also are terrible at answering multi-part questions. So ask one simple question, get the response, then ask another question, instead of combining questions together in one query.
+You have access to the following tools to help with researching your answer:
 
-Interns like long precisely worded questions, the longer and the more precisely worded, the better! They will also not read the entire novel, but only some sections of it which seem semantically relevant to your question. There is no real way to reference which sections. If you ask an intern the same question multiple times, you will get exactly the same answer each time. Rephrase the question to get different answers. These are the available interns:
-
+\`\`\`
 {tools}
-
-Use the following format to make use of interns. After initiating an action, wait for the Observation before continuing:
-
-\`\`\`
-Thought: you should always think about what to do next in the way of any additional research
-Action: only the name of the intern to use (should be one of [{tool_names}] verbatim with no escaping characters, omit if not requesting an Action)
-Action Input: the input to the intern
-Observation: the output from the intern (wait for the intern to respond)
 \`\`\`
 
-... (this Thought/Action/Action Input/Observation can repeat N times)
+Tools do not remember what you've asked them to do before, nor about do they know about your thoughts, they only know about the action input that you send to them for that specific request.
+Tools also are terrible at answering multi-part questions. So ask one simple question, get the response, then ask another question, instead of combining questions together in one query.
+You should generally not use tools to do creative work, suggest solutions, or do complex analysis. Do that work yourself. Only use tools to gather information about the novel, its characters, plot, scenes and so forth, or to looks things up on the internet.
+Do not ask compound questions. Ask one simple thing at a time, but ask as many separate questions as you like successively in subsequent tools calls.
 
-You should generally not use interns to do creative work, suggest solutions, or do complex analysis. Do that work yourself without using any tool. Only use interns to gather information about the novel, its characters, plot, scenes and so forth.
-Ask follow-up questions of your interns as necessary - do not take their initial answer as being exhaustive or conclusive; interns often miss things the first time you ask.
+You use a tool by replying like this:
 
-When you are all done with your research, and done with having interns do their work, and are not requesting another Action you may move on to a final answer, but do not do this pre-maturely.
+\`\`\`
+Action: only the name of the tool to use (should be one of [{tool_names}] verbatim with no escaping characters, omit this "Action" line completely if not requesting an Action)
+Action Input: the input to the tool (omit this "Action Input" line completely if not requesting an Action, but ALWAYS include it if you do request an Action)
+\`\`\`
+
+The tool will the produce an Observation in response, like this:
+
+\`\`\`
+Observation: the result from the tool
+\`\`\`
+
+... (you can then repeat this Thought/Action/Action Input/Observation until you have enough information)
+
+Cycle through Though/Action/Observation as many times as necessary - do not take initial tool answers as being exhaustive or conclusive; tools often miss things the first time you ask.
+
+When you are all done and have pursued every thought, and you are not requesting another tools use you may move on to a conclusion as a final answer, but do not do this prematurely - make sure you really thought everything through.
+
 When you have a final answer, you should use this format:
 
 \`\`\`
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
+Final Answer: the final answer to the original query
 \`\`\`
 
-Never include both an "Action:" and a "Final Answer:" - it's one or the other, but ALWAYS include one of the two.
+Always in your responses then, you should include a single Thought, and either an Action *or* a Final Answer but not both - it's one or the other, but ALWAYS include one of the two.
 
-Begin!
-
-Question: {input}
-
-Previous analysis:
-{agent_scratchpad}
-`;
-
-const prompt = PromptTemplate.fromTemplate(`${B_INST}${PROMPT}${E_INST}`);
-
-const qaStuffPromptTemplate = PromptTemplate.fromTemplate(`${B_INST}You are an intern who answers questions for a developmental editor.
-
-You are given extracts from a semantic index of the novel in JSON format like
-
-[
-    {{ "loc": <where the extract is located within the novel>, "text": <the text of the extract> }},
-    ...
-]
-
-Consider only these extracts to answer the question in your own words, encoded in JSON. There might be other relevant parts of the novel, but you didn't read them.
-
-You should digest these extracts and ANSWER THE QUESTION, and not just regurgitate verbatim quotes.
-
-Make it clear in every answer that you're only reading a few shorts extracts from the novel, and you might be overlooking parts of the novel which you didn't actually read. Let your boss know that they can ask you to read further if necessary to confirm things.
-
-If you don't know the answer, or the answer cannot be found in the extracts, just say that you don't know, don't try to make up an answer. You won't get in trouble for saying you don't know. you can do that by responding like this (and not including an extract), for example:
+Here's an example of a full process, using tools, to answer a query:
 
 \`\`\`
-{{ "warning": "I'm sorry, but I don't really know how to answer that question from the short passages that I read. Can you give me more guidance as to what other parts of the novel to read?" }}
+Query: Who are the main characters? What language do they speak?
+Thought: I should first use a tool to identify the characters, and then use another tool to find something each says and identify the languages.
+Action: character-finder-tool
+Action Input: Who are the main characters?
+Observation: Alison and Mary are the main characters
+Thought: I should now use a tool to find something Alison says
+Action: quote-finder-tool
+Action Input: Please find something Alison says in the book.
+Observation: Alison says "I am a girl"
+Thought: I can tell that Alison speaks English. Now I should find out what language Mary speaks.
+Action: quote-finder-tool
+Action Input: Please find something Mary says in the book.
+Observation: In chapter 9, Mary says "Je suis une fille"
+Thought: Mary speaks French. I now know all the main characters, and their languages, which was the original query.
+Final Answer: The main characters are Alison, who speaks English, and Mary, who speaks French.
 \`\`\`
 
-If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise. You are encouraged to learn by asking questions. You can do that like this (and without including an extract), for example:
+`),
+        HumanMessagePromptTemplate.fromTemplate(
+`Ok, begin!
+
+Query: {input}
+{agent_scratchpad}`),
+]);
+
+const qaStuffPromptTemplate = ChatPromptTemplate.fromMessages([
+    SystemMessagePromptTemplate.fromTemplate(`You answer queries about a novel in syntactically correct JSON.
+You are given extracts from a semantic index of the novel, in JSON.
+Consider only these extracts to answer the query. You should ANSWER THE QUERY, and not just regurgitate verbatim quotes.
+
+Make it clear that you're only reading a few shorts extracts from the novel, and you might be overlooking parts of the novel that might shed more light on the query.
+Let your boss know that they can ask you to read further if necessary to confirm things.
+
+If you don't know the answer, or the answer cannot be found in the extracts, just say that you don't know for sure, and include your best guess.
+You won't get in trouble for saying you don't know. You can do that by responding like this for example:
 
 \`\`\`
-{{ "warning": "I didn't really understand that question, it's too complex. Could you break it down into simpler questions, and ask them one at a time?" }}
+{{"warning":"I can only make an educated guess based on the few short passages that I read.","answer":"As far as I can tell, the hero dies at the end."}}
 \`\`\`
 
-When you respond, do so in JSON like this:
+If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be rephrased in a more precise way.
+You can do that like this for example:
 
 \`\`\`
-{{ "answer": <your answer> }}
-\'\'\'
+{{"warning":"That question is too complex for me. Could you break it down into simpler questions, and ask them one at a time?"}}
+\`\`\`
 
-Begin!
+When you respond, you *must* do so in syntactically correct JSON for example:
 
-Editor's question: {question}
+\`\`\`
+{{"answer":"The hero starts off at home (page 17), later in the novel he is in a car (page 211). Later still, he gets to the office (page 300)."}}
+\`\`\``),
+    HumanMessagePromptTemplate.fromTemplate(`Query: {question}
 Extracts:
-{context}${E_INST}`);
+{context}`),
+]);
 
-const extractStuffPromptTemplate = PromptTemplate.fromTemplate(`${B_INST}You are an intern whose job is to provide verbatim extracts or passage from a novel, working for a developmental editor.
+const extractStuffPromptTemplate = ChatPromptTemplate.fromMessages([
+    SystemMessagePromptTemplate.fromTemplate(`You provide verbatim extracts or passages (up to a paragraph or so long) from a novel.
 
-You are given extract from a semantic index of the novel in JSON format like
+You are given extracts from a semantic index of the novel in JSON format.
 
-[
-    {{ "loc": <where the extract is located within the novel>, "text": <the text of the extract> }},
-    ...
-]
+Given these extracts and a query, return a single extract (up to a paragraph or so long) from the novel that is the most relevant to the query.
 
-Given these extracts and a question, return a single extract from the novel that is the most relevant to the question.
+Make it clear this is only a single extract, and there might be other extracts that are relevant to the query.
+Let your boss know that they can ask for other extracts if they want more.
 
-Make it clear this is only a single of extract, and there might be other extracts that are relevant, but you're lazy so you're only returning this one. Let your boss know that they can ask for other extracts if they want more.
-
-If there are no relevant extracts, just say so. Don't try to make up an answer. You won't get in trouble for saying you don't know, and the correct answer in that case is that you do not know. You can do that by responding like this (omitting any extract), for example:
-
-\`\`\`
-{{ "warning": "SORRY: I could not find any relevant extract, sorry! Perhaps try re-phrasing the question?" }}
-\`\`\`
-
-If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise - dont give a half-assed answer. You are encouraged to learn by asking questions back to your boss. You can do that by responding like this (omitting any extract), for example:
+If there are no relevant extracts, just say so. Don't try to make up an answer.
+You won't get in trouble for saying you don't know, and the correct answer in that case is that you do not know.
+You can do that by responding like this (omitting any extract), for example:
 
 \`\`\`
-{{ "warning": "SORRY: The question is vague, so I'm not sure how to answer it. Please could you be more precise in what you'd like me to find?" }}
+{{"warning":"I could not find any relevant extract, sorry! Perhaps try re-phrasing the question?"}}
 \`\`\`
 
-If the extract you choose does not cover the entire question, then let your boss know that you can only provide one extract at a time, and for further extracts, they should rephrase the question (and that you are only including a single extract), for example:
+If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be more precise - dont give a half-assed answer.
+You can do that by responding like this (omitting any extract) for example:
 
 \`\`\`
-{{ "warning": "SORRY: I can only provide one single extract, but you asked for more. Please ask for one at a time, and rephrase the question each time to get more.",
-"commentary": <Reason for choosing this extract, and explanations of whom any pronouns in the extract refer to if it's not obvious>,
-"extract": <text of the extract goes here> }}
+{{"warning":"The question is vague, so I'm not sure how to answer it. Please could you be more precise in what you'd like me to find?"}}
 \`\`\`
 
-When you find an appropriate extract, you don't need a warning, but you should include your own commentary on the extract, along with the verbatim text, for example:
+If the extract you choose does not cover the entire question, then let your boss know that it's only partly responsive, and that for further extracts they should rephrase the question to focus on parts which weren't covered by the extract your provided. Do include the most suitable extract though, for example:
 
 \`\`\`
-{{ "commentary": <Reason for choosing this extract, and explanations of whom any pronouns in the extract refer to if it's not obvious>,
-"extract": <text of the extract goes here> }}
+{{"warning":"No single extract really covers everything you asked about. Please ask again focusing on any areas this extract doesn't cover","commentary":"This extract is a perfect example of symbolism used in the text, which is part of what you were asking for.","extract":{{"loc":{{"lines":{{"from":423,"to":551}}}},"text":"Inside, the glass walls reflected not just the world outside but also the soul within, as if inviting visitors to see beyond the veil of reality and touch the very essence of their own being."}}}}
 \`\`\`
 
-When there is an appropriate extract, always return it as demonstrated above. Do not forget to include the actual extract from your response when there is one.
+When you find an ideal extract, omit any warning, but you should include your own commentary on the extract, along with the verbatim text.
+The commentary should clarify the context of the extract, and identify any pronouns used.
+All responses *must* be in syntactically valid JSON for example:
 
-Editor's question: {question}
+\`\`\`
+{{"commentary":"I chose this extract because it shows clearly how the hero defeated the dragon. \\"He\\" in the extract refers to the hero.","extract":{{"loc":{{"lines":{{"from":123,"to":456}}}},"text":"And then, he stabbed the dragon straight through the heart and killed it."}}}}
+\`\`\`
+
+When there is an appropriate extract, always return it as demonstrated above. Do not forget to include the actual extract from your response when there is one, and always use the most representative extract that best responds to the query.`,
+    ),
+    HumanMessagePromptTemplate.fromTemplate(`Editor's query: {question}
 Extracts to choose from:
-{context}${E_INST}`);
+{context}`),
+]);
 
 const sortDocsFormatAsJSON = (documents) => {
     return JSON.stringify(
@@ -327,7 +358,7 @@ const tools = [
 const agent = await createReactAgent({
     llm: slowLLM,
     tools,
-    prompt,
+    prompt: mainAgentPromptTemplate,
  });
 const executor = new AgentExecutor({
     agent,
