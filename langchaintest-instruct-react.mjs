@@ -58,7 +58,8 @@ async function createReactAgent({ llm, tools, prompt, streamRunnable, }) {
     });
 }
 
-const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048, baseUrl: 'http://127.0.0.1:11434' });
+// const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048, baseUrl: 'http://127.0.0.1:11434' });
+const embeddings = new OllamaEmbeddings({ model: 'mistral:instruct', numCtx: 32768 });
 
 // Mistral 7b-instruct in the cloud on amazon - cheap and fast, but not so smrt; 32k context 8k outputs
 // const llm = new Bedrock({
