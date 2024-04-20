@@ -122,16 +122,16 @@ const hydePrompt = ChatPromptTemplate.fromMessages([
 const qaRetriever = new HydeRetriever({
     // verbose: true,
     vectorStore,
-    llm: fastestLLM, // Basic task to write the prompt so do it quickly
-    k: 50,
+    llm: llama3LLMChat, // Basic task to write the prompt so do it quickly
+    k: 20,
     promptTemplate: hydePrompt,
 });
 
 const extractRetriever = new HydeRetriever({
     // verbose: true,
     vectorStore,
-    llm: fastestLLM, // Basic task to write the prompt so do it quickly
-    k: 15,
+    llm: llama3LLMChat, // Basic task to write the prompt so do it quickly
+    k: 20,
     promptTemplate: hydePrompt,
 });
 
