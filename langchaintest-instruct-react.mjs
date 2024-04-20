@@ -3,7 +3,6 @@ import _ from 'lodash';
 
 import { OllamaEmbeddings } from '@langchain/community/embeddings/ollama';
 import { ChatOllama } from '@langchain/community/chat_models/ollama';
-import { Bedrock } from "@langchain/community/llms/bedrock";
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { HydeRetriever } from "langchain/retrievers/hyde";
 import { RunnableSequence, RunnablePassthrough } from '@langchain/core/runnables';
@@ -61,13 +60,6 @@ async function createReactAgent({ llm, tools, prompt, streamRunnable, }) {
 // const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048, baseUrl: 'http://127.0.0.1:11434' });
 const embeddings = new OllamaEmbeddings({ model: 'mistral:instruct', numCtx: 32768 });
 
-// Mistral 7b-instruct in the cloud on amazon - cheap and fast, but not so smrt; 32k context 8k outputs
-// const llm = new Bedrock({
-//     model: "mistral.mistral-7b-instruct-v0:2", // You can also do e.g. "anthropic.claude-v2"
-//     region: "us-west-2",
-//     temperature: 0,
-//     maxTokens: 8192,
-// });
 
 // mistral7b-instruct has 32k training ctx but ollama sets it to 2k so need to override that here
 // Prompt parse: ~550-600 t/s; generation: ~50-60 t/s
@@ -98,13 +90,6 @@ const slowestLLMChat = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0
 const slowestLLMJSON = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, format: 'json', baseUrl: 'http://127.0.0.1:11437' });
 const slowestLLMInstruct = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, baseUrl: 'http://127.0.0.1:11437' });
 
-// Same guy, but in the cloud - faster but more $
-// const llm = new Bedrock({
-//     model: "mistral.mixtral-8x7b-instruct-v0:1", // You can also do e.g. "anthropic.claude-v2"
-//     region: "us-west-2",
-//     temperature: 0,
-//     maxTokens: 4096,
-// });
 
 const storeDirectory = 'novels/Christmas Town draft 2';
 // const storeDirectory = 'novels/Fighters_pages';
