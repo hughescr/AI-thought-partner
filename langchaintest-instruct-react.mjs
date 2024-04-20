@@ -8,6 +8,8 @@ import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { HydeRetriever } from "langchain/retrievers/hyde";
 import { RunnableSequence, RunnablePassthrough } from '@langchain/core/runnables';
 import { DynamicTool } from '@langchain/core/tools';
+import { WikipediaQueryRun } from '@langchain/community/tools/wikipedia_query_run';
+import { DuckDuckGoSearch } from '@langchain/community/tools/duckduckgo_search';
 
 import { AgentExecutor } from 'langchain/agents';
 
@@ -345,6 +347,9 @@ const tools = [
     //     topKResults: 3,
     //     maxDocContentLength: 4000,
     // }),
+    new DuckDuckGoSearch({
+        maxResults: 3
+    }),
     // new ExaSearchResults({
     //     client: new Exa('7980b8df-2d60-4900-bc29-4d3695eb4e45'),
     // }),
