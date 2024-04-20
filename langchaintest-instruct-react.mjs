@@ -6,8 +6,6 @@ import { ChatOllama } from '@langchain/community/chat_models/ollama';
 import { Bedrock } from "@langchain/community/llms/bedrock";
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { HydeRetriever } from "langchain/retrievers/hyde";
-
-import { StuffDocumentsChain, LLMChain, loadQAStuffChain } from 'langchain/chains';
 import { RunnableSequence, RunnablePassthrough } from '@langchain/core/runnables';
 import { DynamicTool } from '@langchain/core/tools';
 
@@ -15,9 +13,9 @@ import { AgentExecutor } from 'langchain/agents';
 
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 
-import { renderTextDescription } from "langchain/tools/render";
-import { ReActSingleInputOutputParser } from "./node_modules/langchain/dist/agents/react/output_parser.js";
-import { RunnableSingleActionAgent } from "./node_modules/langchain/dist/agents/agent.js";
+import { renderTextDescription } from 'langchain/tools/render';
+import { ReActSingleInputOutputParser } from './node_modules/langchain/dist/agents/react/output_parser.js';
+import { RunnableSingleActionAgent } from './node_modules/langchain/dist/agents/agent.js';
 import { StringOutputParser, JsonOutputParser } from 'langchain/schema/output_parser';
 
 function formatLogToString(intermediateSteps, observationPrefix = "Observation: ", llmPrefix = "Thought: ") {
@@ -352,9 +350,6 @@ const tools = [
     // }),
 ];
 
-// console.log(tools);
-// const result = retrievalQAChain.invoke({ query: `Who are the main characters in the novel?` });
-
 const agent = await createReactAgent({
     llm: slowLLM,
     tools,
@@ -402,28 +397,38 @@ const input = // `What do you think of this novel?`
 
 console.log(chalk.greenBright(`Question: ${input}`));
 
-// const result = { output: JSON.stringify(await extractRetrievalChain.invoke(input)) };
+// const result = { output: JSON.stringify(await qaChain.invoke(input)) };
+
+// const result = { output: JSON.stringify(await qaRetriever.invoke(input))};
 
 const result = await executor.invoke({ input },
 {
     callbacks: [{
         handleToolStart(tool, input, runId, parentRunId, tags, metadata, runName) {
-            internLookup[runId] = runName;
-            console.log(chalk.blueBright(`Boss asks ${runName}: ${input}`));
+            internLookup[runId] = runName || tool.name || (tool.id && tool.id[2]);
+            console.log(chalk.blueBright(`Boss asks ${internLookup[runId]}: ${input}`));
         },
         handleToolEnd(output, runId, parentRunId, tags) {
-            console.log(chalk.blue(`${internLookup[runId] || 'Intern'} responds: ${output}`));
-            internLookup[runId] = undefined;
+            console.log(chalk.bgBlueBright(`${internLookup[runId] || 'Intern'} responds: ${output}`));
+            delete internLookup[runId];
+        },
+        handleToolError(err, runId, parentRunId, tags) {
+            console.log(chalk.red(`${internLookup[runId] || 'Intern'} errors: ${err.message} : ${JSON.stringify(err)}`));
+            delete internLookup[runId];
         },
         handleAgentAction(action, runId, parentRunId, tags) {
             const thought = action.log.trim().match(/.*^Thought:(.*?)(?:^Action:|^Final Answer:)/ms)[1].trim();
-            console.log(chalk.whiteBright(`\n${thought}\n`));
+            if(thought) {
+                console.log(chalk.whiteBright(`\n${thought}\n`));
+            } else {
+                console.log(chalk.whiteBright(`\n${action.log.trim()}`));
+            }
         },
         // handleLLMStart(llm, message, runId, parentRunId, extraParams, tags, metadata, runName) {
         //     console.log(chalk.yellowBright(`\nAsking LLM: ${message}`));
         // },
         // handleLLMEnd(llmOutput, runId, parentRunId, tags) {
-        //     console.log(chalk.yellow(`\nLLM result: ${llmOutput.generations[0][0].text}\n`));
+        //     console.log(chalk.bgYellowBright(`\nLLM result: ${llmOutput.generations[0][0].text}\n`));
         // },
     }],
 });
