@@ -133,6 +133,7 @@ const mainAgentPromptTemplate = ChatPromptTemplate.fromMessages([
 
 Find the book's flaws when they exist, and help fix them - that is the whole point. Analyze any flaws rigorously and point them out to the author.
 
+You will first come up with an overall plan for answering the query, and then break that plan down into steps, and then iterate through the steps to produce a result.
 In each iteration, you first will come up with a plan or thought, and you will output it like this:
 
 \`\`\`
@@ -179,24 +180,24 @@ Final Answer: the final answer to the original query
 
 Always in your responses then, you should include a single Thought, and either an Action *or* a Final Answer but not both - it's one or the other, but ALWAYS include one of the two.
 
-Here's an example of a full process, using tools, to answer a query:
+Here's an example with a made-up query and facts that do not come from this novel, just to demonstrate the process and format:
 
 \`\`\`
-Query: Who are the main characters? What language do they speak?
-Thought: I should first use a tool to identify the characters, and then use another tool to find something each says and identify the languages.
-Action: character-finder-tool
-Action Input: Who are the main characters?
-Observation: Alison and Mary are the main characters
-Thought: I should now use a tool to find something Alison says
-Action: quote-finder-tool
-Action Input: Please find something Alison says in the book.
-Observation: Alison says "I am a girl"
-Thought: I can tell that Alison speaks English. Now I should find out what language Mary speaks.
-Action: quote-finder-tool
-Action Input: Please find something Mary says in the book.
-Observation: In chapter 9, Mary says "Je suis une fille"
-Thought: Mary speaks French. I now know all the main characters, and their languages, which was the original query.
-Final Answer: The main characters are Alison, who speaks English, and Mary, who speaks French.
+Query: Some question about the novel
+Thought: An overall plan, broken down into steps. You will then iterate through the steps one by one to compile a final answer.
+Action: first-tool
+Action Input: Tool query which will produce information about the first step in the plan.
+Observation: results from the tool
+Thought: Now I should consider what to do next and what tool might be useful based on the plan and the observations so far.
+Action: another-tool
+Action Input: some question for the next tool
+Observation: results of the tool call
+Thought: Continue executing the plan as informed by the observations
+Action: more-tool-use
+Action Input: input for the tool
+Observation: tool results
+Thought: Ok, from all the observations so far, I'm ready to produce a final result
+Final Answer: The best answer to the query based on the thoughts and observations above.
 \`\`\`
 
 `),
@@ -208,43 +209,40 @@ Query: {input}`),
 ]);
 
 const qaStuffPromptTemplate = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`You answer queries about a novel in syntactically correct JSON.
-You are given extracts from a semantic index of the novel, in JSON.
-Consider only these extracts to answer the query. You should ANSWER THE QUERY, and not just regurgitate verbatim quotes.
+    SystemMessagePromptTemplate.fromTemplate(`You answer queries about a novel for a developmental editor.
+You are given a limited number of extracts from a semantic index of the novel, in JSON.
+Answer the query by considering these extract. You should ANSWER THE QUERY, and not just regurgitate verbatim quotes.
 
 Make it clear that you're only reading a few shorts extracts from the novel, and you might be overlooking parts of the novel that might shed more light on the query.
 Let your boss know that they can ask you to read further if necessary to confirm things.
+
+When you have an answer, provide it back to the editor in JSON format like this:
+\`\`\`
+{{"answer":"The sky is blue","warning":"It's possible that other parts of the book tell a different story. Ask me to confirm this fact if you want to double-check."}}
+\`\`\`
 
 If you don't know the answer, or the answer cannot be found in the extracts, just say that you don't know for sure, and include your best guess.
 You won't get in trouble for saying you don't know. You can do that by responding like this for example:
 
 \`\`\`
-{{"warning":"I can only make an educated guess based on the few short passages that I read.","answer":"As far as I can tell, the hero dies at the end."}}
+{{"answer":"As far as I can tell, the hero dies at the end.","warning":"I can only make an educated guess based on the few short passages that I read."}}
 \`\`\`
 
-If the question is too vague or complex, then ask for it to be broken down into simpler questions or to be rephrased in a more precise way.
+If the question is vague or multipartite, then ask for it to be broken down into simpler individual questions or to be rephrased in a more precise way.
 You can do that like this for example:
 
 \`\`\`
 {{"warning":"That question is too complex for me. Could you break it down into simpler questions, and ask them one at a time?"}}
-\`\`\`
-
-When you respond, you *must* do so in syntactically correct JSON for example:
-
-\`\`\`
-{{"answer":"The hero starts off at home (page 17), later in the novel he is in a car (page 211). Later still, he gets to the office (page 300)."}}
 \`\`\``),
-    HumanMessagePromptTemplate.fromTemplate(`Query: {question}
+    HumanMessagePromptTemplate.fromTemplate(`Editor's query: {question}
 Extracts:
 {context}`),
 ]);
 
 const extractStuffPromptTemplate = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`You provide verbatim extracts or passages (up to a paragraph or so long) from a novel.
-
-You are given extracts from a semantic index of the novel in JSON format.
-
-Given these extracts and a query, return a single extract (up to a paragraph or so long) from the novel that is the most relevant to the query.
+    SystemMessagePromptTemplate.fromTemplate(`You provide verbatim extracts or passages from a novel for a developmental editor.
+You are given extracts from a semantic index of the novel in JSON.
+Given these extracts and a query, return a single extract from the novel that is the most relevant to the query.
 
 Make it clear this is only a single extract, and there might be other extracts that are relevant to the query.
 Let your boss know that they can ask for other extracts if they want more.
@@ -267,7 +265,7 @@ You can do that by responding like this (omitting any extract) for example:
 If the extract you choose does not cover the entire question, then let your boss know that it's only partly responsive, and that for further extracts they should rephrase the question to focus on parts which weren't covered by the extract your provided. Do include the most suitable extract though, for example:
 
 \`\`\`
-{{"warning":"No single extract really covers everything you asked about. Please ask again focusing on any areas this extract doesn't cover","commentary":"This extract is a perfect example of symbolism used in the text, which is part of what you were asking for.","extract":{{"loc":{{"lines":{{"from":423,"to":551}}}},"text":"Inside, the glass walls reflected not just the world outside but also the soul within, as if inviting visitors to see beyond the veil of reality and touch the very essence of their own being."}}}}
+{{"extract":{{"text":"Inside, the glass walls reflected not just the world outside but also the soul within, as if inviting visitors to see beyond the veil of reality and touch the very essence of their own being.","loc":{{"lines":{{"from":423,"to":551}}}}}},"commentary":"This extract is a perfect example of symbolism used in the text, which is part of what you were asking for, but doesn't cover any major plot elements, which you had also wanted.","warning":"No single extract really covers everything you asked about. If you want another extract, focus your question more narrowly."}}
 \`\`\`
 
 When you find an ideal extract, omit any warning, but you should include your own commentary on the extract, along with the verbatim text.
@@ -275,11 +273,10 @@ The commentary should clarify the context of the extract, and identify any prono
 All responses *must* be in syntactically valid JSON for example:
 
 \`\`\`
-{{"commentary":"I chose this extract because it shows clearly how the hero defeated the dragon. \\"He\\" in the extract refers to the hero.","extract":{{"loc":{{"lines":{{"from":123,"to":456}}}},"text":"And then, he stabbed the dragon straight through the heart and killed it."}}}}
+{{"extract":{{"text":"And then, he stabbed the dragon straight through the heart and killed it.","loc":{{"lines":{{"from":123,"to":456}}}}}},"commentary":"I chose this extract because it shows clearly how the hero defeated the dragon. \\"He\\" in the extract refers to the hero."}}
 \`\`\`
 
-When there is an appropriate extract, always return it as demonstrated above. Do not forget to include the actual extract from your response when there is one, and always use the most representative extract that best responds to the query.`,
-    ),
+When there is an appropriate extract, always return it as demonstrated above. Do not forget to include the actual extract from your response when there is one, and always use the most representative extract that best responds to the query.`),
     HumanMessagePromptTemplate.fromTemplate(`Editor's query: {question}
 Extracts to choose from:
 {context}`),
@@ -326,15 +323,20 @@ const extractRetrievalChain = RunnableSequence.from([
 const tools = [
     new DynamicTool({
         // verbose: true,
-        name: 'Joe Analyst',
-        description: 'An intern who answers questions about what happens in the novel. He is best for broad questions about the novel.',
+        name: 'novel-analyst',
+        description: 'A tool that can answer questions about what happens in the novel. It is best for broad questions about the novel, plot, characters, scenes and other elements in the story.',
         func: async (x) => JSON.stringify(await qaChain.invoke(x)),
     }),
     new DynamicTool({
         // verbose: true,
-        name: 'Sally Extractor',
-        description: 'An intern who can read the novel and provide a single short extract up to a paragraph or so long. She is best for very specific verbatim extracts about specific details.',
+        name: 'quote-extractor',
+        description: 'A tool that can provide a single short extract up to a paragraph or so long. It is best for very specific verbatim extracts about specific things that happen in the novel.',
         func: async (x) => JSON.stringify(await extractRetrievalChain.invoke(x)),
+    }),
+    new DynamicTool({
+        name: 'word-count',
+        description: 'Count the number of words in the input and return it as a number.',
+        func: async (x) => _(x).split(/\b/).filter(/^\w+$/).size(),
     }),
     // new WikipediaQueryRun({
     //     topKResults: 3,
