@@ -138,8 +138,8 @@ const mainAgentPromptTemplate = ChatPromptTemplate.fromMessages([
 
 Find the book's flaws when they exist, and help fix them - that is the whole point. Analyze any flaws rigorously and point them out to the author.
 
-You will first come up with an overall plan for answering the query, and then break that plan down into steps, and then iterate through the steps to produce a result.
-In each iteration, you first will come up with a plan or thought, and you will output it like this:
+You will first come up with an overall plan for answering the query, and then break that plan down into simple individual steps, and then iterate through the steps to produce a result.
+In each iteration, you first will come up with a thought for how to achieve this step, and you will output it like this:
 
 \`\`\`
 Thought: you should always think about what additional research might help better answer the question
@@ -147,7 +147,7 @@ Thought: you should always think about what additional research might help bette
 
 After providing the thought, you will choose either to use a tool to gather more information, or whether you have enough information for a final answer.
 
-You have access to the following tools to help with researching your answer:
+You have access to the following tools to help with researching your answer, you can use any or all of them as needed:
 
 \`\`\`
 {tools}
@@ -190,14 +190,11 @@ Here's an example with a made-up query and facts that do not come from this nove
 \`\`\`
 Query: Some question about the novel
 Thought: An overall plan, broken down into steps. You will then iterate through the steps one by one to compile a final answer.
-Action: first-tool
+Action: some-tool
 Action Input: Tool query which will produce information about the first step in the plan.
 Observation: results from the tool
-Thought: Now I should consider what to do next and what tool might be useful based on the plan and the observations so far.
-Action: another-tool
-Action Input: some question for the next tool
-Observation: results of the tool call
-Thought: Continue executing the plan as informed by the observations
+... (more thought/action/observations)
+Thought: Continue executing the plan but amending it as necessary as informed by the observations
 Action: more-tool-use
 Action Input: input for the tool
 Observation: tool results
@@ -216,9 +213,9 @@ Query: {input}`),
 const qaStuffPromptTemplate = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`You answer queries about a novel for a developmental editor.
 You are given a limited number of extracts from a semantic index of the novel, in JSON.
-Answer the query by considering these extract. You should ANSWER THE QUERY, and not just regurgitate verbatim quotes.
+Answer the query as completely and accurately as possible by considering these extract.
+You should ANSWER THE QUERY, and not just regurgitate verbatim quotes.
 
-Make it clear that you're only reading a few shorts extracts from the novel, and you might be overlooking parts of the novel that might shed more light on the query.
 Let your boss know that they can ask you to read further if necessary to confirm things.
 
 When you have an answer, provide it back to the editor in JSON format like this:
@@ -329,7 +326,7 @@ const tools = [
     new DynamicTool({
         // verbose: true,
         name: 'novel-analyst',
-        description: 'A tool that can answer questions about what happens in the novel. It is best for broad questions about the novel, plot, characters, scenes and other elements in the story.',
+        description: 'A tool that can answer basic questions about story elements of the novel: plot, characters, scenes and such.',
         func: async (x) => JSON.stringify(await qaChain.invoke(x)),
     }),
     new DynamicTool({
@@ -340,23 +337,25 @@ const tools = [
     }),
     new DynamicTool({
         name: 'word-count',
-        description: 'Count the number of words in the input and return it as a number.',
-        func: async (x) => _(x).split(/\b/).filter(/^\w+$/).size(),
+        description: 'Count the number of words in the literal input. If you need to count words, send the text to this tool for an accurate number. This tool will treat the input itself as the thing to count, it will not look anything up or interpret the input in any way.',
+        func: async (x) => {
+            return `That input text had ${_(x).split(/\b/).filter(w => /^\w+$/.test(w)).size()} words`
+        },
     }),
     // new WikipediaQueryRun({
     //     topKResults: 3,
     //     maxDocContentLength: 4000,
     // }),
-    new DuckDuckGoSearch({
-        maxResults: 3
-    }),
+    // new DuckDuckGoSearch({
+    //     maxResults: 3
+    // }),
     // new ExaSearchResults({
     //     client: new Exa('7980b8df-2d60-4900-bc29-4d3695eb4e45'),
     // }),
 ];
 
 const agent = await createReactAgent({
-    llm: slowLLM,
+    llm: commandRLLMChat,
     tools,
     prompt: mainAgentPromptTemplate,
  });
