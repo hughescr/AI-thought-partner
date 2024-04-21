@@ -60,36 +60,43 @@ async function createReactAgent({ llm, tools, prompt, streamRunnable, }) {
 // const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048, baseUrl: 'http://127.0.0.1:11434' });
 const embeddings = new OllamaEmbeddings({ model: 'mistral:instruct', numCtx: 32768 });
 
+const commonOptions = { temperature: 0, seed: 19740822 };
+const commonOptionsJSON = { format: 'json' };
+const commonOptions8k = { numCtx: 8 * 1024, ...commonOptions };
+const commonOptions8kJSON = { ...commonOptions8k, ...commonOptionsJSON };
+const commonOptions32k = { numCtx: 32 * 1024, ...commonOptions };
+const commonOptions32kJSON = { ...commonOptions32k, ...commonOptionsJSON };
+const commonOptions64k = { numCtx: 64 * 1024, ...commonOptions };
+const commonOptions64kJSON = { ...commonOptions64k, ...commonOptionsJSON };
 
 // mistral7b-instruct has 32k training ctx but ollama sets it to 2k so need to override that here
 // Prompt parse: ~550-600 t/s; generation: ~50-60 t/s
-const fastestLLMChat = new ChatOllama({ model: 'mistral:instruct', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11435' });
-const fastestLLMJSON = new ChatOllama({ model: 'mistral:instruct', temperature: 0, numCtx: 32768, format: 'json', baseUrl: 'http://127.0.0.1:11435' });
-const fastestLLMInstruct = new ChatOllama({ model: 'mistral:instruct', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11435' });
+const mistralLLMChat = new ChatOllama({ model: 'mistral:instruct', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11435' });
+const mistralLLMJSON = new ChatOllama({ model: 'mistral:instruct', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11435' });
+
+// wizardlm2:7b-q5_1 has 32k training ctx but ollama sets it to 2k so need to override that here, it's quite bad at long context though.
+// Prompt parse: 500-650 t/s; generation: ~40-50 t/s
+const wizard7bLLMChat = new ChatOllama({ model: 'wizardlm2:7b-q5_1', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11435' });
+const wizard7bLLMJSON = new ChatOllama({ model: 'wizardlm2:7b-q5_1', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11435' });
 
 // llama3 llama3:8b-instruct-q5_K_M has 8k ctx
-const llama3LLMChat = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', temperature: 0, numCtx: 8192, baseUrl: 'http://127.0.0.1:11435' });
-const llama3LLMJSON = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', temperature: 0, numCtx: 8192, format: 'json', baseUrl: 'http://127.0.0.1:11435' });
-const llama3LLMInstruct = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', temperature: 0, numCtx: 8192, baseUrl: 'http://127.0.0.1:11435' });
+const llama3LLMChat = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', ...commonOptions8k, baseUrl: 'http://127.0.0.1:11435' });
+const llama3LLMJSON = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', ...commonOptions8kJSON, baseUrl: 'http://127.0.0.1:11435' });
 
 // mixtral:8x7b-instruct-v0.1-q5_K_M - 32k context
 // Prompt parse: ~150-200 t/s; generation: ~20-25 t/s
-const slowLLMChat = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11436' });
-const slowLLMJSON = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', temperature: 0, numCtx: 32768, format: 'json', baseUrl: 'http://127.0.0.1:11436' });
-const slowLLMInstruct = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11436' });
+const mixtral7BLLMChat = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11436' });
+const mixtral7BLLMJSON = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11436' });
 
 // command-r:35b-v0.1-q6_K has 128k training ctx but ollama sets it to 2k so need to override that here
 // Prompt parse: ~20t/s; generation: ~4 t/s
-const commandRLLMChat = new ChatOllama({ model: 'command-r:35b-v0.1-q6_K', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11436' });
-const commandRLLMJSON = new ChatOllama({ model: 'command-r:35b-v0.1-q6_K', temperature: 0, numCtx: 32768, format: 'json', baseUrl: 'http://127.0.0.1:11436' });
-const commandRLLMInstruct = new ChatOllama({ model: 'command-r:35b-v0.1-q6_K', temperature: 0, numCtx: 32768, baseUrl: 'http://127.0.0.1:11436' });
+const commandRLLMChat = new ChatOllama({ model: 'command-r:35b-v0.1-q6_K', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11437' });
+const commandRLLMJSON = new ChatOllama({ model: 'command-r:35b-v0.1-q6_K', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11437' });
 
-// mixtral:8x22b-instruct-v0.1-q4_0 - 65k training context but ollama sets it to 2k, has special tokens for tools and shit
+// mixtral:8x22b-instruct-v0.1-q4_0 - 64k training context but ollama sets it to 2k, has special tokens for tools and shit
 // Prompt parse: ~60-80 t/s; generation ~11-12 t/s
-const slowestLLMChat = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, baseUrl: 'http://127.0.0.1:11437' });
-const slowestLLMJSON = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, format: 'json', baseUrl: 'http://127.0.0.1:11437' });
-const slowestLLMInstruct = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', temperature: 0, numCtx: 65536, baseUrl: 'http://127.0.0.1:11437' });
-
+const mixtral22bLLMChat = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', ...commonOptions64k, baseUrl: 'http://127.0.0.1:11437' });
+const mixtral22bLLMJSON = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', ...commonOptions64kJSON, baseUrl: 'http://127.0.0.1:11437' });
 
 const storeDirectory = 'novels/Christmas Town draft 2';
 // const storeDirectory = 'novels/Fighters_pages';
