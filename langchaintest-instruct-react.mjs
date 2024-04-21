@@ -12,7 +12,7 @@ import { DuckDuckGoSearch } from '@langchain/community/tools/duckduckgo_search';
 
 import { AgentExecutor } from 'langchain/agents';
 
-import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
+import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate } from '@langchain/core/prompts';
 
 import { renderTextDescription } from 'langchain/tools/render';
 import { ReActSingleInputOutputParser } from './node_modules/langchain/dist/agents/react/output_parser.js';
@@ -203,8 +203,8 @@ Final Answer: The main characters are Alison, who speaks English, and Mary, who 
         HumanMessagePromptTemplate.fromTemplate(
 `Ok, begin!
 
-Query: {input}
-{agent_scratchpad}`),
+Query: {input}`),
+        AIMessagePromptTemplate.fromTemplate(`{agent_scratchpad}`),
 ]);
 
 const qaStuffPromptTemplate = ChatPromptTemplate.fromMessages([
