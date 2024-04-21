@@ -88,10 +88,15 @@ const llama3LLMJSON = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', ...co
 const mixtral7BLLMChat = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11436' });
 const mixtral7BLLMJSON = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11436' });
 
-// command-r:35b-v0.1-q6_K has 128k training ctx but ollama sets it to 2k so need to override that here
-// Prompt parse: ~20t/s; generation: ~4 t/s
-const commandRLLMChat = new ChatOllama({ model: 'command-r:35b-v0.1-q6_K', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11437' });
-const commandRLLMJSON = new ChatOllama({ model: 'command-r:35b-v0.1-q6_K', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11437' });
+// dolphin-mixtral:8x7b-v2.7-q6_K - 32k training context but ollama sets it to 2k
+// Prompt parse: ~150-200 t/s; generation: ~20-25 t/s
+const dolphmix7BLLMChat = new ChatOllama({ model: 'dolphin-mixtral:8x7b-v2.7-q6_K', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11436' });
+const dolphmix7BLLMJSON = new ChatOllama({ model: 'dolphin-mixtral:8x7b-v2.7-q6_K', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11436' });
+
+// command-r-plus:104b-q4_0 has 128k training ctx but ollama sets it to 2k so need to override that here
+// Prompt parse: ~50-60t/s; generation: ~5-6 t/s
+const commandRLLMChat = new ChatOllama({ model: 'command-r-plus:104b-q4_0', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11437' });
+const commandRLLMJSON = new ChatOllama({ model: 'command-r-plus:104b-q4_0', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11437' });
 
 // mixtral:8x22b-instruct-v0.1-q4_0 - 64k training context but ollama sets it to 2k, has special tokens for tools and shit
 // Prompt parse: ~60-80 t/s; generation ~11-12 t/s
