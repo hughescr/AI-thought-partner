@@ -76,8 +76,8 @@ const mistralLLMJSON = new ChatOllama({ model: 'mistral:instruct', ...commonOpti
 
 // wizardlm2:7b-q5_1 has 32k training ctx but ollama sets it to 2k so need to override that here, it's quite bad at long context though.
 // Prompt parse: 500-650 t/s; generation: ~40-50 t/s
-const wizard7bLLMChat = new ChatOllama({ model: 'wizardlm2:7b-q5_1', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11435' });
-const wizard7bLLMJSON = new ChatOllama({ model: 'wizardlm2:7b-q5_1', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11435' });
+const wizard7bLLMChat = new ChatOllama({ model: 'wizardlm2:7b-q5_1', ...commonOptions8k, baseUrl: 'http://127.0.0.1:11435' });
+const wizard7bLLMJSON = new ChatOllama({ model: 'wizardlm2:7b-q5_1', ...commonOptions8kJSON, baseUrl: 'http://127.0.0.1:11435' });
 
 // llama3 llama3:8b-instruct-q5_K_M has 8k ctx
 const llama3LLMChat = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', ...commonOptions8k, baseUrl: 'http://127.0.0.1:11435' });
