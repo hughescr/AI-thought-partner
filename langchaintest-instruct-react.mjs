@@ -492,7 +492,7 @@ const result = await executor.invoke({ input },
             delete internLookup[runId];
         },
         handleToolError(err, runId, parentRunId, tags) {
-            console.log(chalk.red(`${internLookup[runId] || 'Intern'} errors: ${err.message} : ${JSON.stringify(err)}`));
+            console.log(chalk.red(`${internLookup[runId] || 'Intern'} errors: ${err.message} : ${JSON.stringify(err)}`), err);
             delete internLookup[runId];
         },
         handleAgentAction(action, runId, parentRunId, tags) {
