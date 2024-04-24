@@ -29,7 +29,7 @@ const embeddings = CacheBackedEmbeddings.fromBytesStore(
 
 const splitter = new SemanticTextSplitter({
     showProgress: true,
-    chunkSize: 500,
+    chunkSize: 250, // Tokens!
     embeddings,
 });
 
