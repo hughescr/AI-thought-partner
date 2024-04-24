@@ -4,7 +4,10 @@ import _ from 'lodash';
 import { OllamaEmbeddings } from '@langchain/community/embeddings/ollama';
 import { ChatOllama } from '@langchain/community/chat_models/ollama';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
-import { HydeRetriever } from "langchain/retrievers/hyde";
+import { HydeRetriever } from 'langchain/retrievers/hyde';
+import { StringPromptValue, } from '@langchain/core/prompt_values';
+import { maximalMarginalRelevance } from '@langchain/core/utils/math';
+
 import { RunnableSequence, RunnablePassthrough } from '@langchain/core/runnables';
 import { DynamicTool } from '@langchain/core/tools';
 import { WikipediaQueryRun } from '@langchain/community/tools/wikipedia_query_run';
@@ -105,32 +108,104 @@ const mixtral22bLLMJSON = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q
 
 const storeDirectory = 'novels/Christmas Town draft 2';
 // const storeDirectory = 'novels/Fighters_pages';
+
+/**
+ * Return documents selected using the maximal marginal relevance.
+ * Maximal marginal relevance optimizes for similarity to the query AND diversity
+ * among selected documents.
+ *
+ * @param {string} query - Text to look up documents similar to.
+ * @param {number} options.k - Number of documents to return.
+ * @param {number} options.fetchK=20- Number of documents to fetch before passing to the MMR algorithm.
+ * @param {number} options.lambda=0.5 - Number between 0 and 1 that determines the degree of diversity among the results,
+ *                 where 0 corresponds to maximum diversity and 1 to minimum diversity.
+ * @param {MongoDBAtlasFilter} options.filter - Optional Atlas Search operator to pre-filter on document fields
+ *                                      or post-filter following the knnBeta search.
+ *
+ * @returns {Promise<Document[]>} - List of documents selected by maximal marginal relevance.
+ */
+async function maxMarginalRelevanceSearch(query, options) {
+    const { k, fetchK = 20, lambda = 0.5, filter } = options;
+    const queryEmbedding = await this.embeddings.embedQuery(query);
+    // preserve the original value of includeEmbeddings
+    const includeEmbeddingsFlag = options.filter?.includeEmbeddings || false;
+    // update filter to include embeddings, as they will be used in MMR
+    const resultDocs = await this.similaritySearchVectorWithScore(queryEmbedding, fetchK);
+    const embeddingList = await Promise.all(resultDocs.map((doc) => this.embeddings.embedQuery(doc[0].pageContent)));
+    const mmrIndexes = maximalMarginalRelevance(queryEmbedding, embeddingList, lambda, k);
+    return mmrIndexes.map((idx) => {
+        const doc = resultDocs[idx][0];
+        // remove embeddings if they were not requested originally
+        if (!includeEmbeddingsFlag) {
+            delete doc.metadata[this.embeddingKey];
+        }
+        return doc;
+    });
+}
+
 const vectorStore = await FaissStore.load(
     storeDirectory,
     embeddings
 );
+vectorStore.maxMarginalRelevanceSearch = maxMarginalRelevanceSearch.bind(vectorStore);
 
 const hydePrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate('Provide 3 alternate phrasings of the query, and then write a short paragraph which responds to the query.'),
     HumanMessagePromptTemplate.fromTemplate('Query: {question}'),
 ]);
 
+async function mmrSearch(query, runManager)
+{
+    let value = new StringPromptValue(query);
+    // Use a custom template if provided
+    if (this.promptTemplate) {
+        value = await this.promptTemplate.formatPromptValue({ question: query });
+    }
+    // Get a hypothetical answer from the LLM
+    const res = await this.llm.generatePrompt([value]);
+    const answer = res.generations[0][0].text;
+    // Retrieve relevant documents based on the hypothetical answer
+    if (this.searchType === "mmr") {
+        if (typeof this.vectorStore.maxMarginalRelevanceSearch !== "function") {
+            throw new Error(`The vector store backing this retriever, ${this._vectorstoreType()} does not support max marginal relevance search.`);
+        }
+        return this.vectorStore.maxMarginalRelevanceSearch(answer, {
+            k: this.k,
+            filter: this.filter,
+            ...this.searchKwargs,
+        }, runManager?.getChild("vectorstore"));
+    }
+    return this.vectorStore.similaritySearch(answer, this.k, this.filter, runManager?.getChild("vectorstore"));
+}
+
 // const retriever = vectorStore.asRetriever({ k: 15 });
 const qaRetriever = new HydeRetriever({
     // verbose: true,
     vectorStore,
-    llm: llama3LLMChat, // Basic task to write the prompt so do it quickly
-    k: 20,
+    llm: mistralLLMChat, // Basic task to write the prompt so do it quickly
+    searchType: 'mmr',
+    searchKwargs: {
+        lambda: 0.75,
+        fetchK: 100,
+    },
+    k: 50,
     promptTemplate: hydePrompt,
 });
+qaRetriever._getRelevantDocuments = mmrSearch.bind(qaRetriever);
 
 const extractRetriever = new HydeRetriever({
     // verbose: true,
     vectorStore,
-    llm: llama3LLMChat, // Basic task to write the prompt so do it quickly
-    k: 20,
+    llm: mistralLLMChat, // Basic task to write the prompt so do it quickly
+    searchType: 'mmr',
+    searchKwargs: {
+        lambda: 0.75,
+        fetchK: 100,
+    },
+    k: 50,
     promptTemplate: hydePrompt,
 });
+extractRetriever._getRelevantDocuments = mmrSearch.bind(extractRetriever);
 
 const mainAgentPromptTemplate = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(
