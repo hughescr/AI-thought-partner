@@ -414,13 +414,13 @@ const tools = [
     new DynamicTool({
         // verbose: true,
         name: 'novel-analyst',
-        description: 'A tool that can answer basic questions about story elements of the novel: plot, characters, scenes and such.',
+        description: 'A tool powered by a Large Language Model that can answer basic questions about story elements of the novel: plot, characters, scenes and such. Tool input should be in complete sentences.',
         func: async (x) => JSON.stringify(await qaChain.invoke(x)),
     }),
     new DynamicTool({
         // verbose: true,
         name: 'quote-extractor',
-        description: 'A tool that can provide a single short extract up to a paragraph or so long. It is best for very specific verbatim extracts about specific things that happen in the novel.',
+        description: 'A tool powered by a Large Language Model that provides a single short extract up to at most a paragraph or so long. It is best for very specific verbatim extracts about specific things that happen in the novel. Tool input should be in complete sentences.',
         func: async (x) => JSON.stringify(await extractRetrievalChain.invoke(x)),
     }),
     new DynamicTool({
