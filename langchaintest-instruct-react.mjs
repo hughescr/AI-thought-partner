@@ -456,23 +456,21 @@ const executor = new AgentExecutor({
 
 const internLookup = {};
 
-const input = // `What do you think of this novel?`
+const input =
+    // `What do you think of this novel?`
     // `Identify sentences which are too long or complex and are hard to understand.`
     // `What would be a good, engaging title for this novel?`
-    // `Who are the main characters in the novel?`
-    // `Does Bathrobe Grouch have a real name?`
-    // `Give a brief precis of the novel: list genre, describe the major characters, and provide an overall plot summary.`
+    // `Give a precis of the novel: list genre, describe the protagonist and major characters, and provide an overall plot summary.`
     // `Analyze the story, and let me know if you think this is similar to any other well-known stories in its genre, or in another genre.`
     // `Proofreading: are there any spelling, grammar, or punctuation errors that can distract readers from the story itself?`
-    `Character development: Analyze the important characters and assess how well-developed they are, with distinct personalities, backgrounds, and motivations. This will make them more relatable and engaging to readers.`
-    // `Find me an extract from the novel that shows character development of the main protagonist.`
-    // `Plot structure: Analyze whether the story's events are in a clear and coherent sequence, with rising action, climax, falling action, and resolution. This will help maintain reader interest throughout the novel.`
+    `Character development: Identify the important characters and then assess how well-developed they are, with distinct personalities, backgrounds, and motivations.`
+    // `Plot structure: Analyze whether the story's events are in a clear and coherent sequence, with rising action, climax, falling action, and resolution.`
     // `Subplots: Analyze the sub-plots and minor characters to verify that they add to the story instead of distracting from it. Sub-plots and side-characters should enhance the story and not confuse the reader. Point out any flaws.`
     // `Show, don't tell: Analyze whether the story simply tells readers what is happening or how characters feel, or whether it uses vivid descriptions and actions to show them. This will make the writing more engaging and immersive.`
     // `Consistent point of view: Does the novel stick to one consistent point of view throughout, whether it be first person, third person limited, or omniscient? This will help maintain a cohesive narrative voice.`
-    // `Active voice: Does the writing use active voice instead of passive voice whenever possible? This makes the writing more direct and engaging.`
-    // `Vary sentence structure: Does the writing break up long sentences with shorter ones to create rhythm and variety? This will make the writing more dynamic and interesting to read.`
-    // `Analyze the story from the point of view of a potential reader who purchases the book.`
+    // `Active voice: Does the writing use active voice instead of passive voice whenever possible?`
+    // `Vary sentence structure: Does the writing break up long sentences with shorter ones to create rhythm and variety?`
+    // `Analyze the story from the point of view of a potential reader who purchases the book. Would they be likely to enjoy reading it?`
     // `Analyze the story from the point of view of a literary agent reading this book for the first time and trying to decide if they want to represent this author to publishers.`
     // `Provide suggestions on how to improve any confusing parts of the plot. If there are other narrative elements which should be revised and improved, point them out.`
     // `List all the chapters in the book, and give a one-sentence summary of each chapter.`
@@ -480,10 +478,18 @@ const input = // `What do you think of this novel?`
     // `Who is the ideal audience for this book? What will they enjoy about it? What might they dislike about it? How can the story be adjusted to make it appear to a wider audience?`
     // `Identify any repetitive or superfluous elements in the book.`
     // `Identify any subplots which don't lead anywhere and just distract from the main story.`
-    // `Write a dust-jacket blurb describing this book, with some invented (but realistic) quotes from reviewers about how good the book is. Do not include any extracts from the book itself.`
-    // `Who turns out to have killed Tyler in the end?`
-    // `Write query letter to a potential publisher, explaining the novel and its potential market.`
-    // `Provide an extract from the novel showing how the murder of Tyler is solved.`
+    // `Write a dust-jacket blurb describing this novel and a plot synopsis, in an engaging way but without spoilers, with some invented (but realistic) quotes from reviewers about how good the book is. Do not include any extracts from the book itself.`
+    // `Write a detailed query letter to a potential literary agent, explaining the novel and how it would appeal to readers. The letter should be engaging, and should make the agent interested in repping the book, without being overly cloying or sounding desperate. Be sure to properly research the book content so you're not being misleading. Find out the names of any characters mentioned. The agent will not have read the novel, so any discussion of the novel should not assume that the agent has read it yet. Reference the major events that happen in the book, describe what makes the protagonist engaging for readers, and include something about why the author chose to write this story.`
+    // `Is Meghan a likable and relatable character for readers, even if characters in the book perhaps dislike her? Will readers be able to empathize with her and enjoy the novel with her as the protagonist?`
+    // `Does Bathrobe Grouch have a real name?`
+    // `What is Mr Zimmerman's nickname?`
+    // `How does it turn out that Tyler died in the end? Who is responsible?`
+    // `What is the age of the main character and what are some of the challenges she faces throughout the novel?`
+    // `How can the story be adjusted to make it appealing to a wider audience without losing its core themes of trauma, loss, and redemption?`
+    // `Are there any secondary characters or subplots in the novel that could be expanded upon to provide additional perspectives or interests?`
+    // `Can you provide more context about Roger and his role in the novel? How does he relate to the themes of family, loss, and personal growth?`
+    // `Can you provide a brief overview of the main plot points?`
+    // `Pick any quotation from the book and count the number of words in it.`
 ;
 
 
