@@ -150,7 +150,15 @@ const vectorStore = await FaissStore.load(
 vectorStore.maxMarginalRelevanceSearch = maxMarginalRelevanceSearch.bind(vectorStore);
 
 const hydePrompt = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate('Provide 3 alternate phrasings of the query, and then write a short paragraph which responds to the query.'),
+    SystemMessagePromptTemplate.fromTemplate(`# Instructions
+Provide 3 alternate phrasings of the query (with no formatting, bullets or numbering), and then write a short paragraph which responds to the query.`),
+    HumanMessagePromptTemplate.fromTemplate(`Query: What's your name?`),
+    AIMessagePromptTemplate.fromTemplate(`
+What do you call yourself?
+What is your name?
+How do you say your name?
+
+My name is Simon Smith`),
     HumanMessagePromptTemplate.fromTemplate('Query: {question}'),
 ]);
 
