@@ -12,6 +12,7 @@ import { RunnableSequence, RunnablePassthrough } from '@langchain/core/runnables
 import { DynamicTool } from '@langchain/core/tools';
 import { WikipediaQueryRun } from '@langchain/community/tools/wikipedia_query_run';
 import { DuckDuckGoSearch } from '@langchain/community/tools/duckduckgo_search';
+import { WebBrowser } from 'langchain/tools/webbrowser';
 
 import { AgentExecutor } from 'langchain/agents';
 
@@ -19,14 +20,9 @@ import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemp
 
 import { renderTextDescription } from 'langchain/tools/render';
 import { ReActSingleInputOutputParser } from './node_modules/langchain/dist/agents/react/output_parser.js';
-import { RunnableSingleActionAgent } from './node_modules/langchain/dist/agents/agent.js';
+import { AgentRunnableSequence } from './node_modules/langchain/dist/agents/agent.js';
 import { StringOutputParser, JsonOutputParser } from 'langchain/schema/output_parser';
-
-function formatLogToString(intermediateSteps, observationPrefix = "Observation: ", llmPrefix = "Thought: ") {
-    const formattedSteps = intermediateSteps.reduce((thoughts, { action, observation }) => thoughts +
-        [action.log, `\n${observationPrefix}${observation}`, llmPrefix].join("\n"), "");
-    return formattedSteps;
-}
+import { formatLogToString } from './node_modules/langchain/agents/format_scratchpad/log.js';
 
 // Re-writing this so that it doesn't do the scratchpad wrong for instruct model
 async function createReactAgent({ llm, tools, prompt, streamRunnable, }) {
@@ -40,31 +36,32 @@ async function createReactAgent({ llm, tools, prompt, streamRunnable, }) {
         tool_names: toolNames.join(", "),
     });
     // TODO: Add .bind to core runnable interface.
-    const llmWithStop = llm.bind({
-        stop: ["\nObservation:"],
-    });
-    const agent = RunnableSequence.from([
+    // const llmWithStop = llm.bind({
+    //     stop: ["\nObservation:"],
+    // });
+    const agent = AgentRunnableSequence.fromRunnables([
         RunnablePassthrough.assign({
-            agent_scratchpad: (input) => formatLogToString(input.steps, undefined, ''),
+            agent_scratchpad: (input) => formatLogToString(input.steps, undefined, 'Now continue!\n'),
         }),
         partialedPrompt,
-        llmWithStop,
+        llm,
         new ReActSingleInputOutputParser({
             toolNames,
         }),
-    ]);
-    return new RunnableSingleActionAgent({
-        runnable: agent,
-        defaultRunName: "ReactAgent",
+    ], {
+        name: "ReactAgent",
         streamRunnable,
+        singleAction: true,
     });
+    return agent;
 }
 
-// const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048, baseUrl: 'http://127.0.0.1:11434' });
-const embeddings = new OllamaEmbeddings({ model: 'mistral:instruct', numCtx: 32768 });
+// const embeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048 });
+const embeddings = new OllamaEmbeddings({ model: 'mxbai-embed-large', numCtx: 512 });
+// const embeddings = new OllamaEmbeddings({ model: 'mistral:7b-instruct-v0.2-fp16', numCtx: 32768 });
 
-const commonOptions = { temperature: 0, seed: 19740822 };
-const commonOptionsJSON = { format: 'json' };
+const commonOptions = { temperature: 0.5, seed: 19740822 };
+const commonOptionsJSON = { temperature: 0, format: 'json' };
 const commonOptions8k = { numCtx: 8 * 1024, ...commonOptions };
 const commonOptions8kJSON = { ...commonOptions8k, ...commonOptionsJSON };
 const commonOptions32k = { numCtx: 32 * 1024, ...commonOptions };
@@ -72,39 +69,30 @@ const commonOptions32kJSON = { ...commonOptions32k, ...commonOptionsJSON };
 const commonOptions64k = { numCtx: 64 * 1024, ...commonOptions };
 const commonOptions64kJSON = { ...commonOptions64k, ...commonOptionsJSON };
 
-// mistral7b-instruct has 32k training ctx but ollama sets it to 2k so need to override that here
+// mistral:7b-instruct-v0.2 has 32k training ctx but ollama sets it to 2k so need to override that here
 // Prompt parse: ~550-600 t/s; generation: ~50-60 t/s
-const mistralLLMChat = new ChatOllama({ model: 'mistral:instruct', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11435' });
-const mistralLLMJSON = new ChatOllama({ model: 'mistral:instruct', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11435' });
+const mistralLLMChat = new ChatOllama({ model: 'mistral:7b-instruct-v0.2-q8_0', ...commonOptions32k });
+const mistralLLMJSON = new ChatOllama({ model: 'mistral:7b-instruct-v0.2-q8_0', ...commonOptions32kJSON });
 
-// wizardlm2:7b-q5_1 has 32k training ctx but ollama sets it to 2k so need to override that here, it's quite bad at long context though.
-// Prompt parse: 500-650 t/s; generation: ~40-50 t/s
-const wizard7bLLMChat = new ChatOllama({ model: 'wizardlm2:7b-q5_1', ...commonOptions8k, baseUrl: 'http://127.0.0.1:11435' });
-const wizard7bLLMJSON = new ChatOllama({ model: 'wizardlm2:7b-q5_1', ...commonOptions8kJSON, baseUrl: 'http://127.0.0.1:11435' });
+// llama3 llama3:8b-instruct-Q8_0 has 8k ctx
+// Prompt parse: ~500 t/s; generation: ~40 t/s
+const llama3_8bLLMChat = new ChatOllama({ model: 'llama3:8b-instruct-Q8_0', ...commonOptions8k });
+const llama3_8bLLMJSON = new ChatOllama({ model: 'llama3:8b-instruct-Q8_0', ...commonOptions8kJSON });
 
-// llama3 llama3:8b-instruct-q5_K_M has 8k ctx
-const llama3LLMChat = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', ...commonOptions8k, baseUrl: 'http://127.0.0.1:11435' });
-const llama3LLMJSON = new ChatOllama({ model: 'llama3:8b-instruct-q5_K_M', ...commonOptions8kJSON, baseUrl: 'http://127.0.0.1:11435' });
+// mixtral:8x7b-instruct-v0.1-q8_0 - 32k context
+// Prompt parse: ~200 t/s; generation: ~20-25 t/s
+const mixtral7BLLMChat = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q8_0', ...commonOptions32k });
+const mixtral7BLLMJSON = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q8_0', ...commonOptions32kJSON });
 
-// mixtral:8x7b-instruct-v0.1-q5_K_M - 32k context
-// Prompt parse: ~150-200 t/s; generation: ~20-25 t/s
-const mixtral7BLLMChat = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11436' });
-const mixtral7BLLMJSON = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q5_K_M', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11436' });
-
-// dolphin-mixtral:8x7b-v2.7-q6_K - 32k training context but ollama sets it to 2k
-// Prompt parse: ~150-200 t/s; generation: ~20-25 t/s
-const dolphmix7BLLMChat = new ChatOllama({ model: 'dolphin-mixtral:8x7b-v2.7-q6_K', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11436' });
-const dolphmix7BLLMJSON = new ChatOllama({ model: 'dolphin-mixtral:8x7b-v2.7-q6_K', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11436' });
-
-// command-r-plus:104b-q4_0 has 128k training ctx but ollama sets it to 2k so need to override that here
-// Prompt parse: ~50-60t/s; generation: ~5-6 t/s
-const commandRLLMChat = new ChatOllama({ model: 'command-r-plus:104b-q4_0', ...commonOptions32k, baseUrl: 'http://127.0.0.1:11437' });
-const commandRLLMJSON = new ChatOllama({ model: 'command-r-plus:104b-q4_0', ...commonOptions32kJSON, baseUrl: 'http://127.0.0.1:11437' });
+// llama3 llama3:70b-instruct-q8_0 has 8k ctx
+// Prompt parse: ~65 t/s; generation: ~4-6 t/s
+const llama3_70bLLMChat = new ChatOllama({ model: 'llama3:70b-instruct-q8_0', ...commonOptions8k });
+const llama3_70bLLMJSON = new ChatOllama({ model: 'llama3:70b-instruct-q8_0', ...commonOptions8kJSON });
 
 // mixtral:8x22b-instruct-v0.1-q4_0 - 64k training context but ollama sets it to 2k, has special tokens for tools and shit
 // Prompt parse: ~60-80 t/s; generation ~11-12 t/s
-const mixtral22bLLMChat = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', ...commonOptions64k, baseUrl: 'http://127.0.0.1:11437' });
-const mixtral22bLLMJSON = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', ...commonOptions64kJSON, baseUrl: 'http://127.0.0.1:11437' });
+const mixtral22bLLMChat = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', ...commonOptions64k });
+const mixtral22bLLMJSON = new ChatOllama({ model: 'mixtral:8x22b-instruct-v0.1-q4_0', ...commonOptions64kJSON });
 
 const storeDirectory = 'novels/Christmas Town draft 2';
 // const storeDirectory = 'novels/Fighters_pages';
@@ -151,14 +139,23 @@ vectorStore.maxMarginalRelevanceSearch = maxMarginalRelevanceSearch.bind(vectorS
 
 const hydePrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`# Instructions
-Provide 3 alternate phrasings of the query (with no formatting, bullets or numbering), and then write a short paragraph which responds to the query.`),
-    HumanMessagePromptTemplate.fromTemplate(`Query: What's your name?`),
-    AIMessagePromptTemplate.fromTemplate(`
+Provide 3 alternate phrasings of the query (with no formatting, bullets or numbering), and then write a short paragraph which responds to the query.
+
+## Example:
+
+User:
+\`\`\`
+Query: What's your name?
+\`\`\`
+
+Assistant:
+\`\`\`
 What do you call yourself?
 What is your name?
 How do you say your name?
 
-My name is Simon Smith`),
+My name is Simon Smith
+\`\`\``),
     HumanMessagePromptTemplate.fromTemplate('Query: {question}'),
 ]);
 
@@ -190,13 +187,13 @@ async function mmrSearch(query, runManager)
 const qaRetriever = new HydeRetriever({
     // verbose: true,
     vectorStore,
-    llm: mistralLLMChat, // Basic task to write the prompt so do it quickly
+    llm: llama3_8bLLMChat, // Basic task to write the prompt so do it quickly
     searchType: 'mmr',
     searchKwargs: {
-        lambda: 0.75,
-        fetchK: 100,
+        lambda: 0.5,
+        fetchK: 50,
     },
-    k: 50,
+    k: 15,
     promptTemplate: hydePrompt,
 });
 qaRetriever._getRelevantDocuments = mmrSearch.bind(qaRetriever);
@@ -204,13 +201,13 @@ qaRetriever._getRelevantDocuments = mmrSearch.bind(qaRetriever);
 const extractRetriever = new HydeRetriever({
     // verbose: true,
     vectorStore,
-    llm: mistralLLMChat, // Basic task to write the prompt so do it quickly
+    llm: llama3_8bLLMChat, // Basic task to write the prompt so do it quickly
     searchType: 'mmr',
     searchKwargs: {
-        lambda: 0.75,
-        fetchK: 100,
+        lambda: 0.5,
+        fetchK: 50,
     },
-    k: 50,
+    k: 15,
     promptTemplate: hydePrompt,
 });
 extractRetriever._getRelevantDocuments = mmrSearch.bind(extractRetriever);
@@ -230,15 +227,17 @@ Your job is to help find the book's flaws when they exist, and suggest to the au
 Unless the user asks for a different style of answer, you should answer in full sentences, using proper grammar and spelling. Use Markdown to improve the formatting and presentation of your final answer.
 
 ## Available Tools
-Here is a list of tools that you have available to you:
+Here is a complete list of tools that you have available to you:
 
 {tools}
 
+There are no other tools. Anything else that needs doing, you'll have to do yourself.
+
 # How to proceed with your work
 
-1. You will first come up with an overall plan for answering the query, and then break that plan down into simple individual steps, and then iterate through the steps to produce a result, one step at a time.
+1. You will use a sequence of individual steps to answer the query.
 
-Every response will first begin with a thought for how to achieve this step, and you will output it like this:
+Every response will first *always* begin with a thought for how to achieve this step, and you will output it like this:
 
 \`\`\`
 Thought: you should always think about what additional research might help better answer the question
@@ -252,7 +251,7 @@ Tools also are terrible at answering multi-part questions. So ask one simple que
 You should generally not use tools to do creative work, suggest solutions, or do complex analysis. Do that work yourself. Only use tools to gather information about the novel, its characters, plot, scenes and so forth, or to looks things up on the internet.
 Do not ask compound questions. Ask one simple thing at a time, but ask as many separate questions as you like successively in subsequent tools calls.
 
-You use a tool by replying like this:
+You use a tool by including this in your reply after the Thought:
 
 \`\`\`
 Action: only the name of the tool to use (should be one of [{tool_names}] verbatim with no escaping characters, omit this "Action" line completely if not requesting an Action)
@@ -265,74 +264,94 @@ Action Input: the input to the tool (omit this "Action Input" line completely if
 Observation: the result from the tool
 \`\`\`
 
+If the observation reports that something wasn't clear, or couldn't be determined from the input, you can call the tool again to follow-up and ask for more information.
+
 4. ... (you can then repeat this Thought/Action/Action Input/Observation until you have enough information). Cycle through Though/Action/Observation as many times as necessary - do not take initial tool answers as being exhaustive or conclusive; tools often miss things the first time you ask.
 
-5. When you are all done and have pursued every thought, and you are not requesting another tools use you may move on to a conclusion as a final answer, but do not do this prematurely - make sure you really thought everything through. When you have a final answer, you should use this format:
+5. When you are all done and have pursued every thought, and you are not requesting another tools use you may move on to a conclusion as a final answer, but do not do this prematurely - make sure you really thought everything through.
+When you have a final answer, you should append a Final Answer after your Thought:
 
 \`\`\`
 Final Answer: the final answer to the original query
 \`\`\`
 
-## Remember: Thought (required), [Action/Action Input, Observation] (optional) many times, then Final Answer (at the very end)
-Always in your responses then, you should include a single Thought, and either an Action *or* a Final Answer but not both - it's one or the other, but ALWAYS include one of the two.`),
-    HumanMessagePromptTemplate.fromTemplate(`Query: Some question about the novel`),
-    AIMessagePromptTemplate.fromTemplate(`Thought: An overall plan, broken down into steps. You will then iterate through the steps one by one to compile a final answer.
+## Remember - critical!
+Response the pattern should be: Thought (required every time), [Action/Action Input, Observation] (optional) many times, then Final Answer (at the very end)
+Always in your responses you should include:
+  - a single Thought
+  - either an Action *or* a Final Answer but not both - it's one or the other, but ALWAYS include one of the two.
+
+## Examples:
+
+User:
+\`\`\`
+Query: Some question about the novel
+\`\`\`
+
+Assistant:
+\`\`\`
+Thought: An overall plan, broken down into steps. You will then iterate through the steps one by one to compile a final answer.
 Action: some-tool
-Action Input: Tool query which will produce information about the first step in the plan.`),
-    AIMessagePromptTemplate.fromTemplate(`Observation: results from the tool`),
-    AIMessagePromptTemplate.fromTemplate(`... (more thought/action/observations)`),
-    AIMessagePromptTemplate.fromTemplate(`Thought: Continue executing the plan but amending it as necessary as informed by the observations
-Action: more-tool-use
-Action Input: input for the tool`),
-    AIMessagePromptTemplate.fromTemplate(`Observation: tool results`),
-    AIMessagePromptTemplate.fromTemplate(`Thought: Ok, from all the observations so far, I'm ready to produce a final result
-Final Answer: The best answer to the query based on the thoughts and observations above.`),
+Action Input: Tool query which will produce information about the first step in the plan.
+\`\`\`
+
+Tool output:
+\`\`\`
+Observation: results from the tool
+\`\`\`
+
+... (more thought/action/observations)
+
+Eventually:
+\`\`\`
+Thought: Ok, from all the observations so far, I'm ready to produce a final result
+Final Answer: The best answer to the query based on the thoughts and observations above.
+\`\`\``),
     HumanMessagePromptTemplate.fromTemplate(`Query: {input}`),
     AIMessagePromptTemplate.fromTemplate(`{agent_scratchpad}`),
+    HumanMessagePromptTemplate.fromTemplate(`What's your next Thought and *either* Action, *or* Final Answer (include one of Action or Final Answer each time)?`),
 ]);
 
 const qaStuffPromptTemplate = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`# System Preamble
-## Basic Rules
-You are a powerful conversational AI trained to work as an assistant to a developmental editor (as user), who in turn is assisting authors to improve their unpublished novels. When you answer the user's requests, you cite your sources in your answers.
+    SystemMessagePromptTemplate.fromTemplate(`# Basic Rules
+You work as an assistant to a developmental editor (as user), who in turn is assisting authors to improve their unpublished novels. When you answer the user's requests, you cite your sources in your answers.
 
-# User Preamble
-## Task and Context
-You help developmental editors answer their questrions and other requests interactively. You will be asked a very wide array of requests on all kinds of topics. You should focus on serving the user's needs as best you can, which will be wide-ranging.
-You are given a limited number of extracts from a semantic index of the novel, in JSON as reference material. Answer the query as completely and accurately as possible by considering these extracts. You should ANSWER THE QUERY, and not just regurgitate verbatim quotes.
+# Task and Context
+You help users by answering their queries. You will be asked a very wide array of requests on all kinds of topics. You should focus on serving the user's needs as best you can, which will be wide-ranging.
+You are given a limited number of chunks retrieved from a semantic-indexed database of a novel. Answer the query as completely and accurately as possible by considering these extracts. You should ANSWER THE QUERY, and not just regurgitate verbatim quotes.
 
+# Unable to answer
+If you are unable to answer for some reason, or only able to provide a partial answer, then explain this to the user by including a \`warning\` property in your response, indicating the problem, and what the user can to do help resolve the issue.
 
-## Style Guide
-Unless the user asks for a different style of answer, you should answer in full sentences, using proper grammar and spelling, wrapped in JSON as described below.
-Let the user know that they can ask you to read further if necessary to confirm things.
+# Reply in JSON
+It is very important that your replies be in the form of a JSON object conforming to this JSON schema:
 
-Provide it back to the user in JSON format like this:
-\`\`\`
-{{"answer":"The sky is blue"}}
-\`\`\`
-
-If you don't know the answer, or the answer cannot be found in the extracts, or if you are unsure of the answer for any reason, just say that you don't know for sure, and include your best guess.
-You won't get in trouble for saying you don't know. You can do that by responding like this for example:
-
-\`\`\`
-{{"answer":"As far as I can tell, the hero dies at the end.","warning":"I can only make an educated guess based on the few short passages that I read."}}
-\`\`\`
-
-If the question is vague or multipartite, then ask for it to be broken down into simpler individual questions or to be rephrased in a more precise way.
-You can do that like this for example:
-
-\`\`\`
-{{"warning":"That question is too complex for me. Could you break it down into simpler questions, and ask them one at a time?"}}
-\`\`\``),
-    HumanMessagePromptTemplate.fromTemplate(`Editor's query: {question}
-Extracts:
-{context}`),
+{{
+  "$id": "https://example.com/person.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Response",
+  "type": "object",
+  "properties": {{
+    "answer": {{
+      "type": "string",
+      "description": "The answer to the user's query"
+    }},
+    "warning": {{
+      "type": "string",
+      "description": "Any warnings about the answer, or any other information to help the user resolve the issue"
+    }},
+    "required": []
+  }}
+}}
+`),
+    HumanMessagePromptTemplate.fromTemplate(`Extracts: {context}`),
+    HumanMessagePromptTemplate.fromTemplate(`Query: {question}`),
 ]);
 
 const extractStuffPromptTemplate = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`You provide verbatim extracts or passages from a novel for a developmental editor.
-You are given extracts from a semantic index of the novel in JSON.
-Given these extracts and a query, return a single extract from the novel that is the most relevant to the query.
+    SystemMessagePromptTemplate.fromTemplate(`# Basic rules
+You provide verbatim extracts or passages from a novel for a developmental editor.
+Given a set of extracts and a query, return a single extract from the novel that is the most relevant to the query.
 
 Make it clear this is only a single extract, and there might be other extracts that are relevant to the query.
 Let your boss know that they can ask for other extracts if they want more.
@@ -360,16 +379,57 @@ If the extract you choose does not cover the entire question, then let your boss
 
 When you find an ideal extract, omit any warning, but you should include your own commentary on the extract, along with the verbatim text.
 The commentary should clarify the context of the extract, and identify any pronouns used.
-All responses *must* be in syntactically valid JSON for example:
+All responses *must* be in syntactically valid JSON conforming to the following JSON schema:
 
-\`\`\`
-{{"extract":{{"text":"And then, he stabbed the dragon straight through the heart and killed it.","loc":{{"lines":{{"from":123,"to":456}}}}}},"commentary":"I chose this extract because it shows clearly how the hero defeated the dragon. \\"He\\" in the extract refers to the hero."}}
-\`\`\`
-
-When there is an appropriate extract, always return it as demonstrated above. Do not forget to include the actual extract from your response when there is one, and always use the most representative extract that best responds to the query.`),
-    HumanMessagePromptTemplate.fromTemplate(`Editor's query: {question}
-Extracts to choose from:
-{context}`),
+{{
+  "$id": "https://example.com/person.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Response",
+  "type": "object",
+  "properties": {{
+    "extract": {{
+      "type": "object",
+      "description": "The single extract most relevant to the user's query"
+      "properties": {{
+        "text": {{
+            "type": "string",
+            "description": "The verbatim extract from the novel"
+        }},
+        "loc": {{
+            "type": "object",
+            "properties": {{
+                "lines": {{
+                    "type": "object",
+                    "properties": {{
+                        "from": {{
+                            "type": "integer"
+                        }},
+                        "to": {{
+                            "type": "integer"
+                        }}
+                    }}
+                }},
+                "page": {{
+                    "type": "integer"
+                }}
+            }}
+        }}
+      }}
+    }},
+    "commentary": {{
+      "type": "string",
+      "description": "Your commentary on why the chosen extract was selected"
+    }},
+    "warning": {{
+      "type": "string",
+      "description": "Any warnings about the answer, or any other information to help the user resolve the issue"
+    }},
+    "required": []
+  }}
+}}
+`),
+    HumanMessagePromptTemplate.fromTemplate(`Extracts: {context}`),
+    HumanMessagePromptTemplate.fromTemplate(`Query: {question}`),
 ]);
 
 const sortDocsFormatAsJSON = (documents) => {
@@ -392,7 +452,7 @@ const qaChain = RunnableSequence.from([
 
     qaStuffPromptTemplate,
 
-    fastestLLMJSON,
+    llama3_70bLLMJSON,
 
     new JsonOutputParser(),
 ]);
@@ -405,7 +465,7 @@ const extractRetrievalChain = RunnableSequence.from([
 
     extractStuffPromptTemplate,
 
-    fastestLLMJSON,
+    llama3_70bLLMJSON,
 
     new JsonOutputParser(),
 ]);
@@ -414,13 +474,22 @@ const tools = [
     new DynamicTool({
         // verbose: true,
         name: 'novel-analyst',
-        description: 'A tool powered by a Large Language Model that can answer basic questions about story elements of the novel: plot, characters, scenes and such. Tool input should be in complete sentences.',
-        func: async (x) => JSON.stringify(await qaChain.invoke(x)),
+        description: 'A tool that can answer basic questions about story elements of the novel: plot, characters, scenes and such. Tool input should be questions written in complete sentences.',
+        func: async (x) => JSON.stringify(await qaChain.invoke(JSON.stringify(x), {
+            // callbacks: [{
+            //     handleLLMStart(llm, message, runId, parentRunId, extraParams, tags, metadata, runName) {
+            //         console.log(chalk.yellowBright(`\nAsking LLM: ${message}`));
+            //     },
+            //     handleLLMEnd(llmOutput, runId, parentRunId, tags) {
+            //         console.log(chalk.bgYellowBright(`\nLLM result: ${llmOutput.generations[0][0].text}\n`));
+            //     },
+            // }],
+        })),
     }),
     new DynamicTool({
         // verbose: true,
         name: 'quote-extractor',
-        description: 'A tool powered by a Large Language Model that provides a single short extract up to at most a paragraph or so long. It is best for very specific verbatim extracts about specific things that happen in the novel. Tool input should be in complete sentences.',
+        description: 'A tool that provides a single short extract up to at most a paragraph or so long. It is best for very specific verbatim extracts about specific things that happen in the novel. Tool input should be in complete sentences.',
         func: async (x) => JSON.stringify(await extractRetrievalChain.invoke(x)),
     }),
     new DynamicTool({
@@ -434,16 +503,20 @@ const tools = [
     //     topKResults: 3,
     //     maxDocContentLength: 4000,
     // }),
-    // new DuckDuckGoSearch({
-    //     maxResults: 3
-    // }),
+    new DuckDuckGoSearch({
+        maxResults: 3
+    }),
+    new WebBrowser({
+        model: llama3_8bLLMChat,
+        embeddings,
+    }),
     // new ExaSearchResults({
     //     client: new Exa('7980b8df-2d60-4900-bc29-4d3695eb4e45'),
     // }),
 ];
 
 const agent = await createReactAgent({
-    llm: commandRLLMChat,
+    llm: llama3_70bLLMChat,
     tools,
     prompt: mainAgentPromptTemplate,
  });
@@ -463,7 +536,7 @@ const input =
     // `Give a precis of the novel: list genre, describe the protagonist and major characters, and provide an overall plot summary.`
     // `Analyze the story, and let me know if you think this is similar to any other well-known stories in its genre, or in another genre.`
     // `Proofreading: are there any spelling, grammar, or punctuation errors that can distract readers from the story itself?`
-    `Character development: Identify the important characters and then assess how well-developed they are, with distinct personalities, backgrounds, and motivations.`
+    // `Character development: Identify the important characters and then assess how well-developed they are, with distinct personalities, backgrounds, and motivations.`
     // `Plot structure: Analyze whether the story's events are in a clear and coherent sequence, with rising action, climax, falling action, and resolution.`
     // `Subplots: Analyze the sub-plots and minor characters to verify that they add to the story instead of distracting from it. Sub-plots and side-characters should enhance the story and not confuse the reader. Point out any flaws.`
     // `Show, don't tell: Analyze whether the story simply tells readers what is happening or how characters feel, or whether it uses vivid descriptions and actions to show them. This will make the writing more engaging and immersive.`
@@ -478,8 +551,8 @@ const input =
     // `Who is the ideal audience for this book? What will they enjoy about it? What might they dislike about it? How can the story be adjusted to make it appear to a wider audience?`
     // `Identify any repetitive or superfluous elements in the book.`
     // `Identify any subplots which don't lead anywhere and just distract from the main story.`
-    // `Write a dust-jacket blurb describing this novel and a plot synopsis, in an engaging way but without spoilers, with some invented (but realistic) quotes from reviewers about how good the book is. Do not include any extracts from the book itself.`
-    // `Write a detailed query letter to a potential literary agent, explaining the novel and how it would appeal to readers. The letter should be engaging, and should make the agent interested in repping the book, without being overly cloying or sounding desperate. Be sure to properly research the book content so you're not being misleading. Find out the names of any characters mentioned. The agent will not have read the novel, so any discussion of the novel should not assume that the agent has read it yet. Reference the major events that happen in the book, describe what makes the protagonist engaging for readers, and include something about why the author chose to write this story.`
+    // `Write a dust-jacket blurb describing this novel and a plot synopsis, in an engaging way but without spoilers, with some invented (but realistic) quotes from reviewers about how good the book is. Do not include any extracts from the book itself. Use markdown syntax for formatting.`
+    `Write a detailed query letter to a potential literary agent, explaining the novel and how it would appeal to readers. The letter should be engaging, and should make the agent interested in repping the book, without being overly cloying or sounding desperate. Be sure to properly research the book content so you're not being misleading. Find out the names of any characters mentioned. The agent will not have read the novel, so any discussion of the novel should not assume that the agent has read it yet. Reference the major events that happen in the book, describe what makes the protagonist engaging for readers, and include something about why the author chose to write this story.`
     // `Is Meghan a likable and relatable character for readers, even if characters in the book perhaps dislike her? Will readers be able to empathize with her and enjoy the novel with her as the protagonist?`
     // `Does Bathrobe Grouch have a real name?`
     // `What is Mr Zimmerman's nickname?`
@@ -495,9 +568,29 @@ const input =
 
 console.log(chalk.greenBright(`Question: ${input}`));
 
-// const result = { output: JSON.stringify(await qaChain.invoke(input)) };
+// const result = { output: JSON.stringify(await qaChain.invoke(input, {
+//     callbacks: [{
+//         handleLLMStart(llm, message, runId, parentRunId, extraParams, tags, metadata, runName) {
+//             console.log(chalk.yellowBright(`\nAsking LLM: ${message}`));
+//         },
+//         handleLLMEnd(llmOutput, runId, parentRunId, tags) {
+//             console.log(chalk.bgYellowBright(`\nLLM result: ${llmOutput.generations[0][0].text}\n`));
+//         },
+//     }],
+// })) };
 
-// const result = { output: JSON.stringify(await qaRetriever.invoke(input))};
+// const result = {
+//     output: JSON.stringify(await extractRetrievalChain.invoke(input, {
+//         callbacks: [{
+//             handleLLMStart(llm, message, runId, parentRunId, extraParams, tags, metadata, runName) {
+//                 console.log(chalk.yellowBright(`\nAsking LLM: ${message}`));
+//             },
+//             handleLLMEnd(llmOutput, runId, parentRunId, tags) {
+//                 console.log(chalk.bgYellowBright(`\nLLM result: ${llmOutput.generations[0][0].text}\n`));
+//             },
+//         }],
+//     }))
+// };
 
 const result = await executor.invoke({ input },
 {
@@ -515,7 +608,8 @@ const result = await executor.invoke({ input },
             delete internLookup[runId];
         },
         handleAgentAction(action, runId, parentRunId, tags) {
-            const thought = action.log.trim().match(/.*^Thought:(.*?)(?:^Action:|^Final Answer:)/ms)[1].trim();
+            const thoughtParse = action.log.trim().match(/.*^Thought:(.*?)(?:^Action:|^Final Answer:)/ms);
+            const thought = thoughtParse && thoughtParse[1] && thoughtParse[1].trim && thoughtParse[1].trim();
             if(thought) {
                 console.log(chalk.whiteBright(`\n${thought}\n`));
             } else {
