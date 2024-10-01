@@ -3,11 +3,11 @@
 // TODO: Put info about the LLMs into the state so I don't need to search/replace all the LLM info across the app all the time
 // TODO: Put novel metadata in the state like title, author name, date, ... so that the LLM has more context and doesn't invent novel names
 
-import { OllamaEmbeddings } from '@langchain/community/embeddings/ollama';
+import { OllamaEmbeddings } from '@langchain/ollama';
 import { CacheBackedEmbeddings } from "langchain/embeddings/cache_backed";
 import { InMemoryStore } from "langchain/storage/in_memory";
-import { ChatOllama } from '@langchain/community/chat_models/ollama';
-import { OllamaFunctions } from '@langchain/community/experimental/chat_models/ollama_functions';
+import { ChatOllama } from '@langchain/ollama';
+import { OllamaFunctions } from '@langchain/ollama';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { JsonOutputFunctionsParser } from '@langchain/core/output_parsers/openai_functions';
@@ -20,7 +20,6 @@ import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { HydeRetriever } from 'langchain/retrievers/hyde';
 import { StringPromptValue } from '@langchain/core/prompt_values';
 import { maximalMarginalRelevance } from '@langchain/core/utils/math';
-import { ToolExecutor } from '@langchain/langgraph/prebuilt';
 import { pull } from "langchain/hub";
 import { setGlobalDispatcher, Agent } from 'undici';
 setGlobalDispatcher(new Agent({headersTimeout: 0, bodyTimeout: 0})); // ensure we wait for long ollama runs
@@ -74,8 +73,8 @@ const nemo_12bLLMJSON = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-
 
 // phi3:medium-128k-instruct-q8_0 has 128k ctx but we'll only use 64k
 // Prompt parse: ~250 t/s; generation: ~20 t/s
-const phi3_14bLLMChat = new ChatOllama({ model: 'phi3:medium-128k-instruct-q8_0', ...commonOptions64k });
-const phi3_14bLLMJSON = new ChatOllama({ model: 'phi3:medium-128k-instruct-q8_0', ...commonOptions64kJSON });
+const phi3_14bLLMChat = new ChatOllama({ model: 'phi3:14b-medium-128k-instruct-q8_0', ...commonOptions64k });
+const phi3_14bLLMJSON = new ChatOllama({ model: 'phi3:14b-medium-128k-instruct-q8_0', ...commonOptions64kJSON });
 
 // mixtral:8x7b-instruct-v0.1-q8_0 - 32k context
 // Prompt parse: ~200 t/s; generation: ~20-25 t/s

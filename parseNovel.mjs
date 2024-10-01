@@ -1,4 +1,4 @@
-import { OllamaEmbeddings } from '@langchain/community/embeddings/ollama';
+import { OllamaEmbeddings } from '@langchain/ollama';
 import { CacheBackedEmbeddings } from "langchain/embeddings/cache_backed";
 import { InMemoryStore } from "langchain/storage/in_memory";
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
@@ -11,9 +11,9 @@ import cliProgress from 'cli-progress';
 import { SemanticTextSplitter } from './lib/SemanticChunker.mjs';
 import _, { initial } from 'lodash';
 
-const book = 'Frankenstein';
+const book = 'Christmas Town beta';
 // const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: true, });
-const loader = new TextLoader(`novels/${book}.txt`);
+const loader = new TextLoader(`novels/${book}.md`);
 const docs = await loader.load();
 
 // const docs = [new Document({ pageContent: 'It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief, it was the epoch of incredulity, it was the season of light, it was the season of darkness, it was the spring of hope, it was the winter of despair.' })];
