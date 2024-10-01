@@ -131,3 +131,5 @@ dist
 
 # Ignore neo4j database
 neo4j_db/
+novels/
+repopack-output.txt
