@@ -21,18 +21,23 @@ import { HydeRetriever } from 'langchain/retrievers/hyde';
 import { StringPromptValue } from '@langchain/core/prompt_values';
 import { maximalMarginalRelevance } from '@langchain/core/utils/math';
 import { pull } from "langchain/hub";
-import { setGlobalDispatcher, Agent } from 'undici';
-setGlobalDispatcher(new Agent({headersTimeout: 0, bodyTimeout: 0})); // ensure we wait for long ollama runs
 
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { z } from 'zod';
 
-import { inspect } from 'node:util';
+import { logger } from '@hughescr/logger';
 import _ from 'lodash';
 import chalk from 'chalk';
 
 const commonOptions = { temperature: 0.5, seed: 19740822, keepAlive: '15m' };
 const commonOptionsJSON = { ...commonOptions, temperature: 0, format: 'json' };
+if (process.versions.bun === undefined) {
+    logger.info(chalk.greenBright("Running under Node, setting global dispatcher"));
+    const { setGlobalDispatcher, Agent } = await import('undici');
+    setGlobalDispatcher(new Agent({ headersTimeout: 0, bodyTimeout: 0 })); // ensure we wait for long ollama runs
+} else {
+    logger.warn(chalk.yellowBright("Running under Bun, not setting global dispatcher so LLMs might timeout"));
+}
 const commonOptions8k = { numCtx: 8 * 1024, ...commonOptions };
 const commonOptions8kJSON = { ...commonOptions8k, ...commonOptionsJSON };
 const commonOptions32k = { numCtx: 32 * 1024, ...commonOptions };
