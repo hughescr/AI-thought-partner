@@ -1,8 +1,8 @@
 import chalk from 'chalk';
 import _ from 'lodash';
 
-import { OllamaEmbeddings } from '@langchain/community/embeddings/ollama';
-import { ChatOllama } from '@langchain/community/chat_models/ollama';
+import { OllamaEmbeddings } from '@langchain/ollama';
+import { ChatOllama } from '@langchain/ollama';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { HydeRetriever } from 'langchain/retrievers/hyde';
 import { StringPromptValue, } from '@langchain/core/prompt_values';
