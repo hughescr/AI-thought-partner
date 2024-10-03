@@ -7,30 +7,23 @@ import { OllamaEmbeddings } from '@langchain/ollama';
 import { CacheBackedEmbeddings } from "langchain/embeddings/cache_backed";
 import { InMemoryStore } from "langchain/storage/in_memory";
 import { ChatOllama } from '@langchain/ollama';
-import { OllamaFunctions } from '@langchain/ollama';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { StringOutputParser } from '@langchain/core/output_parsers';
-import { JsonOutputFunctionsParser } from '@langchain/core/output_parsers/openai_functions';
-import { convertToOpenAIFunction } from '@langchain/core/utils/function_calling';
-import { HumanMessage, BaseMessage, AIMessage, FunctionMessage } from '@langchain/core/messages';
+import { JsonOutputToolsParser } from '@langchain/core/output_parsers/openai_tools';
+import { HumanMessage, BaseMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate } from '@langchain/core/prompts';
 import { END, START, StateGraph, MessageGraph } from '@langchain/langgraph';
-import { ToolNode } from '@langchain/langgraph/prebuilt';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { HydeRetriever } from 'langchain/retrievers/hyde';
 import { StringPromptValue } from '@langchain/core/prompt_values';
 import { maximalMarginalRelevance } from '@langchain/core/utils/math';
-import { pull } from "langchain/hub";
 
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import { z } from 'zod';
 
 import { logger } from '@hughescr/logger';
 import _ from 'lodash';
 import chalk from 'chalk';
 
-const commonOptions = { temperature: 0.5, seed: 19740822, keepAlive: '15m' };
-const commonOptionsJSON = { ...commonOptions, temperature: 0, format: 'json' };
 if (process.versions.bun === undefined) {
     logger.info(chalk.greenBright("Running under Node, setting global dispatcher"));
     const { setGlobalDispatcher, Agent } = await import('undici');
@@ -38,60 +31,74 @@ if (process.versions.bun === undefined) {
 } else {
     logger.warn(chalk.yellowBright("Running under Bun, not setting global dispatcher so LLMs might timeout"));
 }
+
+const commonOptions = { temperature: 1, seed: 19740822, keepAlive: '15m' };
 const commonOptions8k = { numCtx: 8 * 1024, ...commonOptions };
-const commonOptions8kJSON = { ...commonOptions8k, ...commonOptionsJSON };
 const commonOptions32k = { numCtx: 32 * 1024, ...commonOptions };
-const commonOptions32kJSON = { ...commonOptions32k, ...commonOptionsJSON };
 const commonOptions64k = { numCtx: 64 * 1024, ...commonOptions };
-const commonOptions64kJSON = { ...commonOptions64k, ...commonOptionsJSON };
 const commonOptions128k = { numCtx: 128 * 1024, ...commonOptions };
-const commonOptions128kJSON = { ...commonOptions128k, ...commonOptionsJSON };
 const commonOptions256k = { numCtx: 256 * 1024, ...commonOptions };
-const commonOptions256kJSON = { ...commonOptions256k, ...commonOptionsJSON };
 
 const embeddings = CacheBackedEmbeddings.fromBytesStore(
-    // new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048 }),
-    new OllamaEmbeddings({ model: 'mxbai-embed-large', numCtx: 512 }),
-    // new OllamaEmbeddings({ model: 'llama3.1:8b-instruct-q8_0', numCtx: 2048 }),
+    // new OllamaEmbeddings({ model: 'nomic-embed-text', requestOptions: { numCtx: 2048 } }),
+    // new OllamaEmbeddings({ model: 'mxbai-embed-large', requestOptions: { numCtx: 512 } }),
+    // new OllamaEmbeddings({ model: 'bge-large', requestOptions: { numCtx: 512 } }),
+    new OllamaEmbeddings({ model: 'bge-m3', requestOptions: { numCtx: 8192 } }),
+    // new OllamaEmbeddings({ model: 'mistral:7b-instruct-v0.2-q8_0', requestOptions: { numCtx: 32768 } }),
+    // new OllamaEmbeddings({ model: 'llama3.1:8b-instruct-q8_0', requestOptions: { numCtx: 2048 } }),
     new InMemoryStore(),
     {
         namespace: 'embeddings',
     }
-)
+);
 
+// Prompt parse: ~500-1500 t/s; generation: ~60-70 t/s; HAS TOOLS
+const qwen25_3bLLMChat = new ChatOllama({ model: 'qwen2.5:3b-instruct-q8_0', ...commonOptions32k });
 
+// mistral-nemo has 1024k ctx; HAS TOOLS
+// Prompt parse: ~300-500 t/s; generation: ~25-40 t/s
+const nemo_12bLLMChat = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions128k });
 
-// mistral-large has 32k training ctx; claims it can do up to 128k ctx
-// Prompt parse: ~550-600 t/s; generation: ~50-60 t/s
-const mistralLLMChat = new ChatOllama({ model: 'mistral-large:latest', ...commonOptions32k });
-const mistralLLMJSON = new ChatOllama({ model: 'mistral-large:latest', ...commonOptions32kJSON });
+// llama3.1 has 128k ctx; HAS TOOLS
+// Prompt parse: ~200-500 t/s; generation: ~40 t/s
+const llama31_8bLLMChat = new ChatOllama({ model: 'llama3.1:8b-instruct-q8_0', ...commonOptions64k });
 
-// llama3.1 has 128k ctx
-// Prompt parse: ~500 t/s; generation: ~40 t/s
-const llama3_8bLLMChat = new ChatOllama({ model: 'llama3.1:8b-instruct-q8_0', ...commonOptions64k });
-const llama3_8bLLMJSON = new ChatOllama({ model: 'llama3.1:8b-instruct-q8_0', ...commonOptions8kJSON });
-
-// mistral-nemo has 1024k ctx
-// Prompt parse: ~500 t/s; generation: ~40 t/s
-const nemo_12bLLMChat = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions256k });
-const nemo_12bLLMJSON = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions32kJSON });
-
-// phi3:medium-128k-instruct-q8_0 has 128k ctx but we'll only use 64k
-// Prompt parse: ~250 t/s; generation: ~20 t/s
+// phi3:medium-128k-instruct-q8_0 has 128k ctx but we'll only use 64k; MAYBE NO TOOLS?
+// Prompt parse: ~100-250 t/s; generation: ~20 t/s
 const phi3_14bLLMChat = new ChatOllama({ model: 'phi3:14b-medium-128k-instruct-q8_0', ...commonOptions64k });
-const phi3_14bLLMJSON = new ChatOllama({ model: 'phi3:14b-medium-128k-instruct-q8_0', ...commonOptions64kJSON });
 
-// mixtral:8x7b-instruct-v0.1-q8_0 - 32k context
-// Prompt parse: ~200 t/s; generation: ~20-25 t/s
-const mixtral7BLLMChat = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q8_0', ...commonOptions32k });
-const mixtral7BLLMJSON = new ChatOllama({ model: 'mixtral:8x7b-instruct-v0.1-q8_0', ...commonOptions32kJSON });
+// mistral-small has 32k training ctx; claims it can do up to 128k ctx; HAS TOOLS
+// Prompt parse: ~60-70 t/s; generation: ~15 t/s
+const mistralSmallLLMChat = new ChatOllama({ model: 'mistral-small:22b-instruct-2409-q8_0', ...commonOptions32k });
 
-// llama3.1 has 128k ctx
-// Prompt parse: ~65 t/s; generation: ~4-6 t/s
-const llama3_70bLLMChat = new ChatOllama({ model: 'llama3.1:70b-instruct-q8_0', ...commonOptions64k });
-const llama3_70bLLMJSON = new ChatOllama({ model: 'llama3.1:70b-instruct-q8_0', ...commonOptions64kJSON });
+// qwen2.5 has 128k training ctx; HAS TOOLS
+// Prompt parse: ~50-60 t/s; generation: ~10 t/s
+const qwen25_32bLLMChat = new ChatOllama({ model: 'qwen2.5:32b-instruct-q8_0', ...commonOptions32k });
 
-const storeDirectory = 'novels/Frankenstein';
+// command-r has 128k ctx; HAS TOOLS
+// Prompt parse: ~70 t/s; generation: ~10 t/s
+const commandR_35bLLMChat = new ChatOllama({ model: 'command-r:35b-08-2024-q8_0', ...commonOptions64k });
+
+// llama3.1 has 128k ctx; HAS TOOLS
+// Prompt parse: ~30-60 t/s; generation: ~5 t/s
+const llama31_70bLLMChat = new ChatOllama({ model: 'llama3.1:70b-instruct-q8_0', ...commonOptions64k });
+
+// mistral-large has 32k training ctx; claims it can do up to 128k ctx; HAS TOOLS
+// Prompt parse: ~12-15 t/s; generation: ~5-6 t/s
+const mistralLLMChat = new ChatOllama({ model: 'mistral-large:latest', ...commonOptions32k });
+
+// qwen2.5 has 128k ctx; HAS TOOLS
+// Prompt parse: ~30 t/s; generation: ~5 t/s
+const qwen25_72bLLMChat = new ChatOllama({ model: 'qwen2.5:72b-instruct-q8_0', ...commonOptions32k });
+
+// bespoke-minicheck:7b-q8_0 is a fact checker
+// Prompt parse: ~600 t/s; generation: ~50 t/s
+const bespokeMinicheckLLMChat = new ChatOllama({ model: 'bespoke-minicheck:7b-q8_0', ...commonOptions32k });
+
+const fastLLM = nemo_12bLLMChat;
+const slowLLM = commandR_35bLLMChat;
+
+const storeDirectory = 'novels/Christmas Town beta';
 
 /**
  * Return documents selected using the maximal marginal relevance.
@@ -115,7 +122,7 @@ async function maxMarginalRelevanceSearch(query, options) {
     const includeEmbeddingsFlag = options.filter?.includeEmbeddings || false;
     // update filter to include embeddings, as they will be used in MMR
     const resultDocs = await this.similaritySearchVectorWithScore(queryEmbedding, fetchK);
-    const embeddingList = await Promise.all(resultDocs.map((doc) => this.embeddings.embedQuery(doc[0].pageContent)));
+    const embeddingList = await this.embeddings.embedDocuments(resultDocs.map((doc) => doc[0].pageContent));
     const mmrIndexes = maximalMarginalRelevance(queryEmbedding, embeddingList, lambda, k);
     return mmrIndexes.map((idx) => {
         const doc = resultDocs[idx][0];
@@ -166,7 +173,7 @@ async function mmrSearch(query, runManager) {
 const qaRetriever = new HydeRetriever({
     // verbose: true,
     vectorStore,
-    llm: nemo_12bLLMChat, // Basic task to write the prompt so do it quickly
+    llm: fastLLM, // Basic task to write the prompt so do it quickly
     searchType: 'mmr',
     searchKwargs: {
         lambda: 0.5,
@@ -226,10 +233,10 @@ const graphState = {
  * @returns {Promise<GraphState>} - The updated state with the documents added.
  */
 async function retrieve(state) {
-    console.log("---EXECUTE RETRIEVAL---");
+    logger.debug("---EXECUTE RETRIEVAL---");
 
     // We call the tool_executor and get back a response.
-    console.log(chalk.greenBright(JSON.stringify(state.query || state.origQuery)));
+    logger.debug(chalk.greenBright(JSON.stringify(state.query || state.origQuery)));
     const documents = await qaRetriever
         .withConfig({ runName: 'FetchRelevantDocuments' })
         .invoke(state.query || state.origQuery);
@@ -247,7 +254,7 @@ async function passthroughAllDocuments(state) {
  * @returns {Promise<GraphState>} - The updated state with documents filtered for relevance.
  */
 async function gradeDocuments(state) {
-    console.log("---GET RELEVANCE---");
+    logger.debug("---GET RELEVANCE---");
     // Output
     const tool = new DynamicStructuredTool({
             name: "give_relevance_score",
@@ -278,19 +285,19 @@ no: The extract is not at all relevant to the query.`),
 {query}
 `)]);
 
-    const functions = [convertToOpenAIFunction(tool)];
+    const llm = fastLLM;
+    const oldTemp = llm.temperature;
+    llm.temperature = 0;
 
-    const llm = nemo_12bLLMJSON;
+    const model = llm.bindTools([tool]);
+    const chain = prompt.pipe(model).pipe(new JsonOutputToolsParser());
 
-    const model = (new OllamaFunctions({ llm })).bind({ functions });
-    const chain = prompt.pipe(model).pipe(new JsonOutputFunctionsParser({ argsOnly: false }));
-
-    console.log(`${state.documents.length} orig docs`);
+    logger.debug(`${state.documents.length} orig docs`);
     const reducedDocs = _(state.documents)
                         .filter(d => !state.filteredDocuments.some((f) => f.pageContent === d.pageContent))
                         .filter(d => !state.uselessDocuments.some((f) => f.pageContent === d.pageContent))
                         .value();
-    console.log(`${reducedDocs.length} reduced docs`);
+    logger.debug(`${reducedDocs.length} reduced docs`);
 
     const filteredDocuments = [];
     const uselessDocuments = [];
@@ -299,16 +306,17 @@ no: The extract is not at all relevant to the query.`),
             extract: doc.pageContent,
             query: state.origQuery,
         });
-        // console.log(grade);
-        if (grade?.arguments?.relevanceScore === "yes") {
-            console.log('---GRADE: DOCUMENT RELEVANT---');
+        // logger.debug(grade);
+        if (grade?.[0]?.args?.relevanceScore === "yes") {
+            logger.debug('---GRADE: DOCUMENT RELEVANT---');
             filteredDocuments.push(doc);
         } else {
-            console.log('---GRADE: DOCUMENT NOT RELEVANT---');
+            logger.debug('---GRADE: DOCUMENT NOT RELEVANT---');
             uselessDocuments.push(doc);
         }
     }
 
+    llm.temperature = oldTemp;
     return { documents: [], filteredDocuments, uselessDocuments };
 }
 
@@ -319,7 +327,7 @@ no: The extract is not at all relevant to the query.`),
  * @returns {Promise<GraphState>} The new state object.
  */
 async function transformQuery(state) {
-    console.log(`---TRANSFORM QUERY: ${state.priorQueries.length} PREVIOUS QUERIES---`);
+    logger.debug(`---TRANSFORM QUERY: ${state.priorQueries.length} PREVIOUS QUERIES---`);
 
     const prompt = ChatPromptTemplate.fromMessages([
         SystemMessagePromptTemplate.fromTemplate(
@@ -327,7 +335,7 @@ async function transformQuery(state) {
 You are generating a query that is well optimized for semantic search retrieval.
 
 # Instructions
-Look at the initial query, and previous attempts are re-writing the query and try to reason about the underlying sematic intent / meaning. Then formulate and reply with an improved query more likely to surface responsive documents.
+Look at the initial query, and previous attempts at re-writing the query and try to reason about the underlying semantic intent / meaning. Then formulate and reply with an improved query more likely to surface responsive documents. Do not *answer* the query, just re-write it in a way that is more likely to get a good answer.
 
 # Output format
 Your output should be just the re-written query, with no discussion, pre-amble, formatting, or other considerations, just the text of the improved query.`),
@@ -340,12 +348,17 @@ Your output should be just the re-written query, with no discussion, pre-amble, 
 `)]);
 
     // Prompt
-    const llm = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions8k, temperature: 2 });
-    const chain = prompt.pipe(llm).pipe(new StringOutputParser());
+    const oldTemp = fastLLM.temperature;
+    const oldCtx = fastLLM.numCtx;
+    fastLLM.temperature = 2;
+    fastLLM.numCtx = 4096;
+    const chain = prompt.pipe(fastLLM).pipe(new StringOutputParser());
     const betterQuery = await chain.invoke({
         query: state.origQuery,
         previous_queries: state.priorQueries.join('\n'),
     });
+    fastLLM.temperature = oldTemp;
+    fastLLM.numCtx = oldCtx;
 
     return {
         query: betterQuery,
@@ -360,18 +373,18 @@ Your output should be just the re-written query, with no discussion, pre-amble, 
  * @returns {"transformQuery" | "generate"} Next node to call
  */
 function decideToGenerate(state) {
-    console.log(`---DECIDE TO GENERATE: ${state.filteredDocuments.length} RELEVANT DOCUMENTS---`);
+    logger.debug(`---DECIDE TO GENERATE: ${state.filteredDocuments.length} RELEVANT DOCUMENTS---`);
     const filteredDocuments = state.filteredDocuments;
 
     if (filteredDocuments.length <= 30 && state.priorQueries.length < 5) {
         //
         // Too many documents have been filtered checkRelevance
         // We will re-generate a new query
-        console.log(`---DECISION: TRANSFORM QUERY---`);
+        logger.debug(`---DECISION: TRANSFORM QUERY---`);
         return "transformQuery";
     }
     // We have relevant documents, so generate answer
-    console.log("---DECISION: GENERATE---");
+    logger.debug("---DECISION: GENERATE---");
     return "generate";
 }
 
@@ -389,7 +402,6 @@ Remember that you're only reading a few extracts from the novel. You can get som
 
 ## Style guide
 Unless the user asks for a different style of answer, you should answer in full sentences, using proper grammar and spelling. Use Markdown to improve the formatting and presentation of your final answer.
-
 `),
     HumanMessagePromptTemplate.fromTemplate(`# Extracts
 \`\`\`json
@@ -408,18 +420,18 @@ Unless the user asks for a different style of answer, you should answer in full 
  * @returns {Promise<GraphState>} The new state object.
  */
 async function generate(state) {
-    console.log(`---GENERATE FROM ${state.filteredDocuments.length} DOCS---`);
+    logger.debug(`---GENERATE FROM ${state.filteredDocuments.length} DOCS---`);
     // Pull in the prompt
     const prompt = mainAgentPromptTemplate;
 
     // LLM
-    const llm = mistralLLMChat;
+    const llm = slowLLM;
 
     // RAG Chain
     const ragChain = prompt.pipe(llm).pipe(new StringOutputParser());
 
     const docs = sortDocsFormatAsJSON(state.filteredDocuments);
-    console.log(`Context has length ${docs.length}`);
+    logger.debug(`Context has length ${docs.length}`);
 
     const generation = await ragChain.invoke({
         extracts: sortDocsFormatAsJSON(state.filteredDocuments),
@@ -469,7 +481,7 @@ const input =
     // `Identify any repetitive or superfluous elements in the book.`
     // `Identify any subplots which don't lead anywhere and just distract from the main story.`
     // `Write a dust-jacket blurb describing this novel and a plot synopsis, in an engaging way but without spoilers, with some invented (but realistic) quotes from reviewers about how good the book is. One of the reviewers should be "OpenAI ChatGPT". Do not include any extracts from the book itself. Use markdown syntax for formatting.`
-    // `Write a detailed query letter to a potential literary agent, explaining the novel and how it would appeal to readers. The letter should be engaging, and should make the agent interested in repping the book, without being overly cloying or sounding desperate. Be sure to properly research the book content so you're not being misleading. Find out the names of any characters mentioned. The agent will not have read the novel, so any discussion of the novel should not assume that the agent has read it yet. Reference the major events that happen in the book, describe what makes the protagonist engaging for readers, and include something about why the author chose to write this story.`
+    // `Write a detailed query letter to a potential literary agent, explaining the novel and how it would appeal to readers. The letter should be engaging, and should make the agent interested in representing the book, without being overly cloying or sounding desperate. Be sure to properly research the book content so you're not being misleading. Find out the names of any characters mentioned. The agent will not have read the novel, so any discussion of the novel should not assume that the agent has read it yet. Reference the major events that happen in the book, describe what makes the protagonist engaging for readers, and include something about why the author chose to write this story.`
     // `Is Meghan a likable and relatable character for readers, even if characters in the book perhaps dislike her? Will readers be able to empathize with her and enjoy the novel with her as the protagonist?`
     // `Does Bathrobe Grouch have a real name?`
     // `What is Mr Zimmerman's nickname?`
@@ -480,11 +492,12 @@ const input =
     // `Can you provide more context about Roger and his role in the novel? How does he relate to the themes of family, loss, and personal growth?`
     // `Can you provide a brief overview of the main plot points? Is the story believable?`
     // `Pick any quotation from the book and count the number of words in it.`
-    // `Should Tyler's body be found earlier in the narrative? I'm not talking about figuring out how he died, just the actual discovery of his death. Typically, this discovery would be the inciting incident in a mystery novel but this isn't purely a mystery novel. Have I been succesful in engaging readers in Meghan's life so that postponing the mystery elements of the novel works?`
-    // `Meghan at times uses obscure words; is it unbelievable that a highschool sophopmore would know these words, given Meghan's character and background?`
+    // `Should Tyler's body be found earlier in the narrative? I'm not talking about figuring out how he died, just the actual discovery of his death. Typically, this discovery would be the inciting incident in a mystery novel but this isn't purely a mystery novel. Have I been successful in engaging readers in Meghan's life so that postponing the mystery elements of the novel works?`
+    // `Meghan at times uses obscure words; is it unbelievable that a highschool sophomore would know these words, given Meghan's character and background?`
     // `Are there any instances in the novel where I've misused words? That is, where the word is used in a way that is not consistent with the meaning of the word?`
-    // `Write a 1000-word comparative literature essay about this novel written in 2024, thinking about it as an allegory for the modern world of AI, even though the story is set in the 1990s before such AI had been developed. How do the novel's themes mirror issues of social isolation in a world full of robots? How does it help us understand how human societies can co-exist with robots while maintaing any notion of a human "self"? Do not invent things which are not in the novel itself; use quotes from the novel as appropriate to support your arguments. Draw on external sources as necessary. Use markdown formatting in the essay, including markdown footnotes for bibliographic references.`
-    `Pick an iconic scene from the book, and describe it in visual detail. The description will be provided to an AI image generator using a Stable Diffusion model. Include in your description all the important elements which will allow the AI model to properly generate the image. The image generator knows nothing of the novel, so if it's important, include things like the period/era of the story, the geographical setting, etc. so an accurate image can be generated. Specify that the image should be a realistic photograph. Do not include any preamble, discussion or any other meta-information, merely output the description of the desired image.`
+    // `Write a 1000-word comparative literature essay about this novel written in 2024, thinking about it as an allegory for the modern world of AI, even though the story is set in the 1990s before such AI had been developed. How do the novel's themes mirror issues of social isolation in a world full of robots? How does it help us understand how human societies can co-exist with robots while maintaining any notion of a human "self"? Do not invent things which are not in the novel itself; use quotes from the novel as appropriate to support your arguments. Draw on external sources as necessary. Use markdown formatting in the essay, including markdown footnotes for bibliographic references.`
+    `Pick an iconic scene from the book, and describe it in visual detail. The description will be provided to an AI image generator using a Stable Diffusion type model. Include in your description all the important elements which will allow the AI model to properly generate the image. The image generator knows nothing of the novel, so if it's important, include things like the period/era of the story, the geographical setting, etc. so an accurate image can be generated. Do not include any preamble, discussion or any other meta-information, merely output the description of the desired image.`
+    // `When is this story set? What decade, or if you can be more specific, what year? How can you tell? Are there any clues in pop culture references in the story like TV shows, movies, songs, books, or anything similar?`
     ;
 
 const inputs = {
@@ -494,11 +507,10 @@ const config = { recursionLimit: 50, streamMode: 'values' };
 let finalState;
 for await (const output of await app.stream(inputs, config)) {
     if(!output.generation) {
-        console.log(output);
-        console.log('\n---\n');
+        logger.info(output.filteredDocuments);
     } else {
         finalState = output;
     }
 }
 
-console.log(chalk.whiteBright(finalState.generation));
+logger.info(chalk.whiteBright(finalState.generation));
