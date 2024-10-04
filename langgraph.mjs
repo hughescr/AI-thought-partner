@@ -1,18 +1,15 @@
-// DONE: Cache irrelevant documents so they're not rescored
-// DONE: Figure out why embeddings cache isn't working - embedQuery is broken intentionally!
-// TODO: Put info about the LLMs into the state so I don't need to search/replace all the LLM info across the app all the time
 // TODO: Put novel metadata in the state like title, author name, date, ... so that the LLM has more context and doesn't invent novel names
 
 import { OllamaEmbeddings } from '@langchain/ollama';
-import { CacheBackedEmbeddings } from "langchain/embeddings/cache_backed";
-import { InMemoryStore } from "langchain/storage/in_memory";
+import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
+import { InMemoryStore } from 'langchain/storage/in_memory';
 import { ChatOllama } from '@langchain/ollama';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { JsonOutputToolsParser } from '@langchain/core/output_parsers/openai_tools';
-import { HumanMessage, BaseMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
-import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate } from '@langchain/core/prompts';
-import { END, START, StateGraph, MessageGraph } from '@langchain/langgraph';
+// import { HumanMessage, BaseMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
+import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
+import { END, START, StateGraph } from '@langchain/langgraph';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { HydeRetriever } from 'langchain/retrievers/hyde';
 import { StringPromptValue } from '@langchain/core/prompt_values';
@@ -24,14 +21,15 @@ import { logger } from '@hughescr/logger';
 import _ from 'lodash';
 import chalk from 'chalk';
 
-if (process.versions.bun === undefined) {
-    logger.info(chalk.greenBright("Running under Node, setting global dispatcher"));
+if(process.versions.bun === undefined) {
+    logger.info(chalk.greenBright('Running under Node, setting global dispatcher'));
     const { setGlobalDispatcher, Agent } = await import('undici');
     setGlobalDispatcher(new Agent({ headersTimeout: 0, bodyTimeout: 0 })); // ensure we wait for long ollama runs
 } else {
-    logger.warn(chalk.yellowBright("Running under Bun, not setting global dispatcher so LLMs might timeout"));
+    logger.warn(chalk.yellowBright('Running under Bun, not setting global dispatcher so LLMs might timeout'));
 }
 
+/* eslint-disable no-unused-vars -- Leave all these so switching is easier without dealing with comments */
 const commonOptions = { temperature: 1, seed: 19740822, keepAlive: '15m' };
 const commonOptions8k = { numCtx: 8 * 1024, ...commonOptions };
 const commonOptions32k = { numCtx: 32 * 1024, ...commonOptions };
@@ -53,52 +51,55 @@ const embeddings = CacheBackedEmbeddings.fromBytesStore(
 );
 
 // Prompt parse: ~500-1500 t/s; generation: ~60-70 t/s; HAS TOOLS
-const qwen25_3bLLMChat = new ChatOllama({ model: 'qwen2.5:3b-instruct-q8_0', ...commonOptions32k });
+const qwen25_3bLLM = new ChatOllama({ model: 'qwen2.5:3b-instruct-q8_0', ...commonOptions32k });
 
 // mistral-nemo has 1024k ctx; HAS TOOLS
 // Prompt parse: ~300-500 t/s; generation: ~25-40 t/s
-const nemo_12bLLMChat = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions128k });
+const nemo_12bLLM = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions128k });
 
 // llama3.1 has 128k ctx; HAS TOOLS
 // Prompt parse: ~200-500 t/s; generation: ~40 t/s
-const llama31_8bLLMChat = new ChatOllama({ model: 'llama3.1:8b-instruct-q8_0', ...commonOptions64k });
+const llama31_8bLLM = new ChatOllama({ model: 'llama3.1:8b-instruct-q8_0', ...commonOptions64k });
 
 // phi3:medium-128k-instruct-q8_0 has 128k ctx but we'll only use 64k; MAYBE NO TOOLS?
 // Prompt parse: ~100-250 t/s; generation: ~20 t/s
-const phi3_14bLLMChat = new ChatOllama({ model: 'phi3:14b-medium-128k-instruct-q8_0', ...commonOptions64k });
+const phi3_14bLLM = new ChatOllama({ model: 'phi3:14b-medium-128k-instruct-q8_0', ...commonOptions64k });
 
 // mistral-small has 32k training ctx; claims it can do up to 128k ctx; HAS TOOLS
 // Prompt parse: ~60-70 t/s; generation: ~15 t/s
-const mistralSmallLLMChat = new ChatOllama({ model: 'mistral-small:22b-instruct-2409-q8_0', ...commonOptions32k });
+const mistralSmallLLM = new ChatOllama({ model: 'mistral-small:22b-instruct-2409-q8_0', ...commonOptions32k });
 
 // qwen2.5 has 128k training ctx; HAS TOOLS
 // Prompt parse: ~50-60 t/s; generation: ~10 t/s
-const qwen25_32bLLMChat = new ChatOllama({ model: 'qwen2.5:32b-instruct-q8_0', ...commonOptions32k });
+const qwen25_32bLLM = new ChatOllama({ model: 'qwen2.5:32b-instruct-q8_0', ...commonOptions32k });
 
 // command-r has 128k ctx; HAS TOOLS
 // Prompt parse: ~70 t/s; generation: ~10 t/s
-const commandR_35bLLMChat = new ChatOllama({ model: 'command-r:35b-08-2024-q8_0', ...commonOptions64k });
+const commandR_35bLLM = new ChatOllama({ model: 'command-r:35b-08-2024-q8_0', ...commonOptions64k });
 
 // llama3.1 has 128k ctx; HAS TOOLS
 // Prompt parse: ~30-60 t/s; generation: ~5 t/s
-const llama31_70bLLMChat = new ChatOllama({ model: 'llama3.1:70b-instruct-q8_0', ...commonOptions64k });
+const llama31_70bLLM = new ChatOllama({ model: 'llama3.1:70b-instruct-q8_0', ...commonOptions64k });
 
 // mistral-large has 32k training ctx; claims it can do up to 128k ctx; HAS TOOLS
 // Prompt parse: ~12-15 t/s; generation: ~5-6 t/s
-const mistralLLMChat = new ChatOllama({ model: 'mistral-large:latest', ...commonOptions32k });
+const mistralLLM = new ChatOllama({ model: 'mistral-large:latest', ...commonOptions32k });
 
 // qwen2.5 has 128k ctx; HAS TOOLS
 // Prompt parse: ~30 t/s; generation: ~5 t/s
-const qwen25_72bLLMChat = new ChatOllama({ model: 'qwen2.5:72b-instruct-q8_0', ...commonOptions32k });
+const qwen25_72bLLM = new ChatOllama({ model: 'qwen2.5:72b-instruct-q8_0', ...commonOptions32k });
 
 // bespoke-minicheck:7b-q8_0 is a fact checker
 // Prompt parse: ~600 t/s; generation: ~50 t/s
-const bespokeMinicheckLLMChat = new ChatOllama({ model: 'bespoke-minicheck:7b-q8_0', ...commonOptions32k });
+const bespokeMinicheckLLM = new ChatOllama({ model: 'bespoke-minicheck:7b-q8_0', ...commonOptions32k });
 
-const fastLLM = nemo_12bLLMChat;
-const slowLLM = commandR_35bLLMChat;
+/* eslint-enable no-unused-vars -- Leave all these so switching is easier without dealing with comments */
 
-const storeDirectory = 'novels/Christmas Town beta';
+const fastLLM = nemo_12bLLM;
+const slowLLM = mistralSmallLLM;
+
+const book = 'Christmas Town beta';
+const storeDirectory = `novels/${book}`;
 
 /**
  * Return documents selected using the maximal marginal relevance.
@@ -116,18 +117,18 @@ const storeDirectory = 'novels/Christmas Town beta';
  * @returns {Promise<Document[]>} - List of documents selected by maximal marginal relevance.
  */
 async function maxMarginalRelevanceSearch(query, options) {
-    const { k, fetchK = 20, lambda = 0.5, filter } = options;
+    const { k, fetchK = 20, lambda = 0.5 } = options;
     const queryEmbedding = await this.embeddings.embedQuery(query);
     // preserve the original value of includeEmbeddings
     const includeEmbeddingsFlag = options.filter?.includeEmbeddings || false;
     // update filter to include embeddings, as they will be used in MMR
     const resultDocs = await this.similaritySearchVectorWithScore(queryEmbedding, fetchK);
-    const embeddingList = await this.embeddings.embedDocuments(resultDocs.map((doc) => doc[0].pageContent));
+    const embeddingList = await this.embeddings.embedDocuments(_.map(resultDocs, '0.pageContent'));
     const mmrIndexes = maximalMarginalRelevance(queryEmbedding, embeddingList, lambda, k);
-    return mmrIndexes.map((idx) => {
+    return _.map(mmrIndexes, (idx) => {
         const doc = resultDocs[idx][0];
         // remove embeddings if they were not requested originally
-        if (!includeEmbeddingsFlag) {
+        if(!includeEmbeddingsFlag) {
             delete doc.metadata[this.embeddingKey];
         }
         return doc;
@@ -150,24 +151,24 @@ Write a short paragraph which responds to the query.`),
 async function mmrSearch(query, runManager) {
     let value = new StringPromptValue(query);
     // Use a custom template if provided
-    if (this.promptTemplate) {
+    if(this.promptTemplate) {
         value = await this.promptTemplate.formatPromptValue({ query });
     }
     // Get a hypothetical answer from the LLM
     const res = await this.llm.generatePrompt([value]);
     const answer = res.generations[0][0].text;
     // Retrieve relevant documents based on the hypothetical answer
-    if (this.searchType === "mmr") {
-        if (typeof this.vectorStore.maxMarginalRelevanceSearch !== "function") {
+    if(this.searchType === 'mmr') {
+        if(_.isFunction(this.vectorStore.maxMarginalRelevanceSearch) === false) {
             throw new Error(`The vector store backing this retriever, ${this._vectorstoreType()} does not support max marginal relevance search.`);
         }
         return this.vectorStore.maxMarginalRelevanceSearch(answer, {
             k: this.k,
             filter: this.filter,
             ...this.searchKwargs,
-        }, runManager?.getChild("vectorstore"));
+        }, runManager?.getChild('vectorstore'));
     }
-    return this.vectorStore.similaritySearch(answer, this.k, this.filter, runManager?.getChild("vectorstore"));
+    return this.vectorStore.similaritySearch(answer, this.k, this.filter, runManager?.getChild('vectorstore'));
 }
 
 const qaRetriever = new HydeRetriever({
@@ -186,9 +187,9 @@ qaRetriever._getRelevantDocuments = mmrSearch.bind(qaRetriever);
 
 const sortDocsFormatAsJSON = (documents) => {
     return JSON.stringify(
-        _.chain(documents)
+        _(documents)
             .sortBy(['metadata.source', 'metadata.loc.pageNumber', 'metadata.loc.lines.from'])
-            .map((doc) => ({
+            .map(doc => ({
                 loc: doc.metadata.loc,
                 text: doc.pageContent,
             }))
@@ -199,31 +200,31 @@ const sortDocsFormatAsJSON = (documents) => {
 const graphState = {
     documents: {
         value: (left, right) => right ?? left ?? [],
-        default: () => [],
+        'default': () => [],
     },
     filteredDocuments: {
-        value: (left, right) => right ? _.uniqBy([...left, ...right], 'pageContent') : left ?? [],
-        default: () => [],
+        value: (left, right) => (right ? _.uniqBy([...left, ...right], 'pageContent') : left ?? []),
+        'default': () => [],
     },
     uselessDocuments: {
-        value: (left, right) => right ? _.uniqBy([...left, ...right], 'pageContent') : left ?? [],
-        default: () => [],
+        value: (left, right) => (right ? _.uniqBy([...left, ...right], 'pageContent') : left ?? []),
+        'default': () => [],
     },
     origQuery: {
         value: (left, right) => right ?? left ?? '',
-        default: () => '',
+        'default': _.constant(''),
     },
     priorQueries: {
-        value: (left, right) => right ? [...left, ...right] : left ?? [],
-        default: () => [],
+        value: (left, right) => (right ? [...left, ...right] : left ?? []),
+        'default': () => [],
     },
     query: {
         value: (left, right) => right ?? left,
-        default: () => undefined,
+        'default': () => undefined,
     },
     generation: {
         value: (left, right) => right ?? left,
-        default: () => undefined,
+        'default': () => undefined,
     }
 };
 
@@ -233,7 +234,7 @@ const graphState = {
  * @returns {Promise<GraphState>} - The updated state with the documents added.
  */
 async function retrieve(state) {
-    logger.debug("---EXECUTE RETRIEVAL---");
+    logger.debug('---EXECUTE RETRIEVAL---');
 
     // We call the tool_executor and get back a response.
     logger.debug(chalk.greenBright(JSON.stringify(state.query || state.origQuery)));
@@ -244,6 +245,7 @@ async function retrieve(state) {
     return { documents, query: state.query || state.origQuery };
 }
 
+// eslint-disable-next-line no-unused-vars -- Keep this definition as an alternative to gradeDocuments to keep all
 async function passthroughAllDocuments(state) {
     return { filteredDocuments: state.documents, uselessDocuments: [], documents: [] };
 }
@@ -254,20 +256,19 @@ async function passthroughAllDocuments(state) {
  * @returns {Promise<GraphState>} - The updated state with documents filtered for relevance.
  */
 async function gradeDocuments(state) {
-    logger.debug("---GET RELEVANCE---");
+    logger.debug('---GET RELEVANCE---');
     // Output
     const tool = new DynamicStructuredTool({
-            name: "give_relevance_score",
-            description: "Give a relevance score to the retrieved documents.",
-            schema: z.object({
-                relevanceScore: z.string().describe("Score 'yes' or 'no'"),
-            }),
-            func: async ({ relevanceScore }) => relevanceScore,
+        name: 'give_relevance_score',
+        description: 'Give a relevance score to the retrieved documents.',
+        schema: z.object({
+            relevanceScore: z.string().describe("Score 'yes' or 'no'"),
+        }),
+        func: async ({ relevanceScore }) => relevanceScore,
     });
 
     const prompt = ChatPromptTemplate.fromMessages([
-        SystemMessagePromptTemplate.fromTemplate(
-`# Preamble
+        SystemMessagePromptTemplate.fromTemplate(`# Preamble
 You are a grader assessing the relevance of a short extract from a novel to a user's query about the novel. The extract will be combined with other extracts and provided to another LLM in order to answer a query.
 You are *not* answering the query, you are merely assessing the relevance of the extract to the query.
 
@@ -275,8 +276,7 @@ You are *not* answering the query, you are merely assessing the relevance of the
 Give a relevance score 'yes' or 'no' score to indicate whether the extract is in any way relevant to the query. Err on the side of saying that a document is relevant, if you're not really sure.
 yes: The extract is at least vaguely relevant to the query.
 no: The extract is not at all relevant to the query.`),
-        HumanMessagePromptTemplate.fromTemplate(
-`# Extract
+        HumanMessagePromptTemplate.fromTemplate(`# Extract
 \`\`\`
 {extract}
 \`\`\`
@@ -294,8 +294,8 @@ no: The extract is not at all relevant to the query.`),
 
     logger.debug(`${state.documents.length} orig docs`);
     const reducedDocs = _(state.documents)
-                        .filter(d => !state.filteredDocuments.some((f) => f.pageContent === d.pageContent))
-                        .filter(d => !state.uselessDocuments.some((f) => f.pageContent === d.pageContent))
+                        .filter(d => !_.some(state.filteredDocuments, { pageContent: d.pageContent }))
+                        .filter(d => !_.some(state.uselessDocuments, { pageContent: d.pageContent }))
                         .value();
     logger.debug(`${reducedDocs.length} reduced docs`);
 
@@ -307,7 +307,7 @@ no: The extract is not at all relevant to the query.`),
             query: state.origQuery,
         });
         // logger.debug(grade);
-        if (grade?.[0]?.args?.relevanceScore === "yes") {
+        if(grade?.[0]?.args?.relevanceScore === 'yes') {
             logger.debug('---GRADE: DOCUMENT RELEVANT---');
             filteredDocuments.push(doc);
         } else {
@@ -330,8 +330,7 @@ async function transformQuery(state) {
     logger.debug(`---TRANSFORM QUERY: ${state.priorQueries.length} PREVIOUS QUERIES---`);
 
     const prompt = ChatPromptTemplate.fromMessages([
-        SystemMessagePromptTemplate.fromTemplate(
-`# Background
+        SystemMessagePromptTemplate.fromTemplate(`# Background
 You are generating a query that is well optimized for semantic search retrieval.
 
 # Instructions
@@ -339,8 +338,7 @@ Look at the initial query, and previous attempts at re-writing the query and try
 
 # Output format
 Your output should be just the re-written query, with no discussion, pre-amble, formatting, or other considerations, just the text of the improved query.`),
-        HumanMessagePromptTemplate.fromTemplate(
-`# Previous inadequate queries
+        HumanMessagePromptTemplate.fromTemplate(`# Previous inadequate queries
 {previous_queries}
 
 # Initial query
@@ -376,21 +374,20 @@ function decideToGenerate(state) {
     logger.debug(`---DECIDE TO GENERATE: ${state.filteredDocuments.length} RELEVANT DOCUMENTS---`);
     const filteredDocuments = state.filteredDocuments;
 
-    if (filteredDocuments.length <= 30 && state.priorQueries.length < 5) {
+    if(filteredDocuments.length <= 30 && state.priorQueries.length < 5) {
         //
         // Too many documents have been filtered checkRelevance
         // We will re-generate a new query
-        logger.debug(`---DECISION: TRANSFORM QUERY---`);
-        return "transformQuery";
+        logger.debug('---DECISION: TRANSFORM QUERY---');
+        return 'transformQuery';
     }
     // We have relevant documents, so generate answer
-    logger.debug("---DECISION: GENERATE---");
-    return "generate";
+    logger.debug('---DECISION: GENERATE---');
+    return 'generate';
 }
 
 const mainAgentPromptTemplate = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(
-`# Basic instructions
+    SystemMessagePromptTemplate.fromTemplate(`# Basic instructions
 You are a powerful conversational AI trained to work as a developmental editor, assisting authors (as users) to improve their unpublished novels before the drafts are submitted to literary agents to find a publisher. You are provided with one or more extracts from the novel which should contain the answers to a query from the user, and your job is to digest these extracts to best help the user. When you answer the user's requests, you cite your sources in your answers.
 
 ## Task and context
@@ -458,6 +455,7 @@ const workflow = new StateGraph({ channels: graphState })
 
 const app = workflow.compile();
 
+// eslint-disable-next-line @stylistic/operator-linebreak -- This is fine here cos we can swap in any of the prompts
 const input =
     // `What do you think of this novel?`
     // `Identify sentences which are too long or complex and are hard to understand.`
@@ -485,7 +483,7 @@ const input =
     // `Is Meghan a likable and relatable character for readers, even if characters in the book perhaps dislike her? Will readers be able to empathize with her and enjoy the novel with her as the protagonist?`
     // `Does Bathrobe Grouch have a real name?`
     // `What is Mr Zimmerman's nickname?`
-    // `How does it turn out that Tyler died in the end? Who is responsible?`
+    `How does it turn out that Tyler died in the end? Who is responsible?`
     // `What is the age of the main character and what are some of the challenges she faces throughout the novel?`
     // `How can the story be adjusted to make it appealing to a wider audience without losing its core themes of trauma, loss, and redemption?`
     // `Are there any secondary characters or subplots in the novel that could be expanded upon to provide additional perspectives or interests?`
@@ -496,7 +494,7 @@ const input =
     // `Meghan at times uses obscure words; is it unbelievable that a highschool sophomore would know these words, given Meghan's character and background?`
     // `Are there any instances in the novel where I've misused words? That is, where the word is used in a way that is not consistent with the meaning of the word?`
     // `Write a 1000-word comparative literature essay about this novel written in 2024, thinking about it as an allegory for the modern world of AI, even though the story is set in the 1990s before such AI had been developed. How do the novel's themes mirror issues of social isolation in a world full of robots? How does it help us understand how human societies can co-exist with robots while maintaining any notion of a human "self"? Do not invent things which are not in the novel itself; use quotes from the novel as appropriate to support your arguments. Draw on external sources as necessary. Use markdown formatting in the essay, including markdown footnotes for bibliographic references.`
-    `Pick an iconic scene from the book, and describe it in visual detail. The description will be provided to an AI image generator using a Stable Diffusion type model. Include in your description all the important elements which will allow the AI model to properly generate the image. The image generator knows nothing of the novel, so if it's important, include things like the period/era of the story, the geographical setting, etc. so an accurate image can be generated. Do not include any preamble, discussion or any other meta-information, merely output the description of the desired image.`
+    // `Pick an iconic scene from the book, and describe it in visual detail. The description will be provided to an AI image generator using a Stable Diffusion type model. Include in your description all the important elements which will allow the AI model to properly generate the image. The image generator knows nothing of the novel, so if it's important, include things like the period/era of the story, the geographical setting, etc. so an accurate image can be generated. Do not include any preamble, discussion or any other meta-information, merely output the description of the desired image.`
     // `When is this story set? What decade, or if you can be more specific, what year? How can you tell? Are there any clues in pop culture references in the story like TV shows, movies, songs, books, or anything similar?`
     ;
 

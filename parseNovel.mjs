@@ -1,13 +1,13 @@
 import { OllamaEmbeddings } from '@langchain/ollama';
-import { CacheBackedEmbeddings } from "langchain/embeddings/cache_backed";
-import { InMemoryStore } from "langchain/storage/in_memory";
+import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
+import { InMemoryStore } from 'langchain/storage/in_memory';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
-import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
+// import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import cliProgress from 'cli-progress';
 import { SemanticTextSplitter } from './lib/SemanticChunker.mjs';
 import _ from 'lodash';
-import { logger } from '@hughescr/logger';
+// import { logger } from '@hughescr/logger';
 
 const book = 'Christmas Town beta';
 // const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: true, });
@@ -29,13 +29,14 @@ const embeddings = CacheBackedEmbeddings.fromBytesStore(
     {
         namespace: coreEmbeddings.modelName,
     }
-)
+);
 
 const splitter = new SemanticTextSplitter({
     showProgress: true,
-    initialChunkSize: 128, // Tokens!
-    chunkSize: 512, // Tokens!
+    initialChunkSize: 256, // Tokens!
+    chunkSize: 1024, // Tokens!
     embeddings,
+    embeddingsBatchSize: 32,
 });
 
 const splits = await splitter.splitDocuments(docs);
@@ -43,9 +44,9 @@ const splits = await splitter.splitDocuments(docs);
 
 let vectorStore;
 
-const bar = new cliProgress.SingleBar({ barsize: 80, format: '{bar} {value}/{total} splits | {percentage}% | Time: {duration_formatted} | ETA: {eta_formatted}'}, cliProgress.Presets.shades_classic);
+const bar = new cliProgress.SingleBar({ barsize: 80, format: '{bar} {value}/{total} splits | {percentage}% | Time: {duration_formatted} | ETA: {eta_formatted}' }, cliProgress.Presets.shades_classic);
 bar.start(_.flatten(splits).length, 0);
-for(let split of splits) {
+for(const split of splits) {
     if(vectorStore) {
         await vectorStore.addDocuments([split]);
     } else {

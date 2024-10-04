@@ -1,0 +1,26 @@
+{
+    "cSpell.words": [
+        "barsize",
+        "Chunker",
+        "duckduckgo",
+        "Faiss",
+        "hughescr",
+        "Kwargs",
+        "langchain",
+        "langgraph",
+        "minicheck",
+        "mxbai",
+        "nemo",
+        "nomic",
+        "Ollama",
+        "openai",
+        "qwen",
+        "textsplitters",
+        "tiktoken",
+        "undici",
+        "upserted",
+        "vectorstore",
+        "vectorstores",
+        "webbrowser"
+    ]
+}

@@ -1,8 +1,8 @@
 import { OllamaEmbeddings } from '@langchain/ollama';
-import { CacheBackedEmbeddings } from "langchain/embeddings/cache_backed";
-import { InMemoryStore } from "langchain/storage/in_memory";
+import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
+import { InMemoryStore } from 'langchain/storage/in_memory';
 import { ChatOllama } from '@langchain/ollama';
-import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate } from '@langchain/core/prompts';
+import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 // import { SemanticTextSplitter } from './lib/SemanticChunker.mjs';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
@@ -12,6 +12,8 @@ import z from 'zod';
 import _ from 'lodash';
 import chalk from 'chalk';
 import cliProgress from 'cli-progress';
+
+import { logger } from '@hughescr/logger';
 
 const neo4jURL = process.env.NEO4J_URI;
 const neo4jUsername = process.env.NEO4J_USER;
@@ -33,37 +35,30 @@ const embeddings = CacheBackedEmbeddings.fromBytesStore(
     {
         namespace: coreEmbeddings.modelName,
     }
-)
+);
+
+/* eslint-disable no-unused-vars -- Keep declarations to switch back and forth without having to uncomment */
 
 const commonOptions = { temperature: 0, seed: 19740822, keepAlive: '15m' };
-const commonOptionsJSON = { ...commonOptions, temperature: 0, format: 'json' };
 const commonOptions8k = { numCtx: 8 * 1024, ...commonOptions };
-const commonOptions8kJSON = { ...commonOptions8k, ...commonOptionsJSON };
 const commonOptions32k = { numCtx: 32 * 1024, ...commonOptions };
-const commonOptions32kJSON = { ...commonOptions32k, ...commonOptionsJSON };
 const commonOptions64k = { numCtx: 64 * 1024, ...commonOptions };
-const commonOptions64kJSON = { ...commonOptions64k, ...commonOptionsJSON };
 const commonOptions128k = { numCtx: 128 * 1024, ...commonOptions };
-const commonOptions128kJSON = { ...commonOptions128k, ...commonOptionsJSON };
 const commonOptions256k = { numCtx: 256 * 1024, ...commonOptions };
-const commonOptions256kJSON = { ...commonOptions256k, ...commonOptionsJSON };
 
 // mistral-nemo has 1024k ctx
 // Prompt parse: ~500 t/s; generation: ~40 t/s
 const nemo_12bLLMChat = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions64k });
-const nemo_12bLLMJSON = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions32kJSON });
 
 // mistral-large has 1024k ctx
 // Prompt parse: ~slow t/s; generation: ~slow t/s
 const mistralLargeLLMChat = new ChatOllama({ model: 'mistral-large:latest', ...commonOptions64k });
-const mistralLargeLLMJSON = new ChatOllama({ model: 'mistral-large:latest', ...commonOptions32kJSON });
 
 // llama3.1 has 128k ctx
 // Prompt parse: ~500 t/s; generation: ~40 t/s
 const llama3_8bLLMChat = new ChatOllama({ model: 'llama3.1:8b-instruct-q8_0', ...commonOptions64k });
-const llama3_8bLLMJSON = new ChatOllama({ model: 'llama3.1:8b-instruct-q8_0', ...commonOptions32kJSON });
 
-// process_novel.js
+/* eslint-enable no-unused-vars -- Keep declarations to switch back and forth without having to uncomment */
 
 // Define the Zod schema for structured output
 const EntitySchema = z.object({
@@ -98,7 +93,7 @@ const textSplitter = new RecursiveCharacterTextSplitter({
 const systemPrompt = SystemMessagePromptTemplate.fromTemplate(`You are an AI assistant that extracts entities and relationships from text extracts of a novel.
 For the given text, extract all entities (people, locations, organizations) and relationships.
 
-Provide sufficient description to dis-ambiguate each entity.
+Provide sufficient description to disambiguate each entity.
 
 You must *always* include a name, and type for each entity. You should also include a description; descriptions will be super helpful - make your very best effort to describe each entity in a sentence or two.
 
@@ -119,7 +114,7 @@ Remember to always make a tool call, so your response should always be JSON like
 // Combine the system prompt and the chunk
 const prompt = ChatPromptTemplate.fromMessages([
     systemPrompt,
-    HumanMessagePromptTemplate.fromTemplate(`{chunk}`),
+    HumanMessagePromptTemplate.fromTemplate('{chunk}'),
 ]);
 
 // Initialize Neo4j driver
@@ -144,16 +139,18 @@ const driver = neo4j.driver(
         });
         progressBar.start(chunks.length, 0, { speed: 'N/A' });
 
-        for (const [index, chunk] of chunks.entries()) {
+        for(const [index, chunk] of chunks.entries()) {
             // Update progress bar
-            progressBar.update(index + 1, { speed: Math.round(10*Math.round((Date.now() - progressBar.startTime) / 1000)/progressBar.value)/10 });
+            progressBar.update(index + 1, {
+                speed: Math.round(10 * Math.round((Date.now() - progressBar.startTime) / 1000) / progressBar.value) / 10
+            });
 
             // Extract entities and relationships using the structured LLM
             let response;
             try {
-                response = await prompt.pipe(structuredLlm).invoke({chunk: chunk.pageContent});
-            } catch (error) {
-                console.error(chalk.red(`\nFailed to process chunk ${index + 1}:`), error);
+                response = await prompt.pipe(structuredLlm).invoke({ chunk: chunk.pageContent });
+            } catch(error) {
+                logger.error(chalk.red(`\nFailed to process chunk ${index + 1}:`), error);
                 continue;
             }
 
@@ -167,9 +164,10 @@ const driver = neo4j.driver(
             let entitiesWithIDs = {};
             if(entities.length > 0) {
                 const result = await upsertEntitiesWithResolution(driver, entities, embeddings);
-                entitiesWithIDs = _.zipObject(_.map(entities, entity => entity.name),
-                                        _.map(entities, (entity, index) => ({...entity, id: result[index]}))
-                                    );
+                entitiesWithIDs = _(entities)
+                                  .map('name')
+                                  .zipObject(_.map(entities, (entity, index) => ({ ...entity, id: result[index] })))
+                                  .value();
             }
 
             // Create relationships in Neo4j
@@ -180,9 +178,9 @@ const driver = neo4j.driver(
         // Stop the progress bar after processing
         progressBar.stop();
 
-        console.log(chalk.green('Processing complete!'));
-    } catch (error) {
-        console.error(chalk.red('An error occurred:'), error);
+        logger.info(chalk.green('Processing complete!'));
+    } catch(error) {
+        logger.error(chalk.red('An error occurred:'), error);
     } finally {
         // Close the Neo4j driver
         await driver.close();
@@ -193,8 +191,8 @@ const driver = neo4j.driver(
 async function upsertEntitiesWithResolution(driver, entities, embeddings) {
     try {
         // Prepare texts for embeddings
-        const entityTexts = entities.map(
-            (entity) => `${entity.name}. Type: ${entity.type}. Description: ${entity.description || entity.name}`
+        const entityTexts = _.map(entities,
+            entity => `${entity.name}. Type: ${entity.type}. Description: ${entity.description || entity.name}`
         );
 
         // Generate embeddings in batches
@@ -212,10 +210,10 @@ async function upsertEntitiesWithResolution(driver, entities, embeddings) {
                 // Perform similarity search using GDS
                 const similarEntities = await findSimilarEntities(driver, embeddingArray, entity.name);
 
-                if (similarEntities.length > 0) {
+                if(similarEntities.length > 0) {
                     const matchedEntity = similarEntities[0].node.properties;
                     // Merge with existing entity
-                    console.log(chalk.yellow(`Found similar entity: ${entity.name} -> ${matchedEntity.name} (${similarEntities[0].similarity})`));
+                    logger.warn(chalk.yellow(`Found similar entity: ${entity.name} -> ${matchedEntity.name} (${similarEntities[0].similarity})`));
                     await session.run(
                         `
             MATCH (e {id: $existingId})
@@ -232,7 +230,7 @@ async function upsertEntitiesWithResolution(driver, entities, embeddings) {
                     // Create new entity with embedding
                     const response = await session.run(
                         `
-            CREATE (e:${entity.type.toUpperCase().replace(/(-|\s)+/g, '_')} {id: randomUUID(), name: $name, description: $description, embedding: $embedding})
+            CREATE (e:${_(entity.type).toUpper().replace(/(-|\s)+/g, '_')} {id: randomUUID(), name: $name, description: $description, embedding: $embedding})
             RETURN e
             `,
                         {
@@ -244,15 +242,13 @@ async function upsertEntitiesWithResolution(driver, entities, embeddings) {
                     );
                     return response.records[0].get('e').properties.id;
                 }
-            }
-            finally {
+            } finally {
                 await session.close();
             }
         }));
         return upsertedEntityIDs;
-    } catch (error) {
-        console.error('Failed to upsert entities:', error);
-    } finally {
+    } catch(error) {
+        logger.error('Failed to upsert entities:', error);
     }
 }
 
@@ -285,12 +281,13 @@ async function findSimilarEntities(driver, embedding, name, similarity = 0.9) {
             params
         );
 
-        return result.records.map((record) => ({
-            node: record.get('node'),
-            similarity: record.get('similarity'),
-        }));
-    } catch (error) {
-        console.warn(chalk.yellow('Failed to find similar entities:'), error);
+        return _.map(result.records,
+            record => ({
+                node: record.get('node'),
+                similarity: record.get('similarity'),
+            }));
+    } catch(error) {
+        logger.warn(chalk.yellow('Failed to find similar entities:'), error);
         return [];
     } finally {
         await session.close();
@@ -303,7 +300,7 @@ async function createRelationshipsWithResolution(driver, relationships, embeddin
     try {
         // Extract unique entity names from relationships
         const entityNames = [
-            ...new Set(relationships.flatMap((rel) => [rel.source, rel.target])),
+            ...new Set(relationships.flatMap(rel => [rel.source, rel.target])),
         ];
 
         // Resolve entities
@@ -316,13 +313,13 @@ async function createRelationshipsWithResolution(driver, relationships, embeddin
         });
         resolveBar.start(entityNames.length, 0);
 
-        for (const [i, entityName] of entityNames.entries()) {
+        for(const [i, entityName] of entityNames.entries()) {
             let resolvedEntity = entitiesWithIDs[entityName];
             if(!resolvedEntity) {
                 // Resolve entity using embeddings
                 resolvedEntity = await resolveEntity(driver, entityName, embeddings);
             }
-            if (resolvedEntity) {
+            if(resolvedEntity) {
                 resolvedEntities[entityName] = resolvedEntity;
             }
             resolveBar.update(i + 1);
@@ -337,16 +334,16 @@ async function createRelationshipsWithResolution(driver, relationships, embeddin
         });
         relationshipBar.start(relationships.length, 0);
 
-        for (const [i, relationship] of relationships.entries()) {
+        for(const [i, relationship] of relationships.entries()) {
             const sourceEntity = resolvedEntities[relationship.source];
             const targetEntity = resolvedEntities[relationship.target];
 
-            if (sourceEntity && targetEntity) {
+            if(sourceEntity && targetEntity) {
                 await session.run(
                     `
           MATCH (source {id: $sourceId})
           MATCH (target {id: $targetId})
-          MERGE (source)-[r:${relationship.type.toUpperCase().replace(/(-|\s)+/g, '_')}]->(target)
+          MERGE (source)-[r:${_(relationship.type).toUpper().replace(/(-|\s)+/g, '_')}]->(target)
           ON CREATE SET r.description = $description
           RETURN r
           `,
@@ -357,14 +354,14 @@ async function createRelationshipsWithResolution(driver, relationships, embeddin
                     }
                 );
             } else {
-                console.warn(chalk.yellow(`Could not resolve entities for relationship: ${relationship.source} -> ${relationship.target}`));
+                logger.warn(chalk.yellow(`Could not resolve entities for relationship: ${relationship.source} -> ${relationship.target}`));
             }
 
             relationshipBar.update(i + 1);
         }
         relationshipBar.stop();
-    } catch (error) {
-        console.error(chalk.red('Failed to create relationships:'), error);
+    } catch(error) {
+        logger.error(chalk.red('Failed to create relationships:'), error);
     } finally {
         await session.close();
     }
@@ -384,15 +381,15 @@ async function resolveEntity(driver, entityName, embeddings) {
         // Perform similarity search using GDS
         const similarEntities = await findSimilarEntities(driver, embeddingArray, entityName, 0.5);
 
-        if (similarEntities.length > 0) {
+        if(similarEntities.length > 0) {
             return similarEntities[0].node.properties;
         } else {
             // Entity not found, create a new one
             const response = await upsertEntityWithResolution(driver, { name: entityName, type: 'Unknown' }, embeddings);
             return { id: response, name: entityName, type: 'Unknown' };
         }
-    } catch (error) {
-        console.error(chalk.red('Failed to resolve entity:'), error);
+    } catch(error) {
+        logger.error(chalk.red('Failed to resolve entity:'), error);
         return null;
     } finally {
         await session.close();

@@ -15,7 +15,9 @@
     "postversion": "git commit -m \"Bump package version to $npm_package_version\" package.json; git flow release start $npm_package_version; git flow release finish -m $npm_package_version $npm_package_version; git checkout develop; git merge master"
   },
   "devDependencies": {
-    "@hughescr/eslint-config-default": "^2.8.8",
+    "@eslint/config-inspector": "^0.5.4",
+    "@eslint/eslintrc": "^3.1.0",
+    "@hughescr/eslint-config-default": "^3.0.3",
     "@hughescr/serverless-plugin-git-version-json": "^1.1.0",
     "@stryker-mutator/core": "^8.6.0",
     "@stryker-mutator/jest-runner": "^8.6.0",
@@ -28,7 +30,7 @@
   "dependencies": {
     "@hughescr/logger": "^2.6.0",
     "@langchain/community": "^0.3.4",
-    "@langchain/core": "^0.3.6",
+    "@langchain/core": "^0.3.7",
     "@langchain/langgraph": "^0.2.11",
     "@langchain/ollama": "^0.1.0",
     "@langchain/textsplitters": "^0.1.0",
