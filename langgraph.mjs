@@ -1,4 +1,7 @@
-// TODO: Put novel metadata in the state like title, author name, date, ... so that the LLM has more context and doesn't invent novel names
+/* eslint-disable @stylistic/quotes */
+// TODO: Re-ranking - maybe wait for ollama to support rerankers
+
+// TODO: Improve use of document metadata for referencing/anchoring attributions
 
 import { OllamaEmbeddings } from '@langchain/ollama';
 import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
@@ -100,6 +103,23 @@ const slowLLM = mistralSmallLLM;
 
 const book = 'Christmas Town beta';
 const storeDirectory = `novels/${book}`;
+/**
+ * Call the retriever to find matching documents
+ * @param {GraphState} state - The current state of the agent, including the query.
+ * @returns {Promise<GraphState>} - The updated state with the documents added.
+ */
+async function setupMetadata() {
+    logger.debug('---METADATA---');
+
+    return {
+        novelMetadata: {
+            title: 'Christmas Town',
+            author: 'Erica S. Hughes',
+            today: new Date().toISOString(),
+            genre: 'Literary Fiction/Young Adult',
+        },
+    };
+}
 
 /**
  * Return documents selected using the maximal marginal relevance.
@@ -117,7 +137,7 @@ const storeDirectory = `novels/${book}`;
  * @returns {Promise<Document[]>} - List of documents selected by maximal marginal relevance.
  */
 async function maxMarginalRelevanceSearch(query, options) {
-    const { k, fetchK = 20, lambda = 0.5 } = options;
+    const { k, fetchK = 10, lambda = 0.5 } = options;
     const queryEmbedding = await this.embeddings.embedQuery(query);
     // preserve the original value of includeEmbeddings
     const includeEmbeddingsFlag = options.filter?.includeEmbeddings || false;
@@ -142,10 +162,8 @@ const vectorStore = await FaissStore.load(
 vectorStore.maxMarginalRelevanceSearch = maxMarginalRelevanceSearch.bind(vectorStore);
 
 const hydePrompt = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`# Instructions
-Write a short paragraph which responds to the query.`),
-    HumanMessagePromptTemplate.fromTemplate(`# Query
-{query}`),
+    SystemMessagePromptTemplate.fromTemplate('Write a short paragraph which responds to the given query.'),
+    HumanMessagePromptTemplate.fromTemplate('Query: {query}'),
 ]);
 
 async function mmrSearch(query, runManager) {
@@ -178,7 +196,7 @@ const qaRetriever = new HydeRetriever({
     searchType: 'mmr',
     searchKwargs: {
         lambda: 0.5,
-        fetchK: 100,
+        fetchK: 25,
     },
     k: 10,
     promptTemplate: hydePrompt,
@@ -192,12 +210,17 @@ const sortDocsFormatAsJSON = (documents) => {
             .map(doc => ({
                 loc: doc.metadata.loc,
                 text: doc.pageContent,
+                context: doc.context,
             }))
             .value()
     );
 };
 
 const graphState = {
+    novelMetadata: {
+        value: (left, right) => _.merge(left, right),
+        'default': () => ({}),
+    },
     documents: {
         value: (left, right) => right ?? left ?? [],
         'default': () => [],
@@ -255,42 +278,27 @@ async function passthroughAllDocuments(state) {
  * @param {GraphState} state - The current state of the graph, including query and documents.
  * @returns {Promise<GraphState>} - The updated state with documents filtered for relevance.
  */
+const gradeDocumentsPrompt = ChatPromptTemplate.fromMessages([
+    SystemMessagePromptTemplate.fromTemplate(`Assess whether the provided extract is relevant to the user's query about "{title}", a {genre} novel by {author}.`),
+    HumanMessagePromptTemplate.fromTemplate('<extract>{extract}</extract><query>{query}</query>'),
+]);
+const giveRelevanceScoreTool = new DynamicStructuredTool({
+    name: 'give_relevance_score',
+    description: 'Give a relevance score to the retrieved documents.',
+    schema: z.object({
+        relevanceScore: z.enum(['yes', 'no']).describe("'yes' if relevent or 'no' if irrelevant"),
+    }),
+    func: async ({ relevanceScore }) => relevanceScore,
+});
+const gradeDocumentsLLM = fastLLM.bindTools([giveRelevanceScoreTool]);
+const gradeDocumentsChain = gradeDocumentsPrompt.pipe(gradeDocumentsLLM).pipe(new JsonOutputToolsParser());
+
 async function gradeDocuments(state) {
     logger.debug('---GET RELEVANCE---');
     // Output
-    const tool = new DynamicStructuredTool({
-        name: 'give_relevance_score',
-        description: 'Give a relevance score to the retrieved documents.',
-        schema: z.object({
-            relevanceScore: z.string().describe("Score 'yes' or 'no'"),
-        }),
-        func: async ({ relevanceScore }) => relevanceScore,
-    });
 
-    const prompt = ChatPromptTemplate.fromMessages([
-        SystemMessagePromptTemplate.fromTemplate(`# Preamble
-You are a grader assessing the relevance of a short extract from a novel to a user's query about the novel. The extract will be combined with other extracts and provided to another LLM in order to answer a query.
-You are *not* answering the query, you are merely assessing the relevance of the extract to the query.
-
-# Instructions
-Give a relevance score 'yes' or 'no' score to indicate whether the extract is in any way relevant to the query. Err on the side of saying that a document is relevant, if you're not really sure.
-yes: The extract is at least vaguely relevant to the query.
-no: The extract is not at all relevant to the query.`),
-        HumanMessagePromptTemplate.fromTemplate(`# Extract
-\`\`\`
-{extract}
-\`\`\`
-
-# Query
-{query}
-`)]);
-
-    const llm = fastLLM;
-    const oldTemp = llm.temperature;
-    llm.temperature = 0;
-
-    const model = llm.bindTools([tool]);
-    const chain = prompt.pipe(model).pipe(new JsonOutputToolsParser());
+    const oldTemp = gradeDocumentsLLM.temperature;
+    gradeDocumentsLLM.temperature = 0;
 
     logger.debug(`${state.documents.length} orig docs`);
     const reducedDocs = _(state.documents)
@@ -302,7 +310,10 @@ no: The extract is not at all relevant to the query.`),
     const filteredDocuments = [];
     const uselessDocuments = [];
     for await (const doc of reducedDocs) {
-        const grade = await chain.invoke({
+        const grade = await gradeDocumentsChain.invoke({
+            title: state.novelMetadata.title,
+            author: state.novelMetadata.author,
+            genre: state.novelMetadata.genre,
             extract: doc.pageContent,
             query: state.origQuery,
         });
@@ -316,7 +327,7 @@ no: The extract is not at all relevant to the query.`),
         }
     }
 
-    llm.temperature = oldTemp;
+    gradeDocumentsLLM.temperature = oldTemp;
     return { documents: [], filteredDocuments, uselessDocuments };
 }
 
@@ -326,32 +337,30 @@ no: The extract is not at all relevant to the query.`),
  * @param {GraphState} state The current state of the graph.
  * @returns {Promise<GraphState>} The new state object.
  */
-async function transformQuery(state) {
-    logger.debug(`---TRANSFORM QUERY: ${state.priorQueries.length} PREVIOUS QUERIES---`);
-
-    const prompt = ChatPromptTemplate.fromMessages([
-        SystemMessagePromptTemplate.fromTemplate(`# Background
-You are generating a query that is well optimized for semantic search retrieval.
+const transformQueryPrompt = ChatPromptTemplate.fromMessages([
+    SystemMessagePromptTemplate.fromTemplate(`# Background
+You are generating a query that is well optimized for semantic search retrieval of extracts from "{title}", a {genre} novel by {author}. The query will be used to retrieve extracts that are relevant to the user's query.
 
 # Instructions
 Look at the initial query, and previous attempts at re-writing the query and try to reason about the underlying semantic intent / meaning. Then formulate and reply with an improved query more likely to surface responsive documents. Do not *answer* the query, just re-write it in a way that is more likely to get a good answer.
 
 # Output format
 Your output should be just the re-written query, with no discussion, pre-amble, formatting, or other considerations, just the text of the improved query.`),
-        HumanMessagePromptTemplate.fromTemplate(`# Previous inadequate queries
-{previous_queries}
-
-# Initial query
-{query}
-`)]);
+    HumanMessagePromptTemplate.fromTemplate('<previous_queries>{previous_queries}</previous_queries><initial_query>{query}</initial_query>')
+]);
+const transformQueryChain = transformQueryPrompt.pipe(fastLLM).pipe(new StringOutputParser());
+async function transformQuery(state) {
+    logger.debug(`---TRANSFORM QUERY: ${state.priorQueries.length} PREVIOUS QUERIES---`);
 
     // Prompt
     const oldTemp = fastLLM.temperature;
     const oldCtx = fastLLM.numCtx;
     fastLLM.temperature = 2;
     fastLLM.numCtx = 4096;
-    const chain = prompt.pipe(fastLLM).pipe(new StringOutputParser());
-    const betterQuery = await chain.invoke({
+    const betterQuery = await transformQueryChain.invoke({
+        title: state.novelMetadata.title,
+        genre: state.novelMetadata.genre,
+        author: state.novelMetadata.author,
         query: state.origQuery,
         previous_queries: state.priorQueries.join('\n'),
     });
@@ -374,7 +383,7 @@ function decideToGenerate(state) {
     logger.debug(`---DECIDE TO GENERATE: ${state.filteredDocuments.length} RELEVANT DOCUMENTS---`);
     const filteredDocuments = state.filteredDocuments;
 
-    if(filteredDocuments.length <= 30 && state.priorQueries.length < 5) {
+    if(filteredDocuments.length <= 10 && state.priorQueries.length < 5) {
         //
         // Too many documents have been filtered checkRelevance
         // We will re-generate a new query
@@ -388,14 +397,14 @@ function decideToGenerate(state) {
 
 const mainAgentPromptTemplate = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`# Basic instructions
-You are a powerful conversational AI trained to work as a developmental editor, assisting authors (as users) to improve their unpublished novels before the drafts are submitted to literary agents to find a publisher. You are provided with one or more extracts from the novel which should contain the answers to a query from the user, and your job is to digest these extracts to best help the user. When you answer the user's requests, you cite your sources in your answers.
+You are a powerful conversational AI trained to work as a developmental editor, assisting authors (as users) to improve their unpublished novels before the drafts are submitted to literary agents to find a publisher. You are provided with one or more extracts from "{title}", a {genre} novel by {author}, which should contain the answers to a query from the user, and your job is to digest these extracts to best help the user. When you answer the user's requests, you cite your sources in your answers.
 
 ## Task and context
 You help authors answer their questions and other requests. You will be asked a very wide array of requests on all kinds of topics. You should use the provided extract(s) to answer the question, and not make anything up that wasn't in at least one of the extracts. You should focus on serving the user's needs as best you can.
-Your job is to help find the book's flaws when they exist, and suggest to the author how they might fix them - that is the whole point of your review. Analyze any flaws rigorously and do not just mindlessly praise the author's work.
+Your job is to help find "{title}"'s flaws when they exist, and suggest to {author} how they might fix them - that is the whole point of your review. Analyze any flaws rigorously and do not just mindlessly praise the author's work.
 
 ## Limitations
-Remember that you're only reading a few extracts from the novel. You can get some sense of how much you're not seeing based on the provided location data which tells you which lines or pages of the book each extract is from. You will see that you're only seeing a very limited chunk of the novel.
+Remember that you're only reading a few extracts from "{title}" and not the whole novel. You can get some sense of how much you're not seeing based on the provided location data which tells you which lines or pages of the book each extract is from. You will see that you're only seeing a very limited chunk of the novel.
 
 ## Style guide
 Unless the user asks for a different style of answer, you should answer in full sentences, using proper grammar and spelling. Use Markdown to improve the formatting and presentation of your final answer.
@@ -408,6 +417,7 @@ Unless the user asks for a different style of answer, you should answer in full 
 # Query
 {query}
 `)]);
+const ragChain = mainAgentPromptTemplate.pipe(slowLLM).pipe(new StringOutputParser());
 
 /**
  * Generate answer
@@ -419,18 +429,14 @@ Unless the user asks for a different style of answer, you should answer in full 
 async function generate(state) {
     logger.debug(`---GENERATE FROM ${state.filteredDocuments.length} DOCS---`);
     // Pull in the prompt
-    const prompt = mainAgentPromptTemplate;
-
-    // LLM
-    const llm = slowLLM;
-
-    // RAG Chain
-    const ragChain = prompt.pipe(llm).pipe(new StringOutputParser());
 
     const docs = sortDocsFormatAsJSON(state.filteredDocuments);
     logger.debug(`Context has length ${docs.length}`);
 
     const generation = await ragChain.invoke({
+        title: state.novelMetadata.title,
+        genre: state.novelMetadata.genre,
+        author: state.novelMetadata.author,
         extracts: sortDocsFormatAsJSON(state.filteredDocuments),
         query: state.origQuery,
     });
@@ -442,12 +448,14 @@ async function generate(state) {
 }
 
 const workflow = new StateGraph({ channels: graphState })
+    .addNode('setupMetadata', setupMetadata)
     .addNode('retrieve', retrieve)
     .addNode('gradeDocuments', gradeDocuments)
     // .addNode('gradeDocuments', passthroughAllDocuments)
     .addNode('transformQuery', transformQuery)
     .addNode('generate', generate)
-    .addEdge(START, 'retrieve')
+    .addEdge(START, 'setupMetadata')
+    .addEdge('setupMetadata', 'retrieve')
     .addEdge('retrieve', 'gradeDocuments')
     .addConditionalEdges('gradeDocuments', decideToGenerate)
     .addEdge('transformQuery', 'retrieve')
@@ -462,6 +470,7 @@ const input =
     // `What would be a good, engaging title for this novel?`
     // `Give a precis of the novel: list genre, describe the protagonist and major characters, and provide an overall plot summary.`
     // `Analyze the story, and let me know if you think this is similar to any other well-known stories in its genre, or in another genre.`
+    // `Where would this novel fit in the pantheon of books? How good is it? Would it be at all fair to compare it to any other books? Be realistic and honest.`
     // `Proofreading: are there any spelling, grammar, or punctuation errors that can distract readers from the story itself? Please list them all, including reference information for where they occur in the novel.`
     // `Character development: Identify the important characters and then assess how well-developed they are, with distinct personalities, backgrounds, and motivations.`
     // `Plot structure: Analyze whether the story's events are in a clear and coherent sequence, with rising action, climax, falling action, and resolution.`
@@ -480,10 +489,10 @@ const input =
     // `Identify any subplots which don't lead anywhere and just distract from the main story.`
     // `Write a dust-jacket blurb describing this novel and a plot synopsis, in an engaging way but without spoilers, with some invented (but realistic) quotes from reviewers about how good the book is. One of the reviewers should be "OpenAI ChatGPT". Do not include any extracts from the book itself. Use markdown syntax for formatting.`
     // `Write a detailed query letter to a potential literary agent, explaining the novel and how it would appeal to readers. The letter should be engaging, and should make the agent interested in representing the book, without being overly cloying or sounding desperate. Be sure to properly research the book content so you're not being misleading. Find out the names of any characters mentioned. The agent will not have read the novel, so any discussion of the novel should not assume that the agent has read it yet. Reference the major events that happen in the book, describe what makes the protagonist engaging for readers, and include something about why the author chose to write this story.`
-    // `Is Meghan a likable and relatable character for readers, even if characters in the book perhaps dislike her? Will readers be able to empathize with her and enjoy the novel with her as the protagonist?`
+    // `Is Meghan a likable and relatable character for readers? Will readers be able to empathize with her and enjoy the novel with her as the protagonist?`
     // `Does Bathrobe Grouch have a real name?`
     // `What is Mr Zimmerman's nickname?`
-    `How does it turn out that Tyler died in the end? Who is responsible?`
+    // 'How does it turn out that Tyler Laduk died? What happened to him, and who if anyone is responsible?'
     // `What is the age of the main character and what are some of the challenges she faces throughout the novel?`
     // `How can the story be adjusted to make it appealing to a wider audience without losing its core themes of trauma, loss, and redemption?`
     // `Are there any secondary characters or subplots in the novel that could be expanded upon to provide additional perspectives or interests?`
@@ -494,7 +503,7 @@ const input =
     // `Meghan at times uses obscure words; is it unbelievable that a highschool sophomore would know these words, given Meghan's character and background?`
     // `Are there any instances in the novel where I've misused words? That is, where the word is used in a way that is not consistent with the meaning of the word?`
     // `Write a 1000-word comparative literature essay about this novel written in 2024, thinking about it as an allegory for the modern world of AI, even though the story is set in the 1990s before such AI had been developed. How do the novel's themes mirror issues of social isolation in a world full of robots? How does it help us understand how human societies can co-exist with robots while maintaining any notion of a human "self"? Do not invent things which are not in the novel itself; use quotes from the novel as appropriate to support your arguments. Draw on external sources as necessary. Use markdown formatting in the essay, including markdown footnotes for bibliographic references.`
-    // `Pick an iconic scene from the book, and describe it in visual detail. The description will be provided to an AI image generator using a Stable Diffusion type model. Include in your description all the important elements which will allow the AI model to properly generate the image. The image generator knows nothing of the novel, so if it's important, include things like the period/era of the story, the geographical setting, etc. so an accurate image can be generated. Do not include any preamble, discussion or any other meta-information, merely output the description of the desired image.`
+    `Pick an iconic scene from the book, and describe it in visual detail. The description will be provided to an AI image generator using a Stable Diffusion type model. Include in your description all the important elements which will allow the AI model to properly generate the image. The image generator knows nothing of the novel, so if it's important, include things like the period/era of the story, the geographical setting, etc. so an accurate image can be generated. Do not include any preamble, discussion or any other meta-information, merely output the description of the desired image.`
     // `When is this story set? What decade, or if you can be more specific, what year? How can you tell? Are there any clues in pop culture references in the story like TV shows, movies, songs, books, or anything similar?`
     ;
 
@@ -505,7 +514,11 @@ const config = { recursionLimit: 50, streamMode: 'values' };
 let finalState;
 for await (const output of await app.stream(inputs, config)) {
     if(!output.generation) {
-        logger.info(output.filteredDocuments);
+        // logger.info(_(output.filteredDocuments)
+        //     .sortBy(['metadata.source', 'metadata.loc.pageNumber', 'metadata.loc.lines.from'])
+        //     .map('pageContent')
+        //     .join('\n')
+        // );
     } else {
         finalState = output;
     }
