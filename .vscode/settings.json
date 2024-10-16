@@ -8,6 +8,7 @@
         "Kwargs",
         "langchain",
         "langgraph",
+        "linebreak",
         "minicheck",
         "mxbai",
         "nemo",
@@ -22,5 +23,8 @@
         "vectorstore",
         "vectorstores",
         "webbrowser"
+    ],
+    "cSpell.ignoreWords": [
+        "Laduk"
     ]
 }
