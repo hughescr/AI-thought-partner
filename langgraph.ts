@@ -18,6 +18,8 @@ import { HydeRetriever } from 'langchain/retrievers/hyde';
 import { StringPromptValue, BasePromptValueInterface } from '@langchain/core/prompt_values';
 import { maximalMarginalRelevance } from '@langchain/core/utils/math';
 import { Document } from '@langchain/core/documents';
+import { CallbackManagerForRetrieverRun } from "@langchain/core/callbacks/manager";
+import { MaxMarginalRelevanceSearchOptions } from "@langchain/core/vectorstores";
 
 import { z } from 'zod';
 
@@ -140,18 +142,13 @@ async function setupMetadata(): Promise<{ novelMetadata: NovelMetadata }> {
  * @param {number} options.fetchK=20- Number of documents to fetch before passing to the MMR algorithm.
  * @param {number} options.lambda=0.5 - Number between 0 and 1 that determines the degree of diversity among the results,
  *                 where 0 corresponds to maximum diversity and 1 to minimum diversity.
- * @param {MongoDBAtlasFilter} options.filter - Optional Atlas Search operator to pre-filter on document fields
- *                                      or post-filter following the knnBeta search.
  *
  * @returns {Promise<Document[]>} - List of documents selected by maximal marginal relevance.
  */
 class FaissStoreWithMMR extends FaissStore {
-    async maxMarginalRelevanceSearch(query, options) {
-        const { k, fetchK = 10, lambda = 0.5 } = options;
+    async maxMarginalRelevanceSearch(query: string, options: MaxMarginalRelevanceSearchOptions<this["FilterType"]>, _callbacks?: undefined) {
+        const { k, fetchK = 20, lambda = 0.5 } = options;
         const queryEmbedding = await this.embeddings.embedQuery(query);
-        // preserve the original value of includeEmbeddings
-        const includeEmbeddingsFlag = options.filter?.includeEmbeddings || false;
-        // update filter to include embeddings, as they will be used in MMR
         const resultDocs = await this.similaritySearchVectorWithScore(queryEmbedding, fetchK);
         const embeddingList = await this.embeddings.embedDocuments(_.map(resultDocs, '0.pageContent'));
         const mmrIndexes = maximalMarginalRelevance(queryEmbedding, embeddingList, lambda, k);
@@ -170,7 +167,7 @@ const hydePrompt = ChatPromptTemplate.fromMessages([
 ]);
 
 class HydeRetrieverWithMMR extends HydeRetriever {
-    async _getRelevantDocuments(query, runManager) {
+    async _getRelevantDocuments(query: string, runManager?: CallbackManagerForRetrieverRun) {
         let value: BasePromptValueInterface = new StringPromptValue(query);
         // Use a custom template if provided
         if (this.promptTemplate) {
@@ -201,7 +198,7 @@ const qaRetriever = new HydeRetrieverWithMMR({
     searchType: 'mmr',
     searchKwargs: {
         lambda: 0.5,
-        fetchK: 25,
+        fetchK: 50,
     },
     k: 10,
     promptTemplate: hydePrompt,
