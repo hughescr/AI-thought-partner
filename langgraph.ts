@@ -142,12 +142,13 @@ async function setupMetadata(): Promise<{ novelMetadata: NovelMetadata }> {
  * @param {number} options.fetchK=20- Number of documents to fetch before passing to the MMR algorithm.
  * @param {number} options.lambda=0.5 - Number between 0 and 1 that determines the degree of diversity among the results,
  *                 where 0 corresponds to maximum diversity and 1 to minimum diversity.
+ * @param {any} options.filter - filter parameter is ignored for FAISS stores.
  *
  * @returns {Promise<Document[]>} - List of documents selected by maximal marginal relevance.
  */
 class FaissStoreWithMMR extends FaissStore {
     async maxMarginalRelevanceSearch(query: string, options: MaxMarginalRelevanceSearchOptions<this["FilterType"]>, _callbacks?: undefined) {
-        const { k, fetchK = 20, lambda = 0.5 } = options;
+        const { k, fetchK = 20, lambda = 0.5, filter } = options;
         const queryEmbedding = await this.embeddings.embedQuery(query);
         const resultDocs = await this.similaritySearchVectorWithScore(queryEmbedding, fetchK);
         const embeddingList = await this.embeddings.embedDocuments(_.map(resultDocs, '0.pageContent'));
@@ -198,7 +199,7 @@ const qaRetriever = new HydeRetrieverWithMMR({
     searchType: 'mmr',
     searchKwargs: {
         lambda: 0.5,
-        fetchK: 50,
+        fetchK: 25,
     },
     k: 10,
     promptTemplate: hydePrompt,
