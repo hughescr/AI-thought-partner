@@ -201,9 +201,9 @@ const qaRetriever = new HydeRetrieverWithMMR({
     searchType: 'mmr',
     searchKwargs: {
         lambda: 0.5,
-        fetchK: 25,
+        fetchK: 50,
     },
-    k: 10,
+    k: 20,
     promptTemplate: hydePrompt,
 });
 
