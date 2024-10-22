@@ -290,14 +290,15 @@ async function passthroughAllDocuments(state) {
  * @returns {Promise<GraphState>} - The updated state with documents filtered for relevance.
  */
 const gradeDocumentsPrompt = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`Assess whether the provided extract, within the given context, might be helpful for answering the user's query about "{title}", a {genre} novel by {author}.`),
+    SystemMessagePromptTemplate.fromTemplate(`You will be provided with an extract from "{title}", a {genre} novel by {author} along with the context of that extract within the novel, and a query seeking information about the novel.
+Assess the provided extract and its given context within the broader story in terms of how informative it is for the specified query . The more helpful it is, the higher the score. Provide a score from 0 to 10, where 0 means the extract is completely irrelevant to the query in any way and 10 means the extract is highly relevant to the query potentially directly answering it.`),
     HumanMessagePromptTemplate.fromTemplate('<extract>{extract}</extract><context>{context}</context><query>{query}</query>'),
 ]);
 const giveRelevanceScoreTool = new DynamicStructuredTool({
     name: 'give_relevance_score',
     description: 'Give a relevance score to the retrieved documents.',
     schema: z.object({
-        relevanceScore: z.enum(['yes', 'no']).describe("'yes' if relevant or 'no' if irrelevant"),
+        relevanceScore: z.number().min(0).max(10).describe('The relevance score of the document from 0-10. Higher scores are more relevant.'),
     }),
     func: async ({ relevanceScore }) => relevanceScore,
 });
@@ -330,13 +331,13 @@ async function gradeDocuments(state) {
             query: state.origQuery,
         });
         // logger.debug(grade);
-        if(grade?.[0]?.args?.relevanceScore === 'yes') {
-            logger.debug(chalk.green('---GRADE: DOCUMENT RELEVANT---'));
+        if(grade?.[0]?.args?.relevanceScore > 0) {
+            logger.debug(chalk.green(`---GRADE: DOCUMENT RELEVANT: ${grade?.[0]?.args?.relevanceScore}---`));
             logger.debug(chalk.blueBright(doc.metadata.context));
             logger.debug(chalk.cyan(doc.pageContent));
             filteredDocuments.push(doc);
         } else {
-            logger.debug(chalk.red('---GRADE: DOCUMENT NOT RELEVANT---'));
+            logger.debug(chalk.red(`---GRADE: DOCUMENT NOT RELEVANT: ${grade?.[0]?.args?.relevanceScore}---`));
             logger.debug(chalk.blue(doc.metadata.context));
             logger.debug(chalk.blueBright(doc.pageContent));
             uselessDocuments.push(doc);
