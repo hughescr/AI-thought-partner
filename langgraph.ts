@@ -213,8 +213,8 @@ const sortDocsFormatAsJSON = (documents) => {
             .sortBy(['metadata.source', 'metadata.loc.pageNumber', 'metadata.loc.lines.from'])
             .map(doc => ({
                 loc: doc.metadata.loc,
-                text: doc.pageContent,
-                context: doc.context,
+                extract: doc.pageContent,
+                context: doc.metadata.context,
             }))
             .value()
     );
