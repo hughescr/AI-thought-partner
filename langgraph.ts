@@ -20,6 +20,7 @@ import { maximalMarginalRelevance } from '@langchain/core/utils/math';
 import { Document } from '@langchain/core/documents';
 import { CallbackManagerForRetrieverRun } from "@langchain/core/callbacks/manager";
 import { MaxMarginalRelevanceSearchOptions } from "@langchain/core/vectorstores";
+import { BM25Retriever } from "@langchain/community/retrievers/bm25";
 // import { OllamaRerank } from './lib/OllamaRerank';
 
 import { z } from 'zod';
@@ -253,8 +254,10 @@ async function retrieve(state) {
     const documents = await qaRetriever
         .withConfig({ runName: 'FetchRelevantDocuments' })
         .invoke(state.query || state.origQuery);
+    const BM25RetrieverInstance = BM25Retriever.fromDocuments(documents, { k: 10 });
+    const bm25Docs = await BM25RetrieverInstance.invoke(state.query || state.origQuery);
 
-    return { documents, query: state.query || state.origQuery };
+    return { documents: bm25Docs, query: state.query || state.origQuery };
 }
 
 // const reranker = new OllamaRerank({ model: 'bge-reranker-v2-m3:bf16', topN: 5 });
