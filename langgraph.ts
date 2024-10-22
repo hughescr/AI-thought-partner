@@ -20,6 +20,7 @@ import { maximalMarginalRelevance } from '@langchain/core/utils/math';
 import { Document } from '@langchain/core/documents';
 import { CallbackManagerForRetrieverRun } from "@langchain/core/callbacks/manager";
 import { MaxMarginalRelevanceSearchOptions } from "@langchain/core/vectorstores";
+// import { OllamaRerank } from './lib/OllamaRerank';
 
 import { z } from 'zod';
 
@@ -255,6 +256,25 @@ async function retrieve(state) {
 
     return { documents, query: state.query || state.origQuery };
 }
+
+// const reranker = new OllamaRerank({ model: 'bge-reranker-v2-m3:bf16', topN: 5 });
+// async function rerankDocuments(state) {
+//     const docsToRerank: string[] = _(state.documents)
+//                         .map((doc) => ({ extract: doc.pageContent, context: doc.metadata.context }))
+//                         .map(JSON.stringify)
+//                         .value() as unknown as string[]; // Confused about types for some reason
+//     logger.debug(`Reranking ${docsToRerank.length} documents`);
+//     const rerankedDocuments = await reranker.rerank(docsToRerank, state.query);
+//     logger.debug(`Reranked ${rerankedDocuments.length} documents`);
+//     // Now figure out which the original documents were
+//     const rerankedDocs = _.map(rerankedDocuments, (doc) => {
+//         const found = _.find(state.documents, { pageContent: JSON.parse(doc.doc).extract });
+//         found.metadata.relevanceScore = doc.relevanceScore;
+//         return found;
+//     });
+//     const ditchedDocs = _.difference(state.documents, rerankedDocs);
+//     return { filteredDocuments: rerankedDocs, uselessDocuments: ditchedDocs, documents: [] };
+// }
 
 // eslint-disable-next-line no-unused-vars -- Keep this definition as an alternative to gradeDocuments to keep all
 async function passthroughAllDocuments(state) {
