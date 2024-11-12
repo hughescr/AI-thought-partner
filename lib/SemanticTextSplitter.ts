@@ -74,23 +74,6 @@ export class SemanticTextSplitter extends TextSplitter {
             chunkOverlap: 0,
             lengthFunction: this.lengthFunction.bind(this),
         });
-        splitter.splitOnSeparator = function(text: string, separator: string): string[] {
-            let splits;
-            if (separator) {
-                if (this.keepSeparator) {
-                    const regexEscapedSeparator = separator.replace(/[/\-\\^$*+?.()|[\]{}]/g, "\\$&");
-                    splits = text.split(new RegExp(`(?<=${regexEscapedSeparator})`));
-                }
-                else {
-                    splits = text.split(separator);
-                }
-            }
-            else {
-                splits = text.split("");
-            }
-            return splits.filter((s) => s !== "");
-        };
-        splitter.splitOnSeparator = splitter.splitOnSeparator.bind(splitter);
 
         const initialChunks: string[] = await splitter.splitText(text);
         return await this.createFinalChunks(initialChunks);
