@@ -8,12 +8,12 @@ const commonOptions32k = { ...commonOptions, numCtx: 32 * 1024 };
 const commonOptions64k = { ...commonOptions, numCtx: 64 * 1024 };
 
 // Embeddings
-export const fastEmbeddings = new OllamaEmbeddings({
+export const nomicEmbeddings = new OllamaEmbeddings({
     model: 'nomic-embed-text',
     requestOptions: { numCtx: 2048 },
 });
 
-export const coreEmbeddings = new OllamaEmbeddings({
+export const bgeM3Embeddings = new OllamaEmbeddings({
     model: 'bge-m3',
     requestOptions: { numCtx: 8192 },
 });
@@ -39,5 +39,5 @@ export const llama31_70bLLM = new ChatOllama({ model: 'llama3.1:70b-instruct-q8_
 export const bespokeMinicheckLLM = new ChatOllama({ model: 'bespoke-minicheck:7b-q8_0', ...commonOptions32k });
 
 // Rerankers
-export const fastReranker = new OllamaRerank({ model: 'jina-reranker-v1-tiny-en:bf16', topN: 10 });
-export const goodReranker = new OllamaRerank({ model: 'bge-reranker-v2-m3:bf16', topN: 5 });
+export const jinaV1TinyENReranker = new OllamaRerank({ model: 'jina-reranker-v1-tiny-en:bf16', topN: 10 });
+export const bgeV2M3Reranker = new OllamaRerank({ model: 'bge-reranker-v2-m3:bf16', topN: 5 });
