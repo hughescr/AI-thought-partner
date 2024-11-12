@@ -23,6 +23,23 @@ interface SemanticTextSplitterOptions {
     showProgress?: boolean;
 }
 
+class CustomRecursiveCharacterTextSplitter extends RecursiveCharacterTextSplitter {
+    splitOnSeparator(text: string, separator: string): string[] {
+        let splits;
+        if (separator) {
+            if (this.keepSeparator) {
+                const regexEscapedSeparator = separator.replace(/[/\-\\^$*+?.()|[\]{}]/g, "\\$&");
+                splits = text.split(new RegExp(`(?<=${regexEscapedSeparator})`));
+            } else {
+                splits = text.split(separator);
+            }
+        } else {
+            splits = text.split("");
+        }
+        return splits.filter((s) => s !== "");
+    }
+}
+
 export class SemanticTextSplitter extends TextSplitter {
     private embeddings: Embeddings;
     private embeddingBatchSize: number;
@@ -48,7 +65,7 @@ export class SemanticTextSplitter extends TextSplitter {
     }
 
     public async splitText(text: string): Promise<string[]> {
-        const splitter: TextSplitter = new RecursiveCharacterTextSplitter({
+        const splitter: TextSplitter = new CustomRecursiveCharacterTextSplitter({
             separators: [
                 '\n\n', '.', '!', '?', '“', '"',
             ],
