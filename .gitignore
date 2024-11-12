@@ -137,3 +137,8 @@ repopack-output.txt
 # Ignore python .venv and venv
 .venv/
 venv/
+
+# Ignore aider stuff other than config
+.aider*
+!.aider.conf.yml
+
