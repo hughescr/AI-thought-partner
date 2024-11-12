@@ -65,7 +65,7 @@ const embeddings = CacheBackedEmbeddings.fromBytesStore(
 // Apache License
 const qwen25_1_5bLLM = new ChatOllama({ model: 'qwen2.5:1.5b-instruct-fp16', ...commonOptions32k });
 
-// Lllama community license
+// Llama community license
 const llama32_3bLLM = new ChatOllama({ model: 'llama3.2:3b-instruct-fp16', ...commonOptions32k });
 
 // MIT License
