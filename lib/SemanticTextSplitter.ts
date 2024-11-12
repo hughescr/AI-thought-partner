@@ -1,7 +1,7 @@
 // Semantic chunking following the method of https://nbviewer.org/github/nesbyte/ResearchChunkingStrategies/blob/main/main.ipynb
 
 import { TextSplitter, RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
-import { OllamaEmbeddings } from '@langchain/ollama';
+import { Embeddings } from '@langchain/core/embeddings';
 import _ from 'lodash';
 import { cosineSimilarity } from './utils';
 import { getEncoding } from '@langchain/core/utils/tiktoken';
@@ -15,7 +15,7 @@ _.mixin({
 });
 
 interface SemanticTextSplitterOptions {
-    embeddings: OllamaEmbeddings;
+    embeddings: Embeddings;
     chunkSize?: number;
     embeddingBatchSize?: number;
     tokenizer?: TiktokenEncoding;
@@ -24,7 +24,7 @@ interface SemanticTextSplitterOptions {
 }
 
 export class SemanticTextSplitter extends TextSplitter {
-    private embeddings: OllamaEmbeddings;
+    private embeddings: Embeddings;
     private embeddingBatchSize: number;
     private tokenizer: TiktokenEncoding;
     private initialChunkSize: number;
