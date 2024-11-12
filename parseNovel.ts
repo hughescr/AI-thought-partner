@@ -1,14 +1,12 @@
 // TODO: Add BM25 for search
 
-import { 
-    cachedCoreEmbeddings as embeddings,
-    fastEmbeddings,
-    summarizerLLM
+import {
+    cachedBgeM3Embeddings as embeddings,
+    cachedNomicEmbeddings as fastEmbeddings,
+    phi3_14bLLM as summarizerLLM
 } from './lib/LLMs';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
-import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
-import { InMemoryStore } from 'langchain/storage/in_memory';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 // import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';

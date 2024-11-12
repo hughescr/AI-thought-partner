@@ -8,23 +8,30 @@ const commonOptions32k = { ...commonOptions, numCtx: 32 * 1024 };
 const commonOptions64k = { ...commonOptions, numCtx: 64 * 1024 };
 
 // Embeddings
-export const nomicEmbeddings = new OllamaEmbeddings({
-    model: 'nomic-embed-text',
-    requestOptions: { numCtx: 2048 },
-});
 
-export const bgeM3Embeddings = new OllamaEmbeddings({
-    model: 'bge-m3',
-    requestOptions: { numCtx: 8192 },
-});
-
-export const cachedNomicEmbeddings = CacheBackedEmbeddings.fromBytesStore(
-    nomicEmbeddings,
+const makeCachedEmbeddings = (model: OllamaEmbeddings) => CacheBackedEmbeddings.fromBytesStore(
+    model,
     new InMemoryStore(),
     {
-        namespace: coreEmbeddings.model,
+        namespace: model.model,
     }
 );
+
+// Nomic uses Apache License 2.0
+export const nomicEmbeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', requestOptions: { numCtx: 2048 } });
+export const cachedNomicEmbeddings = makeCachedEmbeddings(nomicEmbeddings);
+
+// Jina uses Apache License 2.0
+export const jinaV2SmallENEmbeddings = new OllamaEmbeddings({ model: 'jina/jina-embeddings-v2-small-en', requestOptions: { numCtx: 8192 } });
+export const cachedJinaV2SmallENEmbeddings = makeCachedEmbeddings(jinaV2SmallENEmbeddings);
+
+// Jina uses Apache License 2.0
+export const jinaV2BaseENEmbeddings = new OllamaEmbeddings({ model: 'jina/jina-embeddings-v2-base-en', requestOptions: { numCtx: 8192 } });
+export const cachedJinaV2BaseENEmbeddings = makeCachedEmbeddings(jinaV2BaseENEmbeddings);
+
+// BGE M3 uses MIT License
+export const bgeM3Embeddings = new OllamaEmbeddings({ model: 'bge-m3', requestOptions: { numCtx: 8192 }});
+export const cachedBgeM3Embeddings = makeCachedEmbeddings(bgeM3Embeddings);
 
 // LLMs
 export const qwen25_1_5bLLM = new ChatOllama({ model: 'qwen2.5:1.5b-instruct-fp16', ...commonOptions32k });
@@ -39,12 +46,7 @@ export const llama31_70bLLM = new ChatOllama({ model: 'llama3.1:70b-instruct-q8_
 export const bespokeMinicheckLLM = new ChatOllama({ model: 'bespoke-minicheck:7b-q8_0', ...commonOptions32k });
 
 // Rerankers
+// Jina uses Apache License 2.0
 export const jinaV1TinyENReranker = new OllamaRerank({ model: 'jina-reranker-v1-tiny-en:bf16', topN: 10 });
+// BGE M3 uses Apache License 2.0
 export const bgeV2M3Reranker = new OllamaRerank({ model: 'bge-reranker-v2-m3:bf16', topN: 5 });
-export const cachedBgeM3Embeddings = CacheBackedEmbeddings.fromBytesStore(
-    bgeM3Embeddings,
-    new InMemoryStore(),
-    {
-        namespace: bgeM3Embeddings.model,
-    }
-);

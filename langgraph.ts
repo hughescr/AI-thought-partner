@@ -3,7 +3,11 @@
 
 // TODO: Improve use of document metadata for referencing/anchoring attributions
 
-import { cachedCoreEmbeddings as embeddings, phi35_4bLLM as fastLLM, qwen25_14bLLM as slowLLM, fastReranker, goodReranker } from './lib/LLMs';
+import { cachedBgeM3Embeddings as embeddings,
+    phi35_4bLLM as fastLLM,
+    qwen25_14bLLM as slowLLM,
+    jinaV1TinyENReranker as fastReranker,
+    bgeV2M3Reranker as goodReranker } from './lib/LLMs';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { JsonOutputToolsParser } from '@langchain/core/output_parsers/openai_tools';
@@ -15,10 +19,10 @@ import { HydeRetriever } from 'langchain/retrievers/hyde';
 import { StringPromptValue, BasePromptValueInterface } from '@langchain/core/prompt_values';
 import { maximalMarginalRelevance } from '@langchain/core/utils/math';
 import { Document } from '@langchain/core/documents';
+import { ChatOllama } from '@langchain/ollama';
 import { CallbackManagerForRetrieverRun } from "@langchain/core/callbacks/manager";
 import { MaxMarginalRelevanceSearchOptions } from "@langchain/core/vectorstores";
 import { BM25Retriever } from "@langchain/community/retrievers/bm25";
-import { OllamaRerank } from './lib/OllamaRerank';
 
 import { z } from 'zod';
 
@@ -33,16 +37,6 @@ if(process.versions.bun === undefined) {
 } else {
     logger.warn(chalk.yellowBright('Running under Bun, not setting global dispatcher so LLMs might timeout'));
 }
-
-/* eslint-disable no-unused-vars -- Leave all these so switching is easier without dealing with comments */
-const commonOptions = { temperature: 1, seed: 19740822, keepAlive: '15m' };
-const commonOptions8k = { ...commonOptions, numCtx: 8 * 1024 };
-const commonOptions16k = { ...commonOptions, numCtx: 16 * 1024 };
-const commonOptions32k = { ...commonOptions, numCtx: 32 * 1024 };
-const commonOptions64k = { ...commonOptions, numCtx: 64 * 1024 };
-const commonOptions128k = { ...commonOptions, numCtx: 128 * 1024 };
-const commonOptions256k = { ...commonOptions, numCtx: 256 * 1024 };
-
 
 const book = 'Christmas Town beta';
 const storeDirectory = `novels/${book}`;
@@ -200,13 +194,6 @@ async function retrieve(state) {
     return { documents: documents, query: state.query || state.origQuery };
 }
 
-// Apache License
-const fastReranker = new OllamaRerank({ model: 'jina-reranker-v1-tiny-en:bf16', topN: 10 });
-
-// Apache License
-// const fastReranker = new OllamaRerank({ model: 'jina-reranker-v1-turbo-en:bf16', topN: 5 });
-
-const goodReranker = new OllamaRerank({ model: 'bge-reranker-v2-m3:bf16', topN: 5 });
 async function rerankDocuments(state) {
     const docsToRerank: string[] = _(state.documents)
                         .map((doc) => ({ extract: doc.pageContent, context: doc.metadata.context }))
