@@ -3,10 +3,7 @@
 
 // TODO: Improve use of document metadata for referencing/anchoring attributions
 
-import { OllamaEmbeddings } from '@langchain/ollama';
-import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
-import { InMemoryStore } from 'langchain/storage/in_memory';
-import { ChatOllama } from '@langchain/ollama';
+import { cachedCoreEmbeddings as embeddings, phi35_4bLLM as fastLLM, qwen25_14bLLM as slowLLM, fastReranker, goodReranker } from './lib/LLMs';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { JsonOutputToolsParser } from '@langchain/core/output_parsers/openai_tools';
@@ -46,68 +43,6 @@ const commonOptions64k = { ...commonOptions, numCtx: 64 * 1024 };
 const commonOptions128k = { ...commonOptions, numCtx: 128 * 1024 };
 const commonOptions256k = { ...commonOptions, numCtx: 256 * 1024 };
 
-const embeddings = CacheBackedEmbeddings.fromBytesStore(
-    // Apache License
-    // new OllamaEmbeddings({ model: 'nomic-embed-text', requestOptions: { numCtx: 2048 } }),
-
-    // Apache License
-    // new OllamaEmbeddings({ model: 'mxbai-embed-large', requestOptions: { numCtx: 512 } }),
-
-    // MIT License
-    new OllamaEmbeddings({ model: 'bge-m3', requestOptions: { numCtx: 8 * 1024 } }),
-
-    new InMemoryStore(),
-    {
-        namespace: 'embeddings',
-    }
-);
-
-// Apache License
-const qwen25_1_5bLLM = new ChatOllama({ model: 'qwen2.5:1.5b-instruct-fp16', ...commonOptions32k });
-
-// Llama community license
-const llama32_3bLLM = new ChatOllama({ model: 'llama3.2:3b-instruct-fp16', ...commonOptions32k });
-
-// MIT License
-const phi35_4bLLM = new ChatOllama({ model: 'phi3.5:3.8b-mini-instruct-fp16', ...commonOptions32k });
-
-// llama3.1 has 128k ctx; HAS TOOLS
-// Prompt parse: ~200-500 t/s; generation: ~40 t/s
-// Llama community license
-const llama31_8bLLM = new ChatOllama({ model: 'llama3.1:8b-instruct-q8_0', ...commonOptions64k });
-
-// mistral-nemo has 1024k ctx; HAS TOOLS
-// Prompt parse: ~300-500 t/s; generation: ~25-40 t/s
-// Apache License
-const nemo_12bLLM = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions32k });
-
-// Apache License
-const qwen25_14bLLM = new ChatOllama({ model: 'qwen2.5:14b-instruct-q8_0', ...commonOptions32k });
-
-// phi3:medium-128k-instruct-q8_0 has 128k ctx but we'll only use 64k; MAYBE NO TOOLS?
-// Prompt parse: ~100-250 t/s; generation: ~20 t/s
-// MIT License
-const phi3_14bLLM = new ChatOllama({ model: 'phi3:14b-medium-128k-instruct-q8_0', ...commonOptions32k });
-
-// qwen2.5 has 128k training ctx; HAS TOOLS
-// Prompt parse: ~50-60 t/s; generation: ~10 t/s
-// Apache License
-const qwen25_32bLLM = new ChatOllama({ model: 'qwen2.5:32b-instruct-q8_0', ...commonOptions32k });
-
-// llama3.1 has 128k ctx; HAS TOOLS
-// Prompt parse: ~30-60 t/s; generation: ~5 t/s
-// Llama community license
-const llama31_70bLLM = new ChatOllama({ model: 'llama3.1:70b-instruct-q8_0', ...commonOptions16k });
-
-// bespoke-minicheck:7b-q8_0 is a fact checker
-// Prompt parse: ~600 t/s; generation: ~50 t/s
-// CC-Attribution-NonCommercial license
-const bespokeMinicheckLLM = new ChatOllama({ model: 'bespoke-minicheck:7b-q8_0', ...commonOptions32k });
-
-/* eslint-enable no-unused-vars -- Leave all these so switching is easier without dealing with comments */
-
-const fastLLM = phi35_4bLLM;
-const slowLLM = qwen25_14bLLM;
 
 const book = 'Christmas Town beta';
 const storeDirectory = `novels/${book}`;
