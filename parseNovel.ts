@@ -37,13 +37,10 @@ const fastEmbeddings = new OllamaEmbeddings({
     requestOptions: { numCtx: 2048 },
 });
 // const coreEmbeddings: OllamaEmbeddings = new OllamaEmbeddings({ model: 'mxbai-embed-large', requestOptions: { numCtx: 512 } });
-// const coreEmbeddings: OllamaEmbeddings = new OllamaEmbeddings({ model: 'bge-large', requestOptions: { numCtx: 512 } });
 const coreEmbeddings = new OllamaEmbeddings({
     model: 'bge-m3',
     requestOptions: { numCtx: 8192 },
 });
-// const coreEmbeddings: OllamaEmbeddings = new OllamaEmbeddings({ model: 'mistral:7b-instruct-v0.2-q8_0', requestOptions: { numCtx: 32768 } });
-// const coreEmbeddings: OllamaEmbeddings = new OllamaEmbeddings({ model: 'llama3.1:8b-instruct-q8_0', requestOptions: { numCtx: 2048 } });
 
 interface CommonOptions {
     temperature: number;
