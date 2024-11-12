@@ -18,8 +18,8 @@ export const bgeM3Embeddings = new OllamaEmbeddings({
     requestOptions: { numCtx: 8192 },
 });
 
-export const cachedCoreEmbeddings = CacheBackedEmbeddings.fromBytesStore(
-    coreEmbeddings,
+export const cachedNomicEmbeddings = CacheBackedEmbeddings.fromBytesStore(
+    nomicEmbeddings,
     new InMemoryStore(),
     {
         namespace: coreEmbeddings.model,
@@ -41,3 +41,10 @@ export const bespokeMinicheckLLM = new ChatOllama({ model: 'bespoke-minicheck:7b
 // Rerankers
 export const jinaV1TinyENReranker = new OllamaRerank({ model: 'jina-reranker-v1-tiny-en:bf16', topN: 10 });
 export const bgeV2M3Reranker = new OllamaRerank({ model: 'bge-reranker-v2-m3:bf16', topN: 5 });
+export const cachedBgeM3Embeddings = CacheBackedEmbeddings.fromBytesStore(
+    bgeM3Embeddings,
+    new InMemoryStore(),
+    {
+        namespace: bgeM3Embeddings.model,
+    }
+);
