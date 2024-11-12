@@ -1,6 +1,10 @@
 // TODO: Add BM25 for search
 
-import { ChatOllama, OllamaEmbeddings } from '@langchain/ollama';
+import { 
+    cachedCoreEmbeddings as embeddings,
+    fastEmbeddings,
+    summarizerLLM
+} from './lib/LLMs';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
@@ -32,39 +36,6 @@ const docs = await loader.load();
 // Then, for each large chunk, break it into small chunks (maybe 256 tokens), and ask an LLM to describe the context of each small chunk (adding another 256 tokens)
 // Then, concat the context and the extract, calculate encodings, and store in a vector store
 
-const fastEmbeddings = new OllamaEmbeddings({
-    model: 'nomic-embed-text',
-    requestOptions: { numCtx: 2048 },
-});
-// const coreEmbeddings: OllamaEmbeddings = new OllamaEmbeddings({ model: 'mxbai-embed-large', requestOptions: { numCtx: 512 } });
-const coreEmbeddings = new OllamaEmbeddings({
-    model: 'bge-m3',
-    requestOptions: { numCtx: 8192 },
-});
-
-interface CommonOptions {
-    temperature: number;
-    seed: number;
-    keepAlive: string;
-}
-
-const commonOptions = {
-    temperature: 1,
-    seed: 19740822,
-    keepAlive: '15m',
-};
-const commonOptions32k = {
-    numCtx: 32 * 1024,
-    ...commonOptions,
-};
-
-const summarizerLLM = new ChatOllama({
-    ...commonOptions32k,
-    // model: 'qwen2.5:32b-instruct-q8_0',
-    // model: 'mistral-small:22b-instruct-2409-q8_0',
-    // model: 'llama3.1:8b-instruct-q8_0',
-    model: 'command-r:35b-08-2024-q8_0',
-});
 
 class RecursiveCharacterTextSplitterSeparatorMod extends RecursiveCharacterTextSplitter {
     // Override the splitOnSeparator method to allow for keeping the separator attached to the earlier chunk not the later chunk
@@ -99,13 +70,6 @@ const chapterSplitter = new RecursiveCharacterTextSplitterSeparatorMod({
 
 const chapterChunks = await chapterSplitter.splitDocuments(docs);
 
-const embeddings: CacheBackedEmbeddings = CacheBackedEmbeddings.fromBytesStore(
-    coreEmbeddings,
-    new InMemoryStore(),
-    {
-        namespace: coreEmbeddings.model,
-    }
-);
 
 const splitter: SemanticTextSplitter = new SemanticTextSplitter({
     showProgress: false,
