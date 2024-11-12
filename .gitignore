@@ -133,3 +133,7 @@ dist
 neo4j_db/
 novels/
 repopack-output.txt
+
+# Ignore python .venv and venv
+.venv/
+venv/
