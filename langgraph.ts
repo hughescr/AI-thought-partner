@@ -47,65 +47,67 @@ const commonOptions128k = { ...commonOptions, numCtx: 128 * 1024 };
 const commonOptions256k = { ...commonOptions, numCtx: 256 * 1024 };
 
 const embeddings = CacheBackedEmbeddings.fromBytesStore(
+    // Apache License
     // new OllamaEmbeddings({ model: 'nomic-embed-text', requestOptions: { numCtx: 2048 } }),
+
+    // Apache License
     // new OllamaEmbeddings({ model: 'mxbai-embed-large', requestOptions: { numCtx: 512 } }),
-    // new OllamaEmbeddings({ model: 'bge-large', requestOptions: { numCtx: 512 } }),
+
+    // MIT License
     new OllamaEmbeddings({ model: 'bge-m3', requestOptions: { numCtx: 8 * 1024 } }),
-    // new OllamaEmbeddings({ model: 'mistral:7b-instruct-v0.2-q8_0', requestOptions: { numCtx: 32768 } }),
-    // new OllamaEmbeddings({ model: 'llama3.1:8b-instruct-q8_0', requestOptions: { numCtx: 2048 } }),
+
     new InMemoryStore(),
     {
         namespace: 'embeddings',
     }
 );
 
-// Prompt parse: ~500-1500 t/s; generation: ~60-70 t/s; HAS TOOLS
-const qwen25_3bLLM = new ChatOllama({ model: 'qwen2.5:3b-instruct-q8_0', ...commonOptions32k });
+// Apache License
+const qwen25_1_5bLLM = new ChatOllama({ model: 'qwen2.5:1.5b-instruct-fp16', ...commonOptions32k });
 
-// mistral-nemo has 1024k ctx; HAS TOOLS
-// Prompt parse: ~300-500 t/s; generation: ~25-40 t/s
-const nemo_12bLLM = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions32k });
+// Lllama community license
+const llama32_3bLLM = new ChatOllama({ model: 'llama3.2:3b-instruct-fp16', ...commonOptions32k });
+
+// MIT License
+const phi35_4bLLM = new ChatOllama({ model: 'phi3.5:3.8b-mini-instruct-fp16', ...commonOptions32k });
 
 // llama3.1 has 128k ctx; HAS TOOLS
 // Prompt parse: ~200-500 t/s; generation: ~40 t/s
+// Llama community license
 const llama31_8bLLM = new ChatOllama({ model: 'llama3.1:8b-instruct-q8_0', ...commonOptions64k });
+
+// mistral-nemo has 1024k ctx; HAS TOOLS
+// Prompt parse: ~300-500 t/s; generation: ~25-40 t/s
+// Apache License
+const nemo_12bLLM = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions32k });
+
+// Apache License
+const qwen25_14bLLM = new ChatOllama({ model: 'qwen2.5:14b-instruct-q8_0', ...commonOptions32k });
 
 // phi3:medium-128k-instruct-q8_0 has 128k ctx but we'll only use 64k; MAYBE NO TOOLS?
 // Prompt parse: ~100-250 t/s; generation: ~20 t/s
+// MIT License
 const phi3_14bLLM = new ChatOllama({ model: 'phi3:14b-medium-128k-instruct-q8_0', ...commonOptions32k });
-
-// mistral-small has 32k training ctx; claims it can do up to 128k ctx; HAS TOOLS
-// Prompt parse: ~60-70 t/s; generation: ~15 t/s
-const mistralSmallLLM = new ChatOllama({ model: 'mistral-small:22b-instruct-2409-q8_0', ...commonOptions32k });
 
 // qwen2.5 has 128k training ctx; HAS TOOLS
 // Prompt parse: ~50-60 t/s; generation: ~10 t/s
+// Apache License
 const qwen25_32bLLM = new ChatOllama({ model: 'qwen2.5:32b-instruct-q8_0', ...commonOptions32k });
-
-// command-r has 128k ctx; HAS TOOLS
-// Prompt parse: ~70 t/s; generation: ~10 t/s
-const commandR_35bLLM = new ChatOllama({ model: 'command-r:35b-08-2024-q8_0', ...commonOptions64k });
 
 // llama3.1 has 128k ctx; HAS TOOLS
 // Prompt parse: ~30-60 t/s; generation: ~5 t/s
+// Llama community license
 const llama31_70bLLM = new ChatOllama({ model: 'llama3.1:70b-instruct-q8_0', ...commonOptions16k });
-
-// mistral-large has 32k training ctx; claims it can do up to 128k ctx; HAS TOOLS
-// Prompt parse: ~12-15 t/s; generation: ~5-6 t/s
-const mistralLLM = new ChatOllama({ model: 'mistral-large:latest', ...commonOptions16k });
-
-// qwen2.5 has 128k ctx; HAS TOOLS
-// Prompt parse: ~30 t/s; generation: ~5 t/s
-const qwen25_72bLLM = new ChatOllama({ model: 'qwen2.5:72b-instruct-q8_0', ...commonOptions16k });
 
 // bespoke-minicheck:7b-q8_0 is a fact checker
 // Prompt parse: ~600 t/s; generation: ~50 t/s
+// CC-Attribution-NonCommercial license
 const bespokeMinicheckLLM = new ChatOllama({ model: 'bespoke-minicheck:7b-q8_0', ...commonOptions32k });
 
 /* eslint-enable no-unused-vars -- Leave all these so switching is easier without dealing with comments */
 
-const fastLLM = mistralLLM;
-const slowLLM = mistralLLM;
+const fastLLM = phi35_4bLLM;
+const slowLLM = qwen25_14bLLM;
 
 const book = 'Christmas Town beta';
 const storeDirectory = `novels/${book}`;
