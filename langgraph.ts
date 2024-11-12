@@ -21,7 +21,7 @@ import { Document } from '@langchain/core/documents';
 import { CallbackManagerForRetrieverRun } from "@langchain/core/callbacks/manager";
 import { MaxMarginalRelevanceSearchOptions } from "@langchain/core/vectorstores";
 import { BM25Retriever } from "@langchain/community/retrievers/bm25";
-// import { OllamaRerank } from './lib/OllamaRerank';
+import { OllamaRerank } from './lib/OllamaRerank';
 
 import { z } from 'zod';
 
@@ -196,17 +196,22 @@ class HydeRetrieverWithMMR extends HydeRetriever {
     }
 };
 
-const qaRetriever = new HydeRetrieverWithMMR({
-    // verbose: true,
-    vectorStore,
-    llm: fastLLM, // Basic task to write the prompt so do it quickly
-    searchType: 'mmr',
-    searchKwargs: {
-        lambda: 0.5,
-        fetchK: 50,
-    },
-    k: 20,
-    promptTemplate: hydePrompt,
+// const qaRetriever = new HydeRetrieverWithMMR({
+//     // verbose: true,
+//     vectorStore,
+//     llm: fastLLM, // Basic task to write the prompt so do it quickly
+//     searchType: 'mmr',
+//     searchKwargs: {
+//         lambda: 0.5,
+//         fetchK: 100,
+//     },
+//     k: 50,
+//     promptTemplate: hydePrompt,
+// });
+
+
+const qaRetriever = vectorStore.asRetriever({
+    k: 100,
 });
 
 const sortDocsFormatAsJSON = (documents) => {
@@ -256,34 +261,59 @@ async function retrieve(state) {
     const documents = await qaRetriever
         .withConfig({ runName: 'FetchRelevantDocuments' })
         .invoke(state.query || state.origQuery);
-    const BM25RetrieverInstance = BM25Retriever.fromDocuments(documents, { k: 10 });
-    const bm25Docs = await BM25RetrieverInstance.invoke(state.query || state.origQuery);
-
-    return { documents: bm25Docs, query: state.query || state.origQuery };
+    logger.debug(`Retrieved ${documents.length} documents`);
+    return { documents: documents, query: state.query || state.origQuery };
 }
 
-// const reranker = new OllamaRerank({ model: 'bge-reranker-v2-m3:bf16', topN: 5 });
-// async function rerankDocuments(state) {
-//     const docsToRerank: string[] = _(state.documents)
-//                         .map((doc) => ({ extract: doc.pageContent, context: doc.metadata.context }))
-//                         .map(JSON.stringify)
-//                         .value() as unknown as string[]; // Confused about types for some reason
-//     logger.debug(`Reranking ${docsToRerank.length} documents`);
-//     const rerankedDocuments = await reranker.rerank(docsToRerank, state.query);
-//     logger.debug(`Reranked ${rerankedDocuments.length} documents`);
-//     // Now figure out which the original documents were
-//     const rerankedDocs = _.map(rerankedDocuments, (doc) => {
-//         const found = _.find(state.documents, { pageContent: JSON.parse(doc.doc).extract });
-//         found.metadata.relevanceScore = doc.relevanceScore;
-//         return found;
-//     });
-//     const ditchedDocs = _.difference(state.documents, rerankedDocs);
-//     return { filteredDocuments: rerankedDocs, uselessDocuments: ditchedDocs, documents: [] };
-// }
+// Apache License
+const fastReranker = new OllamaRerank({ model: 'jina-reranker-v1-tiny-en:bf16', topN: 10 });
+
+// Apache License
+// const fastReranker = new OllamaRerank({ model: 'jina-reranker-v1-turbo-en:bf16', topN: 5 });
+
+const goodReranker = new OllamaRerank({ model: 'bge-reranker-v2-m3:bf16', topN: 5 });
+async function rerankDocuments(state) {
+    const docsToRerank: string[] = _(state.documents)
+                        .map((doc) => ({ extract: doc.pageContent, context: doc.metadata.context }))
+                        .map(JSON.stringify)
+                        .value() as unknown as string[]; // Confused about types for some reason
+    logger.debug(`Reranking ${docsToRerank.length} documents`);
+
+    fastReranker.topN = Math.max(~~(docsToRerank.length / 4), 5);
+    const preRerankedDocuments = await fastReranker.rerank(docsToRerank, state.query);
+
+    const preRerankedDocs = _.map(preRerankedDocuments,'doc');
+
+    goodReranker.topN = Math.max(~~(preRerankedDocs.length / 4), 3);
+    const rerankedDocuments = await goodReranker.rerank(preRerankedDocs, state.query);
+
+    logger.debug(`Reranked ${rerankedDocuments.length} documents`);
+    // Now figure out which the original documents were
+    const rerankedDocs = _.map(rerankedDocuments, (doc) => {
+        const found = _.find(state.documents, { pageContent: JSON.parse(doc.doc).extract });
+        found.metadata.relevanceScore = doc.relevanceScore;
+        return found;
+    });
+    const ditchedDocs = _.difference(state.documents, rerankedDocs);
+    return { filteredDocuments: rerankedDocs, documents: [] };
+}
 
 // eslint-disable-next-line no-unused-vars -- Keep this definition as an alternative to gradeDocuments to keep all
 async function passthroughAllDocuments(state) {
     return { filteredDocuments: state.documents, uselessDocuments: [], documents: [] };
+}
+
+async function reduceDocuments(state) {
+    logger.debug(`${state.documents.length} orig docs`);
+    const reducedDocs = _(state.documents)
+        .filter(d => !_.some(state.filteredDocuments, { pageContent: d.pageContent }))
+        .filter(d => !_.some(state.uselessDocuments, { pageContent: d.pageContent }))
+        .value() as Document[];
+    logger.debug(`${reducedDocs.length} reduced docs`);
+    // const BM25RetrieverInstance = BM25Retriever.fromDocuments(reducedDocs, { k: ~~(reducedDocs.length/4) });
+    // const bm25Docs = await BM25RetrieverInstance.invoke(state.query || state.origQuery);
+    // logger.debug(`BM25 retrieved ${bm25Docs.length} documents`);
+    return { documents: reducedDocs };
 }
 
 /**
@@ -314,16 +344,9 @@ async function gradeDocuments(state) {
     const oldTemp = gradeDocumentsLLM.temperature;
     gradeDocumentsLLM.temperature = 0;
 
-    logger.debug(`${state.documents.length} orig docs`);
-    const reducedDocs = _(state.documents)
-                        .filter(d => !_.some(state.filteredDocuments, { pageContent: d.pageContent }))
-                        .filter(d => !_.some(state.uselessDocuments, { pageContent: d.pageContent }))
-                        .value() as Document[];
-    logger.debug(`${reducedDocs.length} reduced docs`);
-
     const filteredDocuments: Document[] = [];
     const uselessDocuments: Document[] = [];
-    for await (const doc of reducedDocs) {
+    for await (const doc of state.documents) {
         const grade: any = await gradeDocumentsChain.invoke({
             title: state.novelMetadata.title,
             author: state.novelMetadata.author,
@@ -402,7 +425,7 @@ function decideToGenerate(state) {
     logger.debug(`---DECIDE TO GENERATE: ${state.filteredDocuments.length} RELEVANT DOCUMENTS---`);
     const filteredDocuments = state.filteredDocuments;
 
-    if(filteredDocuments.length <= 10 && state.priorQueries.length < 5) {
+    if(filteredDocuments.length <= 20 && state.priorQueries.length < 5) {
         //
         // Too many documents have been filtered checkRelevance
         // We will re-generate a new query
@@ -467,17 +490,24 @@ async function generate(state) {
 
 const workflow = new StateGraph(QuestionAnswerAnnotation)
     .addNode('setupMetadata', setupMetadata)
-    .addNode('retrieve', retrieve)
-    .addNode('gradeDocuments', gradeDocuments)
-    // .addNode('gradeDocuments', passthroughAllDocuments)
-    // .addNode('gradeDocuments', rerankDocuments)
-    .addNode('transformQuery', transformQuery)
-    .addNode('generate', generate)
     .addEdge(START, 'setupMetadata')
+
+    .addNode('retrieve', retrieve)
     .addEdge('setupMetadata', 'retrieve')
-    .addEdge('retrieve', 'gradeDocuments')
+
+    .addNode('reduceDocuments', reduceDocuments)
+    .addEdge('retrieve', 'reduceDocuments')
+
+    // .addNode('gradeDocuments', gradeDocuments)
+    // .addNode('gradeDocuments', passthroughAllDocuments)
+    .addNode('gradeDocuments', rerankDocuments)
+    .addEdge('reduceDocuments', 'gradeDocuments')
     .addConditionalEdges('gradeDocuments', decideToGenerate)
+
+    .addNode('transformQuery', transformQuery)
     .addEdge('transformQuery', 'retrieve')
+
+    .addNode('generate', generate)
     .addEdge('generate', END);
 
 const app = workflow.compile();
