@@ -5,7 +5,7 @@ export default
 [
     {
         name: 'ignores',
-        ignores: ['coverage', 'node_modules'],
+        ignores: ['coverage', 'node_modules', 'venv'],
     },
     defaultConfig.configs.recommended,
 ];
