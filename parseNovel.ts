@@ -1,8 +1,8 @@
 // TODO: Add BM25 for search
 
 import {
-    jinaBaseEmbeddings as embeddings,
-    jinaSmallEmbeddings as fastEmbeddings,
+    cachedJinaV2BaseENEmbeddings as embeddings,
+    cachedJinaV2SmallENEmbeddings as fastEmbeddings,
     phi3_14bLLM as summarizerLLM
 } from './lib/LLMs';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
