@@ -6,7 +6,7 @@
 import {
     cachedJinaV2BaseENEmbeddings as embeddings,
     phi35_4bLLM as fastLLM,
-    qwen25_14bLLM as slowLLM,
+    qwen25_32bLLM as slowLLM,
     jinaV1TinyENReranker as fastReranker,
     bgeV2M3Reranker as goodReranker } from './lib/LLMs';
 import { DynamicStructuredTool } from '@langchain/core/tools';
