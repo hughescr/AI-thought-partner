@@ -441,8 +441,8 @@ const app = workflow.compile();
 // eslint-disable-next-line @stylistic/operator-linebreak -- This is fine here cos we can swap in any of the prompts
 const input =
     // `What do you think of this novel?`
-    // `Identify sentences which are too long or complex and are hard to understand.`
     // `What would be a good, engaging title for this novel?`
+    // `Identify sentences which are inappropriately too long or complex and are hard to understand.`
     // `Give a precis of the novel: list genre, describe the protagonist and major characters, and provide an overall plot summary.`
     // `Analyze the story, and let me know if you think this is similar to any other well-known stories in its genre, or in another genre.`
     // `Where would this novel fit in the pantheon of books? How good is it? Would it be at all fair to compare it to any other books? Be realistic and honest.`
