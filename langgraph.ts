@@ -3,7 +3,8 @@
 
 // TODO: Improve use of document metadata for referencing/anchoring attributions
 
-import { cachedBgeM3Embeddings as embeddings,
+import {
+    cachedJinaV2BaseENEmbeddings as embeddings,
     phi35_4bLLM as fastLLM,
     qwen25_14bLLM as slowLLM,
     jinaV1TinyENReranker as fastReranker,
