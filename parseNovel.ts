@@ -3,7 +3,7 @@
 import {
     cachedJinaV2BaseENEmbeddings as embeddings,
     cachedJinaV2SmallENEmbeddings as fastEmbeddings,
-    phi3_14bLLM as summarizerLLM
+    qwen25_32bLLM as summarizerLLM
 } from './lib/LLMs';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
@@ -80,7 +80,10 @@ const splitter: SemanticTextSplitter = new SemanticTextSplitter({
 // Now go through each chapter, split it into smaller chunks, and then calculate context for each chunk.
 const contextSummaryPrompt: ChatPromptTemplate = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(
-        'Given a long passage and a short passage, generate a very minimal, short explanatory context that grounds the short passage, and clarifies who any pronouns refer to, if that is not clear in the short extract alone. Output just the generated context with no JSON nor other markup or lead-in, just the raw text by itself. Do not put quotation marks around the context or anything like that.'
+        `Given a long passage and a short passage, generate a very minimal, short explanatory context that grounds the short passage, and clarifies who any pronouns refer to, if that is not clear in the short extract alone.
+Output just the generated context with no JSON nor other markup or lead-in, just the raw text by itself.
+Include information like what chapter this is, and other similar meta-information about where this passage is from.
+Do not put quotation marks around the context or anything like that. You do not need to specify that this is a context, the user will know that already, so don't lead in with "Context:" or "This is the context:" or anything like that.`
     ),
     HumanMessagePromptTemplate.fromTemplate(`Long passage:
 {long}
