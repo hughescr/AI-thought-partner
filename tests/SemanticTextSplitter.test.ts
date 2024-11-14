@@ -9,6 +9,9 @@ mock('@langchain/core/embeddings', () => {
         embedDocuments(texts: string[]): Promise<number[][]> {
             return Promise.resolve(texts.map(text => _.fill(Array(512), 0.5)));
         }
+
+        embedQuery(text: string): Promise<number[]> {
+            return Promise.resolve(_.fill(Array(512), 0.5));
     }
     return {
         Embeddings: ConcreteEmbeddings
