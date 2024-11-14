@@ -1,9 +1,10 @@
+import { test, expect, mock } from 'bun:test';
 import { SemanticTextSplitter } from '../lib/SemanticTextSplitter';
 import { Embeddings } from '@langchain/core/embeddings';
 import _ from 'lodash';
 
 // Mock the Embeddings class
-jest.mock('@langchain/core/embeddings', () => {
+mock('@langchain/core/embeddings', () => {
     return {
         Embeddings: jest.fn().mockImplementation(() => {
             return {
