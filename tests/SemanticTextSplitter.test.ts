@@ -20,7 +20,7 @@ describe('SemanticTextSplitter', () => {
     let splitter: SemanticTextSplitter;
 
     beforeEach(() => {
-        embeddings = new Embeddings();
+        embeddings = new ConcreteEmbeddings();
         splitter = new SemanticTextSplitter({
             embeddings,
             chunkSize: 512,
