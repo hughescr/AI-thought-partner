@@ -1,22 +1,17 @@
-import { test, expect, mock, describe, beforeEach, fn } from 'bun:test';
+import { test, expect, describe, beforeEach } from 'bun:test';
 import { SemanticTextSplitter } from '../lib/SemanticTextSplitter';
 import { Embeddings } from '@langchain/core/embeddings';
 import _ from 'lodash';
 
-// Mock the Embeddings class
-mock('@langchain/core/embeddings', () => {
-    class ConcreteEmbeddings extends Embeddings {
-        embedDocuments(texts: string[]): Promise<number[][]> {
-            return Promise.resolve(texts.map(text => _.fill(Array(512), 0.5)));
-        }
-
-        embedQuery(text: string): Promise<number[]> {
-            return Promise.resolve(_.fill(Array(512), 0.5));
+class ConcreteEmbeddings extends Embeddings {
+    embedDocuments(texts: string[]): Promise<number[][]> {
+        return Promise.resolve(texts.map(text => _.fill(Array(512), 0.5)));
     }
-    return {
-        Embeddings: ConcreteEmbeddings
-    };
-});
+
+    embedQuery(text: string): Promise<number[]> {
+        return Promise.resolve(_.fill(Array(512), 0.5));
+    }
+}
 
 describe('SemanticTextSplitter', () => {
     let embeddings: Embeddings;
