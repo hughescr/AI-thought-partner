@@ -1,9 +1,9 @@
-import { mock, fn } from "bun:test";
+import { mock, jest } from "bun:test";
 
-mock("ollama/browser", () => {
+mock.module("ollama/browser", () => {
     return {
         Ollama: class {
-            rerank = fn().mockImplementation(({ model }) => {
+            rerank = jest.fn().mockImplementation(({ model }) => {
                 if (model !== "test-model") {
                     throw new Error(`model "${model}" not found, try pulling it first`);
                 }
