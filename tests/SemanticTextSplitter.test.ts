@@ -6,9 +6,9 @@ import _ from 'lodash';
 // Mock the Embeddings class
 mock('@langchain/core/embeddings', () => {
     return {
-        Embeddings: jest.fn().mockImplementation(() => {
+        Embeddings: fn().mockImplementation(() => {
             return {
-                embedDocuments: jest.fn((texts: string[]) => {
+                embedDocuments: fn((texts: string[]) => {
                     return Promise.resolve(texts.map(text => _.fill(Array(512), 0.5)));
                 })
             };
