@@ -1,11 +1,12 @@
-import { DocumentInterface } from "@langchain/core/documents";
-import { BaseDocumentCompressor } from "@langchain/core/retrievers/document_compressors";
-import { Ollama } from "ollama/browser";
+import { DocumentInterface } from '@langchain/core/documents';
+import { BaseDocumentCompressor } from '@langchain/core/retrievers/document_compressors';
+import { Ollama } from 'ollama/browser';
+import _ from 'lodash';
 
 export interface OllamaRerankArgs {
-    model: string;
-    baseUrl?: string;
-    topN?: number;
+    model: string
+    baseUrl?: string
+    topN?: number
 }
 
 export class OllamaRerank extends BaseDocumentCompressor {
@@ -14,19 +15,19 @@ export class OllamaRerank extends BaseDocumentCompressor {
     client: Ollama;
     constructor(fields?: OllamaRerankArgs) {
         super();
-        Object.defineProperty(this, "client", {
+        Object.defineProperty(this, 'client', {
             enumerable: true,
             configurable: true,
             writable: true,
             value: void 0
         });
-        Object.defineProperty(this, "model", {
+        Object.defineProperty(this, 'model', {
             enumerable: true,
             configurable: true,
             writable: true,
             value: void 0
         });
-        Object.defineProperty(this, "topN", {
+        Object.defineProperty(this, 'topN', {
             enumerable: true,
             configurable: true,
             writable: true,
@@ -47,8 +48,8 @@ export class OllamaRerank extends BaseDocumentCompressor {
      *
      * @returns {Promise<Array<DocumentInterface>>} A sequence of compressed documents.
      */
-    async compressDocuments(documents: Array<DocumentInterface>, query: string): Promise<Array<DocumentInterface>> {
-        const _docs = documents.map((doc) => doc.pageContent);
+    async compressDocuments(documents: DocumentInterface[], query: string): Promise<DocumentInterface[]> {
+        const _docs = _.map(documents, 'pageContent');
         const { results } = await this.client.rerank({
             model: this.model,
             query,
@@ -56,14 +57,14 @@ export class OllamaRerank extends BaseDocumentCompressor {
             top_n: this.topN ?? _docs.length,
         });
         const finalResults: DocumentInterface[] = [];
-        for (let i = 0; i < results.length; i += 1) {
-            const result = results[i];
+        for(const result of results) {
             const doc = documents[result.document];
             doc.metadata.relevanceScore = result.relevance_score;
             finalResults.push(doc);
         }
         return finalResults;
     }
+
     /**
      * Returns an ordered list of documents ordered by their relevance to the provided query.
      *
@@ -74,15 +75,15 @@ export class OllamaRerank extends BaseDocumentCompressor {
      *
      * @returns {Promise<Array<{ index: number; relevanceScore: number }>>} An ordered list of documents with relevance scores.
      */
-    async rerank(documents: Array<DocumentInterface | string | Record<string, string>>, query: string, options?: {
-        model?: string;
-        topN?: number;
-    }): Promise<Array<{
-        doc: string;
-        relevanceScore: number;
-    }>> {
-        const docs = documents.map((doc) => {
-            if (typeof doc === "string") {
+    async rerank(documents: (DocumentInterface | string | Record<string, string>)[], query: string, options?: {
+        model?: string
+        topN?: number
+    }): Promise<{
+            doc: string
+            relevanceScore: number
+        }[]> {
+        const docs = _.map(documents, (doc) => {
+            if(_.isString(doc)) {
                 return doc;
             }
             return doc.pageContent;
@@ -95,7 +96,7 @@ export class OllamaRerank extends BaseDocumentCompressor {
             documents: docs,
             top_n: topN
         });
-        const resultObjects = results.map((result) => ({
+        const resultObjects = _.map(results, result => ({
             doc: result.document,
             relevanceScore: result.relevance_score,
         }));

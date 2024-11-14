@@ -37,8 +37,6 @@ const embeddings = CacheBackedEmbeddings.fromBytesStore(
     }
 );
 
-/* eslint-disable no-unused-vars -- Keep declarations to switch back and forth without having to uncomment */
-
 const commonOptions = { temperature: 0, seed: 19740822, keepAlive: '15m' };
 const commonOptions8k = { numCtx: 8 * 1024, ...commonOptions };
 const commonOptions32k = { numCtx: 32 * 1024, ...commonOptions };
@@ -57,8 +55,6 @@ const mistralLargeLLMChat = new ChatOllama({ model: 'mistral-large:latest', ...c
 // llama3.1 has 128k ctx
 // Prompt parse: ~500 t/s; generation: ~40 t/s
 const llama3_8bLLMChat = new ChatOllama({ model: 'llama3.1:8b-instruct-q8_0', ...commonOptions64k });
-
-/* eslint-enable no-unused-vars -- Keep declarations to switch back and forth without having to uncomment */
 
 // Define the Zod schema for structured output
 const EntitySchema = z.object({

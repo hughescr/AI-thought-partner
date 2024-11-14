@@ -1,7 +1,7 @@
 import { ChatOllama, OllamaEmbeddings } from '@langchain/ollama';
 import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
 import { InMemoryStore } from 'langchain/storage/in_memory';
-import { OllamaRerank } from './OllamaRerank';
+import { OllamaRerank } from './OllamaRerank.ts';
 
 const commonOptions = { temperature: 1, seed: 19740822, keepAlive: '15m' };
 const commonOptions32k = { ...commonOptions, numCtx: 32 * 1024 };
@@ -26,7 +26,7 @@ export const jinaV2BaseENEmbeddings = new OllamaEmbeddings({ model: 'jina/jina-e
 export const cachedJinaV2BaseENEmbeddings = makeCachedEmbeddings(jinaV2BaseENEmbeddings);
 
 // MIT License
-export const bgeM3Embeddings = new OllamaEmbeddings({ model: 'bge-m3', requestOptions: { numCtx: 8192 }});
+export const bgeM3Embeddings = new OllamaEmbeddings({ model: 'bge-m3', requestOptions: { numCtx: 8192 } });
 export const cachedBgeM3Embeddings = makeCachedEmbeddings(bgeM3Embeddings);
 
 // LLMs

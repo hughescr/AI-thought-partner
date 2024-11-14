@@ -8,11 +8,11 @@ import _ from 'lodash';
  * @returns The cosine similarity as a number between -1 and 1, or 0 if either vector has a norm of 0.
  */
 export function cosineSimilarity(vectorA: number[], vectorB: number[]): number {
-    const dotProduct: number = _.sum(_.map(vectorA, (val, index) => val * vectorB[index]));
-    const normA: number = Math.sqrt(_.sum(_.map(vectorA, (val) => val * val)));
-    const normB: number = Math.sqrt(_.sum(_.map(vectorB, (val) => val * val)));
+    const dotProduct: number = _(vectorA).map((val, index) => val * vectorB[index]).sum();
+    const normA: number = Math.sqrt(_(vectorA).map(val => val * val).sum());
+    const normB: number = Math.sqrt(_(vectorB).map(val => val * val).sum());
 
-    if (normA === 0 || normB === 0) {
+    if(normA === 0 || normB === 0) {
         return 0;
     }
 

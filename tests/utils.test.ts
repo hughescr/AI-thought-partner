@@ -1,4 +1,4 @@
-import { cosineSimilarity } from '../lib/utils';
+import { cosineSimilarity } from '../lib/utils.ts';
 
 test('cosineSimilarity should return 1 for identical vectors', () => {
     const vectorA = [1, 2, 3];

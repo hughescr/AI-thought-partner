@@ -4,24 +4,24 @@ import {
     cachedJinaV2BaseENEmbeddings as embeddings,
     cachedJinaV2SmallENEmbeddings as fastEmbeddings,
     qwen25_32bLLM as summarizerLLM
-} from './lib/LLMs';
+} from './lib/LLMs.ts';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 // import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import cliProgress from 'cli-progress';
-import { SemanticTextSplitter } from './lib/SemanticTextSplitter';
+import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { Document } from '@langchain/core/documents';
 import _ from 'lodash';
 
 _.mixin({
-        awaitAll: function <T>(promiseArray: Promise<T>[]) {
-            return Promise.all(promiseArray);
-        },
+    awaitAll: function <T>(promiseArray: Promise<T>[]) {
+        return Promise.all(promiseArray);
     },
-    { chain: true } // Enable chaining for this mixin
+},
+{ chain: true } // Enable chaining for this mixin
 );
 
 const book = 'Christmas Town beta';
@@ -34,7 +34,6 @@ const docs = await loader.load();
 // Then, for each large chunk, break it into small chunks (maybe 256 tokens), and ask an LLM to describe the context of each small chunk (adding another 256 tokens)
 // Then, concat the context and the extract, calculate encodings, and store in a vector store
 
-
 class RecursiveCharacterTextSplitterSeparatorMod extends RecursiveCharacterTextSplitter {
     // Override the splitOnSeparator method to allow for keeping the separator attached to the earlier chunk not the later chunk
     // Without this, punctuation ends up on the wrong chunk... for example
@@ -42,20 +41,21 @@ class RecursiveCharacterTextSplitterSeparatorMod extends RecursiveCharacterTextS
     // The former is clearly dumber than shit and will confuse the LLM with its weird leading periods and no end to the sentence, etc.
     splitOnSeparator(text: string, separator: string): string[] {
         let splits: string[] = [];
-        if (separator) {
-            if (this.keepSeparator) {
-                const regexEscapedSeparator: string = separator.replace(
+        if(separator) {
+            if(this.keepSeparator) {
+                const regexEscapedSeparator: string = _.replace(
+                    separator,
                     /[/\-\\^$*+?.()|[\]{}]/g,
                     '\\$&'
                 );
-                splits = text.split(new RegExp(`(?<=${regexEscapedSeparator})`));
+                splits = _.split(text, new RegExp(`(?<=${regexEscapedSeparator})`));
             } else {
-                splits = text.split(separator);
+                splits = _.split(text, separator);
             }
         } else {
-            splits = text.split('');
+            splits = _.split(text, '');
         }
-        return splits.filter((s) => s !== '');
+        return _.filter(splits, s => s !== '');
     }
 };
 
@@ -67,7 +67,6 @@ const chapterSplitter = new RecursiveCharacterTextSplitterSeparatorMod({
 });
 
 const chapterChunks = await chapterSplitter.splitDocuments(docs);
-
 
 const splitter: SemanticTextSplitter = new SemanticTextSplitter({
     showProgress: false,
@@ -113,7 +112,7 @@ const chapterBar: cliProgress.SingleBar = multiBar.create(totalChapters, 0, {
 });
 
 const splits: Document[] = [];
-for (const chapter of chapterChunks) {
+for(const chapter of chapterChunks) {
     chapterBar.increment();
     const smallerChunks = await splitter.splitDocuments([chapter]);
 
@@ -123,10 +122,10 @@ for (const chapter of chapterChunks) {
         name: 'Chunks',
     });
 
-    for (const smallerChunk of smallerChunks) {
+    for(const smallerChunk of smallerChunks) {
         const context = await contextChain.invoke({
-            long: chapter.pageContent,
-            short: smallerChunk.pageContent,
+            'long': chapter.pageContent,
+            'short': smallerChunk.pageContent,
         });
         multiBar.log(`Context: (${context.length}) ${context}\n`);
         chunkBar.increment();
@@ -143,7 +142,7 @@ chapterBar.stop();
 
 let vectorStore: FaissStore | undefined;
 
-const splitChunks = _.chain(splits)
+const splitChunks = _(splits)
     .flatten()
     .chunk(16)
     .value();
@@ -152,15 +151,15 @@ const bar: cliProgress.SingleBar = multiBar.create(
     0,
     { name: 'Saving chunks' }
 );
-for (const chunk of splitChunks) {
-    if (vectorStore) {
+for(const chunk of splitChunks) {
+    if(vectorStore) {
         await vectorStore.addDocuments(chunk);
     } else {
         vectorStore = await FaissStore.fromDocuments(chunk, embeddings); // Index with the slower, better embeddings
     }
     bar.increment(chunk.length);
 }
-if (vectorStore) {
+if(vectorStore) {
     vectorStore.save(`novels/${book}`);
 }
 bar.stop();

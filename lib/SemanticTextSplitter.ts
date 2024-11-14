@@ -3,34 +3,34 @@
 import { TextSplitter, RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { Embeddings } from '@langchain/core/embeddings';
 import _ from 'lodash';
-import { cosineSimilarity } from './utils';
+import { cosineSimilarity } from './utils.ts';
 import { getEncoding } from '@langchain/core/utils/tiktoken';
 import { Tiktoken, TiktokenEncoding } from 'js-tiktoken/lite';
 import cliProgress from 'cli-progress';
 
 interface SemanticTextSplitterOptions {
-    embeddings: Embeddings;
-    chunkSize?: number;
-    embeddingBatchSize?: number;
-    tokenizer?: TiktokenEncoding;
-    initialChunkSize?: number;
-    showProgress?: boolean;
+    embeddings: Embeddings
+    chunkSize?: number
+    embeddingBatchSize?: number
+    tokenizer?: TiktokenEncoding
+    initialChunkSize?: number
+    showProgress?: boolean
 }
 
 class CustomRecursiveCharacterTextSplitter extends RecursiveCharacterTextSplitter {
     splitOnSeparator(text: string, separator: string): string[] {
         let splits;
-        if (separator) {
-            if (this.keepSeparator) {
-                const regexEscapedSeparator = separator.replace(/[/\-\\^$*+?.()|[\]{}]/g, "\\$&");
-                splits = text.split(new RegExp(`(?<=${regexEscapedSeparator})`));
+        if(separator) {
+            if(this.keepSeparator) {
+                const regexEscapedSeparator = _.replace(separator, /[/\-\\^$*+?.()|[\]{}]/g, '\\$&');
+                splits = _.split(text, new RegExp(`(?<=${regexEscapedSeparator})`));
             } else {
-                splits = text.split(separator);
+                splits = _.split(text, separator);
             }
         } else {
-            splits = text.split("");
+            splits = _.split(text, '');
         }
-        return splits.filter((s) => s !== "");
+        return _.filter(splits, s => s !== '');
     }
 }
 
@@ -51,7 +51,7 @@ export class SemanticTextSplitter extends TextSplitter {
         this.initialChunkSize = options.initialChunkSize || 32;
         this.showProgress = options.showProgress || false;
         this.lengthFunction = async (text: string): Promise<number> => {
-            if (this.tokenizerInstance === undefined) {
+            if(this.tokenizerInstance === undefined) {
                 this.tokenizerInstance = await getEncoding(this.tokenizer);
             }
             return this.tokenizerInstance.encode(text).length;
@@ -81,22 +81,22 @@ export class SemanticTextSplitter extends TextSplitter {
         const chunkBatches = _.chunk(mergedChunks, this.embeddingBatchSize);
         const progressBar = this.showProgress ? new cliProgress.SingleBar({ barsize: 80, format: '{bar} {value}/{total} embeddings | {percentage}% | Time: {duration_formatted} | ETA: {eta_formatted}' }, cliProgress.Presets.shades_classic) : null;
 
-        if (this.showProgress) {
+        if(this.showProgress) {
             progressBar?.start(mergedChunks.length, 0);
         }
 
         const embeddedChunks: number[][] = [];
-        for (let i = 0; i < chunkBatches.length; i++) {
+        for(let i = 0; i < chunkBatches.length; i++) {
             const batch = chunkBatches[i];
             const embeddings = await this.embeddings.embedDocuments(batch);
             embeddedChunks.push(...embeddings);
 
-            if (this.showProgress) {
+            if(this.showProgress) {
                 progressBar?.update(Math.min((i + 1) * this.embeddingBatchSize, mergedChunks.length));
             }
         }
 
-        if (this.showProgress) {
+        if(this.showProgress) {
             progressBar?.stop();
         }
 
@@ -105,32 +105,32 @@ export class SemanticTextSplitter extends TextSplitter {
 
     private async createFinalChunks(initialChunks: string[]): Promise<string[]> {
         const finalChunks: string[] = [];
-        let currentChunk: string = '';
+        let currentChunk = '';
         const mergedChunks = this.createMergedChunks(initialChunks);
         const embeddings = await this.embedMergedChunks(mergedChunks);
         const similarities = _.map(embeddings.slice(0, -1), (embedding, i) => cosineSimilarity(embedding, embeddings[i + 1]));
 
-        for (let i = 0; i < initialChunks.length; i++) {
+        for(let i = 0; i < initialChunks.length; i++) {
             const chunk = initialChunks[i];
             const potentialChunk = currentChunk + chunk;
             const length = await this.lengthFunction(potentialChunk);
 
-            if (length > this.chunkSize) {
+            if(length > this.chunkSize) {
                 finalChunks.push(currentChunk);
                 currentChunk = chunk;
             } else {
                 currentChunk = potentialChunk;
             }
 
-            if (i > 0 && i < similarities.length - 1) {
-                if (similarities[i - 1] >= similarities[i] && similarities[i + 1] > similarities[i]) {
+            if(i > 0 && i < similarities.length - 1) {
+                if(similarities[i - 1] >= similarities[i] && similarities[i + 1] > similarities[i]) {
                     finalChunks.push(currentChunk);
                     currentChunk = '';
                 }
             }
         }
 
-        if (currentChunk) {
+        if(currentChunk) {
             finalChunks.push(currentChunk);
         }
 

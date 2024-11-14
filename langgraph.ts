@@ -1,6 +1,4 @@
-/* eslint-disable @stylistic/quotes */
 // TODO: Re-ranking - maybe wait for ollama to support rerankers
-
 // TODO: Improve use of document metadata for referencing/anchoring attributions
 
 import {
@@ -8,24 +6,18 @@ import {
     phi35_4bLLM as fastLLM,
     qwen25_32bLLM as slowLLM,
     jinaV1TinyENReranker as fastReranker,
-    bgeV2M3Reranker as goodReranker } from './lib/LLMs';
-import { DynamicStructuredTool } from '@langchain/core/tools';
+    bgeV2M3Reranker as goodReranker } from './lib/LLMs.ts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
-import { JsonOutputToolsParser } from '@langchain/core/output_parsers/openai_tools';
 // import { HumanMessage, BaseMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
-import { HydeRetriever } from 'langchain/retrievers/hyde';
-import { StringPromptValue, BasePromptValueInterface } from '@langchain/core/prompt_values';
+// import { HydeRetriever } from 'langchain/retrievers/hyde';
+// import { StringPromptValue, BasePromptValueInterface } from '@langchain/core/prompt_values';
 import { maximalMarginalRelevance } from '@langchain/core/utils/math';
 import { Document } from '@langchain/core/documents';
-import { ChatOllama } from '@langchain/ollama';
-import { CallbackManagerForRetrieverRun } from "@langchain/core/callbacks/manager";
-import { MaxMarginalRelevanceSearchOptions } from "@langchain/core/vectorstores";
-import { BM25Retriever } from "@langchain/community/retrievers/bm25";
-
-import { z } from 'zod';
+import { MaxMarginalRelevanceSearchOptions } from '@langchain/core/vectorstores';
+// import { BM25Retriever } from '@langchain/community/retrievers/bm25';
 
 import { logger } from '@hughescr/logger';
 import _ from 'lodash';
@@ -42,12 +34,12 @@ if(process.versions.bun === undefined) {
 const book = 'Christmas Town beta';
 const storeDirectory = `novels/${book}`;
 
-type NovelMetadata = {
-    title: string;
-    author: string;
-    today: string;
-    genre: string;
-};
+interface NovelMetadata {
+    title: string
+    author: string
+    today: string
+    genre: string
+}
 /**
  * Call the retriever to find matching documents
  * @param {GraphState} state - The current state of the agent, including the query.
@@ -81,13 +73,13 @@ async function setupMetadata(): Promise<{ novelMetadata: NovelMetadata }> {
  * @returns {Promise<Document[]>} - List of documents selected by maximal marginal relevance.
  */
 class FaissStoreWithMMR extends FaissStore {
-    async maxMarginalRelevanceSearch(query: string, options: MaxMarginalRelevanceSearchOptions<this["FilterType"]>, _callbacks?: undefined) {
-        const { k, fetchK = 20, lambda = 0.5, filter } = options;
+    async maxMarginalRelevanceSearch(query: string, options: MaxMarginalRelevanceSearchOptions<this['FilterType']>, _callbacks?: undefined) {
+        const { k, fetchK = 20, lambda = 0.5 } = options;
         const queryEmbedding = await this.embeddings.embedQuery(query);
         const resultDocs = await this.similaritySearchVectorWithScore(queryEmbedding, fetchK);
         const embeddingList = await this.embeddings.embedDocuments(_.map(resultDocs, '0.pageContent'));
         const mmrIndexes = maximalMarginalRelevance(queryEmbedding, embeddingList, lambda, k);
-        return _.map(mmrIndexes, (idx) => resultDocs[idx][0]);
+        return _.map(mmrIndexes, idx => resultDocs[idx][0]);
     }
 };
 
@@ -96,35 +88,35 @@ const vectorStore = await FaissStoreWithMMR.load(
     embeddings
 );
 
-const hydePrompt = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate('Write a short paragraph which responds to the given query.'),
-    HumanMessagePromptTemplate.fromTemplate('Query: {query}'),
-]);
+// const hydePrompt = ChatPromptTemplate.fromMessages([
+//     SystemMessagePromptTemplate.fromTemplate('Write a short paragraph which responds to the given query.'),
+//     HumanMessagePromptTemplate.fromTemplate('Query: {query}'),
+// ]);
 
-class HydeRetrieverWithMMR extends HydeRetriever {
-    async _getRelevantDocuments(query: string, runManager?: CallbackManagerForRetrieverRun) {
-        let value: BasePromptValueInterface = new StringPromptValue(query);
-        // Use a custom template if provided
-        if (this.promptTemplate) {
-            value = await this.promptTemplate.formatPromptValue({ query });
-        }
-        // Get a hypothetical answer from the LLM
-        const res = await this.llm.generatePrompt([value]);
-        const answer = res.generations[0][0].text;
-        // Retrieve relevant documents based on the hypothetical answer
-        if (this.searchType === 'mmr') {
-            if (_.isFunction(this.vectorStore.maxMarginalRelevanceSearch) === false) {
-                throw new Error(`The vector store backing this retriever, ${this._vectorstoreType()} does not support max marginal relevance search.`);
-            }
-            return this.vectorStore.maxMarginalRelevanceSearch(answer, {
-                k: this.k,
-                filter: this.filter,
-                ...this.searchKwargs,
-            }, runManager?.getChild('vectorstore'));
-        }
-        return this.vectorStore.similaritySearch(answer, this.k, this.filter, runManager?.getChild('vectorstore'));
-    }
-};
+// class HydeRetrieverWithMMR extends HydeRetriever {
+//     async _getRelevantDocuments(query: string, runManager?: CallbackManagerForRetrieverRun) {
+//         let value: BasePromptValueInterface = new StringPromptValue(query);
+//         // Use a custom template if provided
+//         if(this.promptTemplate) {
+//             value = await this.promptTemplate.formatPromptValue({ query });
+//         }
+//         // Get a hypothetical answer from the LLM
+//         const res = await this.llm.generatePrompt([value]);
+//         const answer = res.generations[0][0].text;
+//         // Retrieve relevant documents based on the hypothetical answer
+//         if(this.searchType === 'mmr') {
+//             if(_.isFunction(this.vectorStore.maxMarginalRelevanceSearch) === false) {
+//                 throw new Error(`The vector store backing this retriever, ${this._vectorstoreType()} does not support max marginal relevance search.`);
+//             }
+//             return this.vectorStore.maxMarginalRelevanceSearch(answer, {
+//                 k: this.k,
+//                 filter: this.filter,
+//                 ...this.searchKwargs,
+//             }, runManager?.getChild('vectorstore'));
+//         }
+//         return this.vectorStore.similaritySearch(answer, this.k, this.filter, runManager?.getChild('vectorstore'));
+//     }
+// };
 
 // const qaRetriever = new HydeRetrieverWithMMR({
 //     // verbose: true,
@@ -138,7 +130,6 @@ class HydeRetrieverWithMMR extends HydeRetriever {
 //     k: 50,
 //     promptTemplate: hydePrompt,
 // });
-
 
 const qaRetriever = vectorStore.asRetriever({
     k: 100,
@@ -176,7 +167,7 @@ const QuestionAnswerAnnotation = Annotation.Root({
     query: Annotation<string>,
     generation: Annotation<string>,
 });
-type QuestionAnswerAnnotationType = typeof QuestionAnswerAnnotation.State;
+// type QuestionAnswerAnnotationType = typeof QuestionAnswerAnnotation.State;
 
 /**
  * Call the retriever to find matching documents
@@ -197,17 +188,17 @@ async function retrieve(state) {
 
 async function rerankDocuments(state) {
     const docsToRerank: string[] = _(state.documents)
-                        .map((doc) => ({ extract: doc.pageContent, context: doc.metadata.context }))
+                        .map(doc => ({ extract: doc.pageContent, context: doc.metadata.context }))
                         .map(JSON.stringify)
                         .value() as unknown as string[]; // Confused about types for some reason
     logger.debug(`Reranking ${docsToRerank.length} documents`);
 
-    fastReranker.topN = Math.max(~~(docsToRerank.length / 4), 5);
+    fastReranker.topN = Math.max(Math.floor(docsToRerank.length / 4), 5);
     const preRerankedDocuments = await fastReranker.rerank(docsToRerank, state.query);
 
-    const preRerankedDocs = _.map(preRerankedDocuments,'doc');
+    const preRerankedDocs = _.map(preRerankedDocuments, 'doc');
 
-    goodReranker.topN = Math.max(~~(preRerankedDocs.length / 4), 3);
+    goodReranker.topN = Math.max(Math.floor(preRerankedDocs.length / 4), 3);
     const rerankedDocuments = await goodReranker.rerank(preRerankedDocs, state.query);
 
     logger.debug(`Reranked ${rerankedDocuments.length} documents`);
@@ -217,13 +208,8 @@ async function rerankDocuments(state) {
         found.metadata.relevanceScore = doc.relevanceScore;
         return found;
     });
-    const ditchedDocs = _.difference(state.documents, rerankedDocs);
+    // const ditchedDocs = _.difference(state.documents, rerankedDocs);
     return { filteredDocuments: rerankedDocs, documents: [] };
-}
-
-// eslint-disable-next-line no-unused-vars -- Keep this definition as an alternative to gradeDocuments to keep all
-async function passthroughAllDocuments(state) {
-    return { filteredDocuments: state.documents, uselessDocuments: [], documents: [] };
 }
 
 async function reduceDocuments(state) {
@@ -237,63 +223,6 @@ async function reduceDocuments(state) {
     // const bm25Docs = await BM25RetrieverInstance.invoke(state.query || state.origQuery);
     // logger.debug(`BM25 retrieved ${bm25Docs.length} documents`);
     return { documents: reducedDocs };
-}
-
-/**
- * Determines whether the retrieved documents are relevant to the query. Filters out documents which have already been added to the list of relevant ones.
- * @param {GraphState} state - The current state of the graph, including query and documents.
- * @returns {Promise<GraphState>} - The updated state with documents filtered for relevance.
- */
-const gradeDocumentsPrompt = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`You will be provided with an extract from "{title}", a {genre} novel by {author} along with the context of that extract within the novel, and a query seeking information about the novel.
-Assess the provided extract and its given context within the broader story in terms of how informative it is for the specified query . The more helpful it is, the higher the score. Provide a score from 0 to 10, where 0 means the extract is completely irrelevant to the query in any way and 10 means the extract is highly relevant to the query potentially directly answering it.`),
-    HumanMessagePromptTemplate.fromTemplate('<extract>{extract}</extract><context>{context}</context><query>{query}</query>'),
-]);
-const giveRelevanceScoreTool = new DynamicStructuredTool({
-    name: 'give_relevance_score',
-    description: 'Give a relevance score to the retrieved documents.',
-    schema: z.object({
-        relevanceScore: z.number().min(0).max(10).describe('The relevance score of the document from 0-10. Higher scores are more relevant.'),
-    }),
-    func: async ({ relevanceScore }) => relevanceScore,
-});
-const gradeDocumentsLLM = fastLLM.bindTools([giveRelevanceScoreTool]) as ChatOllama;
-const gradeDocumentsChain = gradeDocumentsPrompt.pipe(gradeDocumentsLLM).pipe(new JsonOutputToolsParser());
-
-async function gradeDocuments(state) {
-    logger.debug('---GET RELEVANCE---');
-    // Output
-
-    const oldTemp = gradeDocumentsLLM.temperature;
-    gradeDocumentsLLM.temperature = 0;
-
-    const filteredDocuments: Document[] = [];
-    const uselessDocuments: Document[] = [];
-    for await (const doc of state.documents) {
-        const grade: any = await gradeDocumentsChain.invoke({
-            title: state.novelMetadata.title,
-            author: state.novelMetadata.author,
-            genre: state.novelMetadata.genre,
-            extract: doc.pageContent,
-            context: doc.metadata.context,
-            query: state.origQuery,
-        });
-        // logger.debug(grade);
-        if(grade?.[0]?.args?.relevanceScore > 0) {
-            logger.debug(chalk.green(`---GRADE: DOCUMENT RELEVANT: ${grade?.[0]?.args?.relevanceScore}---`));
-            logger.debug(chalk.blueBright(doc.metadata.context));
-            logger.debug(chalk.cyan(doc.pageContent));
-            filteredDocuments.push(doc);
-        } else {
-            logger.debug(chalk.red(`---GRADE: DOCUMENT NOT RELEVANT: ${grade?.[0]?.args?.relevanceScore}---`));
-            logger.debug(chalk.blue(doc.metadata.context));
-            logger.debug(chalk.blueBright(doc.pageContent));
-            uselessDocuments.push(doc);
-        }
-    }
-
-    gradeDocumentsLLM.temperature = oldTemp;
-    return { documents: [], filteredDocuments, uselessDocuments };
 }
 
 /**
@@ -424,8 +353,6 @@ const workflow = new StateGraph(QuestionAnswerAnnotation)
     .addNode('reduceDocuments', reduceDocuments)
     .addEdge('retrieve', 'reduceDocuments')
 
-    // .addNode('gradeDocuments', gradeDocuments)
-    // .addNode('gradeDocuments', passthroughAllDocuments)
     .addNode('gradeDocuments', rerankDocuments)
     .addEdge('reduceDocuments', 'gradeDocuments')
     .addConditionalEdges('gradeDocuments', decideToGenerate)
@@ -466,13 +393,13 @@ const input =
     // `Write a detailed query letter to a potential literary agent, explaining the novel and how it would appeal to readers. The letter should be engaging, and should make the agent interested in representing the book, without being overly cloying or sounding desperate. Be sure to properly research the book content so you're not being misleading. Find out the names of any characters mentioned. The agent will not have read the novel, so any discussion of the novel should not assume that the agent has read it yet. Reference the major events that happen in the book, describe what makes the protagonist engaging for readers, and include something about why the author chose to write this story.`
     // `Is Meghan a likable and relatable character for readers? Will readers be able to empathize with her and enjoy the novel with her as the protagonist?`
     // `Does Bathrobe Grouch have a real name?`
-    `Is "Bathrobe Grouch" a nickname for Zimmerman?`
+    // `Is "Bathrobe Grouch" a nickname for Zimmerman?`
     // `What is Mr Zimmerman's nickname?`
     // 'How does it turn out that Tyler Laduk died? What happened to him, and who if anyone is responsible?'
     // `What is the age of the main character and what are some of the challenges she faces throughout the novel?`
     // `How can the story be adjusted to make it appealing to a wider audience without losing its core themes of trauma, loss, and redemption?`
     // `Are there any secondary characters or subplots in the novel that could be expanded upon to provide additional perspectives or interests?`
-    // `Can you provide more context about Roger and his role in the novel? How does he relate to the themes of family, loss, and personal growth?`
+    'Can you provide more context about Roger and his role in the novel? How does he relate to the themes of family, loss, and personal growth?'
     // `Can you provide a brief overview of the main plot points? Is the story believable?`
     // `Pick any quotation from the book and count the number of words in it.`
     // `Should Tyler's body be found earlier in the narrative? I'm not talking about figuring out how he died, just the actual discovery of his death. Typically, this discovery would be the inciting incident in a mystery novel but this isn't purely a mystery novel. Have I been successful in engaging readers in Meghan's life so that postponing the mystery elements of the novel works?`
