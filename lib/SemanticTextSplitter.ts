@@ -8,7 +8,6 @@ import { getEncoding } from '@langchain/core/utils/tiktoken';
 import { Tiktoken, TiktokenEncoding } from 'js-tiktoken/lite';
 import cliProgress from 'cli-progress';
 
-
 interface SemanticTextSplitterOptions {
     embeddings: Embeddings;
     chunkSize?: number;
