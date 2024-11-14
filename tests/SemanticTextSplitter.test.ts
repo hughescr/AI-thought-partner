@@ -1,11 +1,11 @@
 import { test, expect, describe, beforeEach } from 'bun:test';
 import { SemanticTextSplitter } from '../lib/SemanticTextSplitter';
-import { Embeddings } from '@langchain/core/embeddings';
+import { Embeddings, EmbeddingsParams } from '@langchain/core/embeddings';
 import _ from 'lodash';
 
 class ConcreteEmbeddings extends Embeddings {
     constructor(params: EmbeddingsParams) {
-        super();
+        super(params);
     }
 
     embedDocuments(texts: string[]): Promise<number[][]> {
@@ -22,7 +22,7 @@ describe('SemanticTextSplitter', () => {
     let splitter: SemanticTextSplitter;
 
     beforeEach(() => {
-        embeddings = new ConcreteEmbeddings();
+        embeddings = new ConcreteEmbeddings({});
         splitter = new SemanticTextSplitter({
             embeddings,
             chunkSize: 512,
