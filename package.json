@@ -9,7 +9,7 @@
   "author": "Craig R. Hughes <craig.git@rungie.com>",
   "license": "Apache-2.0",
   "scripts": {
-    "test": "yarn node --experimental-vm-modules $(yarn bin jest)",
+    "test": "bun test",
     "mutate": "stryker run",
     "lint": "eslint .",
     "postversion": "git commit -m \"Bump package version to $npm_package_version\" package.json; git flow release start $npm_package_version; git flow release finish -m $npm_package_version $npm_package_version; git checkout develop; git merge master"
