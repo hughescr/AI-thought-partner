@@ -1,5 +1,3 @@
-import { mock, jest } from "bun:test";
-
 mock.module("ollama/browser", () => {
     return {
         Ollama: class {
