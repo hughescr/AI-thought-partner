@@ -42,5 +42,9 @@
     "pdf-parse": "^1.1.1",
     "tolerant-json-parser": "^1.0.1",
     "undici": "^6.20.1"
-  }
+  },
+  "trustedDependencies": [
+    "esbuild",
+    "faiss-node"
+  ]
 }
