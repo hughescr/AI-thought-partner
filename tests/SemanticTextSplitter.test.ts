@@ -4,6 +4,10 @@ import { Embeddings } from '@langchain/core/embeddings';
 import _ from 'lodash';
 
 class ConcreteEmbeddings extends Embeddings {
+    constructor(params: EmbeddingsParams) {
+        super();
+    }
+
     embedDocuments(texts: string[]): Promise<number[][]> {
         return Promise.resolve(texts.map(text => _.fill(Array(512), 0.5)));
     }
