@@ -2,4 +2,5 @@
 coverage = true
 coverageThreshold = { line = 0.95, function = 0.95, statement = 0.95 }
 coverageReporter = ["text", "lcov"]
-preload = ["./tests/ollama-mock-preload.ts"]
+coverageSkipTestFiles = true
+preload = ["./tests/ollama-mock-preload.test.ts"]
