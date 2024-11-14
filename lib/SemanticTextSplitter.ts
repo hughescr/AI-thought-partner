@@ -8,11 +8,6 @@ import { getEncoding } from '@langchain/core/utils/tiktoken';
 import { Tiktoken, TiktokenEncoding } from 'js-tiktoken/lite';
 import cliProgress from 'cli-progress';
 
-_.mixin({
-    asyncMap: async function <T, R>(collection: T[], iteratee: (value: T) => Promise<R>): Promise<R[]> {
-        return Promise.all(_.map(collection, iteratee));
-    }
-});
 
 interface SemanticTextSplitterOptions {
     embeddings: Embeddings;
