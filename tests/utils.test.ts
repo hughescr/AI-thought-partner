@@ -1,4 +1,3 @@
-import { test, expect } from 'bun:test';
 import { cosineSimilarity } from '../lib/utils';
 
 test('cosineSimilarity should return 1 for identical vectors', () => {
