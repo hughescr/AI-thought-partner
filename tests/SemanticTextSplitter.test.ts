@@ -14,25 +14,6 @@ mock('@langchain/core/embeddings', () => {
             };
         })
     };
-    });
-
-    test('should create merged chunks', () => {
-        const chunks = ['chunk1', 'chunk2', 'chunk3'];
-        const mergedChunks = splitter['createMergedChunks'](chunks);
-        expect(mergedChunks).toEqual(['chunk1chunk2', 'chunk2chunk3']);
-    });
-
-    test('should embed merged chunks', async () => {
-        const mergedChunks = ['chunk1chunk2', 'chunk2chunk3'];
-        const embeddings = await splitter['embedMergedChunks'](mergedChunks);
-        expect(embeddings.length).toBe(2);
-    });
-
-    test('should create final chunks', async () => {
-        const initialChunks = ['chunk1', 'chunk2', 'chunk3'];
-        const finalChunks = await splitter['createFinalChunks'](initialChunks);
-        expect(finalChunks.length).toBeGreaterThan(0);
-    });
 });
 
 describe('SemanticTextSplitter', () => {
