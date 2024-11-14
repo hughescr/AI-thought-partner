@@ -5,14 +5,13 @@ import _ from 'lodash';
 
 // Mock the Embeddings class
 mock('@langchain/core/embeddings', () => {
+    class ConcreteEmbeddings extends Embeddings {
+        embedDocuments(texts: string[]): Promise<number[][]> {
+            return Promise.resolve(texts.map(text => _.fill(Array(512), 0.5)));
+        }
+    }
     return {
-        Embeddings: fn().mockImplementation(() => {
-            return {
-                embedDocuments: fn((texts: string[]) => {
-                    return Promise.resolve(texts.map(text => _.fill(Array(512), 0.5)));
-                })
-            };
-        })
+        Embeddings: ConcreteEmbeddings
     };
 });
 
