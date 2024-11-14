@@ -1,4 +1,4 @@
-import { test, expect, mock } from 'bun:test';
+import { test, expect, mock, describe } from 'bun:test';
 import { SemanticTextSplitter } from '../lib/SemanticTextSplitter';
 import { Embeddings } from '@langchain/core/embeddings';
 import _ from 'lodash';
