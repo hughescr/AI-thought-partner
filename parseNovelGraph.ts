@@ -1,0 +1,339 @@
+import { OllamaEmbeddings } from '@langchain/ollama';
+import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
+import { InMemoryStore } from 'langchain/storage/in_memory';
+import { ChatOllama } from '@langchain/ollama';
+import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
+import { TextLoader } from 'langchain/document_loaders/fs/text';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+import neo4j, { Driver, Session } from 'neo4j-driver';
+import z from 'zod';
+import _ from 'lodash';
+import chalk from 'chalk';
+import cliProgress from 'cli-progress';
+import { logger } from '@hughescr/logger';
+
+const neo4jURL: string = process.env.NEO4J_URI || '';
+const neo4jUsername: string = process.env.NEO4J_USER || '';
+const neo4jPassword: string = process.env.NEO4J_PASSWORD || '';
+
+const book: string = 'Christmas Town beta';
+const loader: TextLoader = new TextLoader(`novels/${book}.md`);
+const novelText = await loader.load();
+
+const coreEmbeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048 });
+
+const store = new InMemoryStore();
+const embeddings = CacheBackedEmbeddings.fromBytesStore(
+    coreEmbeddings,
+    store,
+    {
+        namespace: coreEmbeddings.modelName,
+    }
+);
+
+const commonOptions = { temperature: 0, seed: 19740822, keepAlive: '15m' };
+const commonOptions64k = { numCtx: 64 * 1024, ...commonOptions };
+
+const mistralLargeLLMChat = new ChatOllama({ model: 'mistral-large:latest', ...commonOptions64k });
+
+const EntitySchema = z.object({
+    name: z.string().describe('The name of the entity'),
+    type: z.enum(['Person', 'Location', 'Organization', 'Theme', 'Concept', 'Vehicle', 'Object']).describe('The type of the entity'),
+    description: z.string().describe('Brief description or distinguishing details'),
+});
+
+const RelationshipSchema = z.object({
+    source: z.string().describe('The name of the source entity'),
+    target: z.string().describe('The name of the target entity'),
+    type: z.string().describe('The type of the relationship'),
+    description: z.string().optional().describe('Optional description'),
+});
+
+const OutputSchema = z.object({
+    entities: z.array(EntitySchema).describe('List of extracted entities'),
+    relationships: z.array(RelationshipSchema).describe('List of extracted relationships'),
+}).describe('Extracted entities and relationships from the text.');
+
+const structuredLlm = mistralLargeLLMChat.withStructuredOutput(OutputSchema);
+
+const textSplitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 8 * 1024,
+    keepSeparator: true,
+    separators: ['##'],
+});
+
+const systemPrompt = SystemMessagePromptTemplate.fromTemplate(`You are an AI assistant that extracts entities and relationships from text extracts of a novel.
+For the given text, extract all entities (people, locations, organizations) and relationships.
+
+Provide sufficient description to disambiguate each entity.
+
+You must *always* include a name, and type for each entity. You should also include a description; descriptions will be super helpful - make your very best effort to describe each entity in a sentence or two.
+
+You must *always* include a source, target, and type for each relationship. Try to include at least one relationship for each new entity found.
+
+You must *always* respond with a tool call; if you found no entities or relationships, make a tool call and pass in empty arrays.
+
+Your output will be used to analyze the text later. It's extremely important that you provide accurate and consistent information.
+It's also important that you list all entities and relationships in the text, do not leave anything out.
+Do not make anything up. All of the entities and relationships should be based on the text provided.
+
+Remember to always make a tool call, so your response should always be JSON like this, without any markdown quoting:
+
+\`\`\`
+"tool_calls":[{{"function":{{"name":"extract","arguments":{{"entities":[...],"relationships":[...]}}}}}}]
+\`\`\`
+`);
+
+const prompt = ChatPromptTemplate.fromMessages([
+    systemPrompt,
+    HumanMessagePromptTemplate.fromTemplate('{chunk}'),
+]);
+
+const driver: Driver = neo4j.driver(
+    neo4jURL,
+    neo4j.auth.basic(neo4jUsername, neo4jPassword)
+);
+
+(async () => {
+    try {
+        const chunks = await textSplitter.splitDocuments(novelText);
+
+        const progressBar = new cliProgress.SingleBar({
+            format: 'Processing chunks |' + chalk.cyan('{bar}') + '| {percentage}% || Chunk: {value}/{total} || Elapsed: {duration_formatted} Rate: {speed}s/it ETA: {eta_formatted}',
+            barCompleteChar: '\u2588',
+            barIncompleteChar: '\u2591',
+            fps: 1,
+            hideCursor: true,
+        });
+        progressBar.start(chunks.length, 0, { speed: 'N/A' });
+
+        for (const [index, chunk] of chunks.entries()) {
+            progressBar.update(index + 1, {
+                speed: Math.round(10 * Math.round((Date.now() - progressBar.startTime) / 1000) / progressBar.value) / 10
+            });
+
+            let response;
+            try {
+                response = await prompt.pipe(structuredLlm).invoke({ chunk: chunk.pageContent });
+            } catch (error) {
+                logger.error(chalk.red(`\nFailed to process chunk ${index + 1}:`), error);
+                continue;
+            }
+
+            const data = response;
+
+            const entities = data.entities || [];
+            const relationships = data.relationships || [];
+
+            let entitiesWithIDs: Record<string, any> = {};
+            if (entities.length > 0) {
+                const result = await upsertEntitiesWithResolution(driver, entities, embeddings);
+                entitiesWithIDs = _(entities)
+                    .map('name')
+                    .zipObject(_.map(entities, (entity, index) => ({ ...entity, id: result[index] })))
+                    .value();
+            }
+
+            if (relationships.length > 0) {
+                await createRelationshipsWithResolution(driver, relationships, embeddings, entitiesWithIDs);
+            }
+        }
+        progressBar.stop();
+
+        logger.info(chalk.green('Processing complete!'));
+    } catch (error) {
+        logger.error(chalk.red('An error occurred:'), error);
+    } finally {
+        await driver.close();
+    }
+})();
+
+async function upsertEntitiesWithResolution(driver: Driver, entities: any[], embeddings: any): Promise<string[]> {
+    try {
+        const entityTexts = _.map(entities,
+            entity => `${entity.name}. Type: ${entity.type}. Description: ${entity.description || entity.name}`
+        );
+
+        const entityEmbeddings = await embeddings.embedDocuments(entityTexts);
+
+        const upsertedEntityIDs = await Promise.all(_.map(entities, async (entity, index) => {
+            const session: Session = driver.session();
+            try {
+                const entityEmbedding = entityEmbeddings[index];
+                const embeddingArray = Array.from(entityEmbedding);
+
+                const similarEntities = await findSimilarEntities(driver, embeddingArray, entity.name);
+
+                if (similarEntities.length > 0) {
+                    const matchedEntity = similarEntities[0].node.properties;
+                    logger.warn(chalk.yellow(`Found similar entity: ${entity.name} -> ${matchedEntity.name} (${similarEntities[0].similarity})`));
+                    await session.run(
+                        `
+            MATCH (e {id: $existingId})
+            SET e.description = CASE WHEN $newDescription = '' THEN e.description ELSE $newDescription END
+            RETURN e
+            `,
+                        {
+                            existingId: matchedEntity.id,
+                            newDescription: matchedEntity.description + entity.description,
+                        }
+                    );
+                    return matchedEntity.id;
+                } else {
+                    const response = await session.run(
+                        `
+            CREATE (e:${_(entity.type).toUpper().replace(/(-|\s)+/g, '_')} {id: randomUUID(), name: $name, description: $description, embedding: $embedding})
+            RETURN e
+            `,
+                        {
+                            name: entity.name,
+                            type: entity.type,
+                            description: entity.description || '',
+                            embedding: embeddingArray,
+                        }
+                    );
+                    return response.records[0].get('e').properties.id;
+                }
+            } finally {
+                await session.close();
+            }
+        }));
+        return upsertedEntityIDs;
+    } catch (error) {
+        logger.error('Failed to upsert entities:', error);
+        return [];
+    }
+}
+
+async function findSimilarEntities(driver: Driver, embedding: number[], name: string, similarity: number = 0.9): Promise<any[]> {
+    const session: Session = driver.session();
+    try {
+        const params = {
+            embedding,
+            similarity,
+            name,
+        };
+
+        const result = await session.run(
+            `
+      WITH $embedding AS queryEmbedding
+      MATCH (e)
+      WHERE e.embedding IS NOT NULL
+      WITH e, gds.similarity.cosine(queryEmbedding, e.embedding) AS similarity
+      WHERE similarity > $similarity OR e.name = $name
+      RETURN e AS node, similarity
+      ORDER BY similarity DESC
+      LIMIT 1
+      `,
+            params
+        );
+
+        return _.map(result.records,
+            record => ({
+                node: record.get('node'),
+                similarity: record.get('similarity'),
+            }));
+    } catch (error) {
+        logger.warn(chalk.yellow('Failed to find similar entities:'), error);
+        return [];
+    } finally {
+        await session.close();
+    }
+}
+
+async function createRelationshipsWithResolution(driver: Driver, relationships: any[], embeddings: any, entitiesWithIDs: Record<string, any>): Promise<void> {
+    const session: Session = driver.session();
+    try {
+        const entityNames = [
+            ...new Set(relationships.flatMap(rel => [rel.source, rel.target])),
+        ];
+
+        const resolvedEntities: Record<string, any> = {};
+        const resolveBar = new cliProgress.SingleBar({
+            format: 'Resolving entities |' + chalk.magenta('{bar}') + '| {percentage}% || Entity: {value}/{total} || ETA: {eta_formatted}',
+            barCompleteChar: '\u2588',
+            barIncompleteChar: '\u2591',
+            hideCursor: true,
+        });
+        resolveBar.start(entityNames.length, 0);
+
+        for (const [i, entityName] of entityNames.entries()) {
+            let resolvedEntity = entitiesWithIDs[entityName];
+            if (!resolvedEntity) {
+                resolvedEntity = await resolveEntity(driver, entityName, embeddings);
+            }
+            if (resolvedEntity) {
+                resolvedEntities[entityName] = resolvedEntity;
+            }
+            resolveBar.update(i + 1);
+        }
+        resolveBar.stop();
+
+        const relationshipBar = new cliProgress.SingleBar({
+            format: 'Creating relationships |' + chalk.yellow('{bar}') + '| {percentage}% || Relationship: {value}/{total} || ETA: {eta_formatted}',
+            barCompleteChar: '\u2588',
+            barIncompleteChar: '\u2591',
+            hideCursor: true,
+        });
+        relationshipBar.start(relationships.length, 0);
+
+        for (const [i, relationship] of relationships.entries()) {
+            const sourceEntity = resolvedEntities[relationship.source];
+            const targetEntity = resolvedEntities[relationship.target];
+
+            if (sourceEntity && targetEntity) {
+                await session.run(
+                    `
+          MATCH (source {id: $sourceId})
+          MATCH (target {id: $targetId})
+          MERGE (source)-[r:${_(relationship.type).toUpper().replace(/(-|\s)+/g, '_')}]->(target)
+          ON CREATE SET r.description = $description
+          RETURN r
+          `,
+                    {
+                        sourceId: sourceEntity.id,
+                        targetId: targetEntity.id,
+                        description: relationship.description || '',
+                    }
+                );
+            } else {
+                logger.warn(chalk.yellow(`Could not resolve entities for relationship: ${relationship.source} -> ${relationship.target}`));
+            }
+
+            relationshipBar.update(i + 1);
+        }
+        relationshipBar.stop();
+    } catch (error) {
+        logger.error(chalk.red('Failed to create relationships:'), error);
+    } finally {
+        await session.close();
+    }
+}
+
+async function resolveEntity(driver: Driver, entityName: string, embeddings: any): Promise<any> {
+    const session: Session = driver.session();
+    try {
+        const entityText = `${entityName}. Type: Unknown. Description: ${entityName}`;
+
+        const [entityEmbedding] = await embeddings.embedDocuments([entityText]);
+        const embeddingArray = Array.from(entityEmbedding);
+
+        const similarEntities = await findSimilarEntities(driver, embeddingArray, entityName, 0.5);
+
+        if (similarEntities.length > 0) {
+            return similarEntities[0].node.properties;
+        } else {
+            const response = await upsertEntityWithResolution(driver, { name: entityName, type: 'Unknown' }, embeddings);
+            return { id: response, name: entityName, type: 'Unknown' };
+        }
+    } catch (error) {
+        logger.error(chalk.red('Failed to resolve entity:'), error);
+        return null;
+    } finally {
+        await session.close();
+    }
+}
+
+async function upsertEntityWithResolution(driver: Driver, entity: any, embeddings: any): Promise<string> {
+    return (await upsertEntitiesWithResolution(driver, [entity], embeddings))[0];
+}
