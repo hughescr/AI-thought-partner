@@ -16,7 +16,7 @@ const neo4jURL = process.env.NEO4J_URI || '';
 const neo4jUsername = process.env.NEO4J_USER || '';
 const neo4jPassword = process.env.NEO4J_PASSWORD || '';
 
-const book: string = 'Christmas Town beta';
+const book = 'Christmas Town beta';
 const loader: TextLoader = new TextLoader(`novels/${book}.md`);
 const novelText: string = await loader.load();
 
@@ -125,7 +125,7 @@ const driver: Driver = neo4j.driver(
             const entities = data.entities || [];
             const relationships = data.relationships || [];
 
-            let entitiesWithIDs: Record<string, any> = {};
+            let entitiesWithIDs: Record<string, { id: string; name: string; type: string }> = {};
             if(entities.length > 0) {
                 const result = await upsertEntitiesWithResolution(driver, entities, embeddings);
                 entitiesWithIDs = _(entities)
@@ -148,7 +148,7 @@ const driver: Driver = neo4j.driver(
     }
 })();
 
-async function upsertEntitiesWithResolution(driver: Driver, entities: Array<{ name: string; type: string; description: string }>, embeddings: Embeddings): Promise<string[]> {
+async function upsertEntitiesWithResolution(driver: Driver, entities: { name: string; type: string; description: string }[], embeddings: Embeddings): Promise<string[]> {
     try {
         const entityTexts = _.map(entities,
             entity => `${entity.name}. Type: ${entity.type}. Description: ${entity.description || entity.name}`
@@ -205,7 +205,7 @@ async function upsertEntitiesWithResolution(driver: Driver, entities: Array<{ na
     }
 }
 
-async function findSimilarEntities(driver: Driver, embedding: number[], name: string, similarity = 0.9): Promise<Array<{ node: { properties: { id: string; name: string; description: string } }; similarity: number }>> {
+async function findSimilarEntities(driver: Driver, embedding: number[], name: string, similarity = 0.9): Promise<{ node: { properties: { id: string; name: string; description: string } }; similarity: number }[]> {
     const session = driver.session();
     try {
         const params = {
@@ -241,14 +241,14 @@ async function findSimilarEntities(driver: Driver, embedding: number[], name: st
     }
 }
 
-async function createRelationshipsWithResolution(driver: Driver, relationships: Array<{ source: string; target: string; type: string; description?: string }>, embeddings: Embeddings, entitiesWithIDs: Record<string, { id: string; name: string; type: string }>): Promise<void> {
+async function createRelationshipsWithResolution(driver: Driver, relationships: { source: string; target: string; type: string; description?: string }[], embeddings: Embeddings, entitiesWithIDs: Record<string, { id: string; name: string; type: string }>): Promise<void> {
     const session = driver.session();
     try {
         const entityNames = [
             ...new Set(relationships.flatMap(rel => [rel.source, rel.target])),
         ];
 
-        const resolvedEntities: Record<string, any> = {};
+        const resolvedEntities: Record<string, { id: string; name: string; type: string }> = {};
         const resolveBar = new cliProgress.SingleBar({
             format: 'Resolving entities |' + chalk.magenta('{bar}') + '| {percentage}% || Entity: {value}/{total} || ETA: {eta_formatted}',
             barCompleteChar: '\u2588',
