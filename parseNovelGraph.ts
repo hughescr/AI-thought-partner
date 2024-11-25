@@ -11,11 +11,10 @@ import chalk from 'chalk';
 import cliProgress from 'cli-progress';
 import { logger } from '@hughescr/logger';
 import { Embeddings } from '@langchain/core/embeddings';
-import { cosineSimilarity } from './lib/utils.ts';
 
-const neo4jURL: string = process.env.NEO4J_URI || '';
-const neo4jUsername: string = process.env.NEO4J_USER || '';
-const neo4jPassword: string = process.env.NEO4J_PASSWORD || '';
+const neo4jURL = process.env.NEO4J_URI || '';
+const neo4jUsername = process.env.NEO4J_USER || '';
+const neo4jPassword = process.env.NEO4J_PASSWORD || '';
 
 const book: string = 'Christmas Town beta';
 const loader: TextLoader = new TextLoader(`novels/${book}.md`);
@@ -149,7 +148,7 @@ const driver: Driver = neo4j.driver(
     }
 })();
 
-async function upsertEntitiesWithResolution(driver: Driver, entities: any[], embeddings: Embeddings): Promise<string[]> {
+async function upsertEntitiesWithResolution(driver: Driver, entities: Array<{ name: string; type: string; description: string }>, embeddings: Embeddings): Promise<string[]> {
     try {
         const entityTexts = _.map(entities,
             entity => `${entity.name}. Type: ${entity.type}. Description: ${entity.description || entity.name}`
@@ -206,7 +205,7 @@ async function upsertEntitiesWithResolution(driver: Driver, entities: any[], emb
     }
 }
 
-async function findSimilarEntities(driver: Driver, embedding: number[], name: string, similarity: number = 0.9): Promise<any[]> {
+async function findSimilarEntities(driver: Driver, embedding: number[], name: string, similarity = 0.9): Promise<Array<{ node: { properties: { id: string; name: string; description: string } }; similarity: number }>> {
     const session = driver.session();
     try {
         const params = {
@@ -242,7 +241,7 @@ async function findSimilarEntities(driver: Driver, embedding: number[], name: st
     }
 }
 
-async function createRelationshipsWithResolution(driver: Driver, relationships: any[], embeddings: Embeddings, entitiesWithIDs: Record<string, any>): Promise<void> {
+async function createRelationshipsWithResolution(driver: Driver, relationships: Array<{ source: string; target: string; type: string; description?: string }>, embeddings: Embeddings, entitiesWithIDs: Record<string, { id: string; name: string; type: string }>): Promise<void> {
     const session = driver.session();
     try {
         const entityNames = [
@@ -311,7 +310,7 @@ async function createRelationshipsWithResolution(driver: Driver, relationships: 
     }
 }
 
-async function resolveEntity(driver: Driver, entityName: string, embeddings: Embeddings): Promise<any> {
+async function resolveEntity(driver: Driver, entityName: string, embeddings: Embeddings): Promise<{ id: string; name: string; type: string } | null> {
     const session = driver.session();
     try {
         const entityText = `${entityName}. Type: Unknown. Description: ${entityName}`;
@@ -335,6 +334,6 @@ async function resolveEntity(driver: Driver, entityName: string, embeddings: Emb
     }
 }
 
-async function upsertEntityWithResolution(driver: Driver, entity: any, embeddings: Embeddings): Promise<string> {
+async function upsertEntityWithResolution(driver: Driver, entity: { name: string; type: string }, embeddings: Embeddings): Promise<string> {
     return (await upsertEntitiesWithResolution(driver, [entity], embeddings))[0];
 }
