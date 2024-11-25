@@ -12,9 +12,9 @@ import chalk from 'chalk';
 import cliProgress from 'cli-progress';
 import { logger } from '@hughescr/logger';
 
-const neo4jURL: string = process.env.NEO4J_URI || '';
-const neo4jUsername: string = process.env.NEO4J_USER || '';
-const neo4jPassword: string = process.env.NEO4J_PASSWORD || '';
+const neo4jURL = process.env.NEO4J_URI || '';
+const neo4jUsername = process.env.NEO4J_USER || '';
+const neo4jPassword = process.env.NEO4J_PASSWORD || '';
 
 const book: string = 'Christmas Town beta';
 const loader: TextLoader = new TextLoader(`novels/${book}.md`);
@@ -107,7 +107,7 @@ const driver: Driver = neo4j.driver(
         });
         progressBar.start(chunks.length, 0, { speed: 'N/A' });
 
-        for (const [index, chunk] of chunks.entries()) {
+        for(const [index, chunk] of chunks.entries()) {
             progressBar.update(index + 1, {
                 speed: Math.round(10 * Math.round((Date.now() - progressBar.startTime) / 1000) / progressBar.value) / 10
             });
@@ -115,7 +115,7 @@ const driver: Driver = neo4j.driver(
             let response;
             try {
                 response = await prompt.pipe(structuredLlm).invoke({ chunk: chunk.pageContent });
-            } catch (error) {
+            } catch(error) {
                 logger.error(chalk.red(`\nFailed to process chunk ${index + 1}:`), error);
                 continue;
             }
@@ -125,8 +125,8 @@ const driver: Driver = neo4j.driver(
             const entities = data.entities || [];
             const relationships = data.relationships || [];
 
-            let entitiesWithIDs: Record<string, any> = {};
-            if (entities.length > 0) {
+            let entitiesWithIDs: Record<string, { id: string }> = {};
+            if(entities.length > 0) {
                 const result = await upsertEntitiesWithResolution(driver, entities, embeddings);
                 entitiesWithIDs = _(entities)
                     .map('name')
@@ -134,21 +134,21 @@ const driver: Driver = neo4j.driver(
                     .value();
             }
 
-            if (relationships.length > 0) {
+            if(relationships.length > 0) {
                 await createRelationshipsWithResolution(driver, relationships, embeddings, entitiesWithIDs);
             }
         }
         progressBar.stop();
 
         logger.info(chalk.green('Processing complete!'));
-    } catch (error) {
+    } catch(error) {
         logger.error(chalk.red('An error occurred:'), error);
     } finally {
         await driver.close();
     }
 })();
 
-async function upsertEntitiesWithResolution(driver: Driver, entities: any[], embeddings: any): Promise<string[]> {
+async function upsertEntitiesWithResolution(driver: Driver, entities: { name: string; type: string; description?: string }[], embeddings: CacheBackedEmbeddings): Promise<string[]> {
     try {
         const entityTexts = _.map(entities,
             entity => `${entity.name}. Type: ${entity.type}. Description: ${entity.description || entity.name}`
@@ -199,13 +199,13 @@ async function upsertEntitiesWithResolution(driver: Driver, entities: any[], emb
             }
         }));
         return upsertedEntityIDs;
-    } catch (error) {
+    } catch(error) {
         logger.error('Failed to upsert entities:', error);
         return [];
     }
 }
 
-async function findSimilarEntities(driver: Driver, embedding: number[], name: string, similarity: number = 0.9): Promise<any[]> {
+async function findSimilarEntities(driver: Driver, embedding: number[], name: string, similarity = 0.9): Promise<{ node: { properties: { id: string; name: string } }; similarity: number }[]> {
     const session: Session = driver.session();
     try {
         const params = {
@@ -233,7 +233,7 @@ async function findSimilarEntities(driver: Driver, embedding: number[], name: st
                 node: record.get('node'),
                 similarity: record.get('similarity'),
             }));
-    } catch (error) {
+    } catch(error) {
         logger.warn(chalk.yellow('Failed to find similar entities:'), error);
         return [];
     } finally {
@@ -241,7 +241,7 @@ async function findSimilarEntities(driver: Driver, embedding: number[], name: st
     }
 }
 
-async function createRelationshipsWithResolution(driver: Driver, relationships: any[], embeddings: any, entitiesWithIDs: Record<string, any>): Promise<void> {
+async function createRelationshipsWithResolution(driver: Driver, relationships: { source: string; target: string; type: string; description?: string }[], embeddings: CacheBackedEmbeddings, entitiesWithIDs: Record<string, { id: string }>): Promise<void> {
     const session: Session = driver.session();
     try {
         const entityNames = [
@@ -257,12 +257,12 @@ async function createRelationshipsWithResolution(driver: Driver, relationships: 
         });
         resolveBar.start(entityNames.length, 0);
 
-        for (const [i, entityName] of entityNames.entries()) {
+        for(const [i, entityName] of entityNames.entries()) {
             let resolvedEntity = entitiesWithIDs[entityName];
-            if (!resolvedEntity) {
+            if(!resolvedEntity) {
                 resolvedEntity = await resolveEntity(driver, entityName, embeddings);
             }
-            if (resolvedEntity) {
+            if(resolvedEntity) {
                 resolvedEntities[entityName] = resolvedEntity;
             }
             resolveBar.update(i + 1);
@@ -277,11 +277,11 @@ async function createRelationshipsWithResolution(driver: Driver, relationships: 
         });
         relationshipBar.start(relationships.length, 0);
 
-        for (const [i, relationship] of relationships.entries()) {
+        for(const [i, relationship] of relationships.entries()) {
             const sourceEntity = resolvedEntities[relationship.source];
             const targetEntity = resolvedEntities[relationship.target];
 
-            if (sourceEntity && targetEntity) {
+            if(sourceEntity && targetEntity) {
                 await session.run(
                     `
           MATCH (source {id: $sourceId})
@@ -303,14 +303,14 @@ async function createRelationshipsWithResolution(driver: Driver, relationships: 
             relationshipBar.update(i + 1);
         }
         relationshipBar.stop();
-    } catch (error) {
+    } catch(error) {
         logger.error(chalk.red('Failed to create relationships:'), error);
     } finally {
         await session.close();
     }
 }
 
-async function resolveEntity(driver: Driver, entityName: string, embeddings: any): Promise<any> {
+async function resolveEntity(driver: Driver, entityName: string, embeddings: CacheBackedEmbeddings): Promise<{ id: string; name: string; type: string } | null> {
     const session: Session = driver.session();
     try {
         const entityText = `${entityName}. Type: Unknown. Description: ${entityName}`;
@@ -334,6 +334,6 @@ async function resolveEntity(driver: Driver, entityName: string, embeddings: any
     }
 }
 
-async function upsertEntityWithResolution(driver: Driver, entity: any, embeddings: any): Promise<string> {
+async function upsertEntityWithResolution(driver: Driver, entity: { name: string; type: string }, embeddings: CacheBackedEmbeddings): Promise<string> {
     return (await upsertEntitiesWithResolution(driver, [entity], embeddings))[0];
 }
