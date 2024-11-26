@@ -248,7 +248,7 @@ async function createRelationshipsWithResolution(driver: Driver, relationships: 
             ...new Set(relationships.flatMap(rel => [rel.source, rel.target])),
         ];
 
-        const resolvedEntities: Record<string, any> = {};
+        const resolvedEntities: Record<string, { id: string, name: string, type: string }> = {};
         const resolveBar = new cliProgress.SingleBar({
             format: 'Resolving entities |' + chalk.magenta('{bar}') + '| {percentage}% || Entity: {value}/{total} || ETA: {eta_formatted}',
             barCompleteChar: '\u2588',
