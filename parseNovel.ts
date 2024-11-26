@@ -3,7 +3,7 @@
 import {
     cachedJinaV2BaseENEmbeddings as embeddings,
     cachedJinaV2SmallENEmbeddings as fastEmbeddings,
-    qwen25_32bLLM as summarizerLLM
+    qwen25_14bLLM as summarizerLLM
 } from './lib/LLMs.ts';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
@@ -79,16 +79,23 @@ const splitter: SemanticTextSplitter = new SemanticTextSplitter({
 // Now go through each chapter, split it into smaller chunks, and then calculate context for each chunk.
 const contextSummaryPrompt: ChatPromptTemplate = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(
-        `Given a long passage and a short passage, generate a very minimal, short explanatory context that grounds the short passage, and clarifies who any pronouns refer to, if that is not clear in the short extract alone.
-Output just the generated context with no JSON nor other markup or lead-in, just the raw text by itself.
-Include information like what chapter this is, and other similar meta-information about where this passage is from.
-Do not put quotation marks around the context or anything like that. You do not need to specify that this is a context, the user will know that already, so don't lead in with "Context:" or "This is the context:" or anything like that.`
+        `## Task
+Your task is to generate a very minimal, short explanatory context that grounds the given short passage within the context of the provided long passage. The generated context should clarify any ambiguous pronouns in the short passage by providing relevant information from the long passage. Additionally, include meta-information such as the chapter number or section where these passages are from.
+
+## Guidelines
+1. Read and understand both the long passage and the short passage carefully.
+2. Identify any pronouns or ambiguous references in the short passage that require clarification from the long passage.
+3. Extract the minimal necessary information from the long passage to provide context for the short passage and resolve any ambiguities.
+4. Include meta-information like the chapter number or section where these passages are from.
+5. Output only the generated context, without any JSON markup, quotation marks, or additional lead-in text.`
     ),
-    HumanMessagePromptTemplate.fromTemplate(`Long passage:
+    HumanMessagePromptTemplate.fromTemplate(`## Long Passage
 {long}
 
-Short passage:
-{short}`),
+## Short Passage
+{short}
+
+Please provide the generated minimal explanatory context immediately:`),
 ]);
 
 const contextChain = contextSummaryPrompt

@@ -16,7 +16,7 @@ const neo4jURL = process.env.NEO4J_URI || '';
 const neo4jUsername = process.env.NEO4J_USER || '';
 const neo4jPassword = process.env.NEO4J_PASSWORD || '';
 
-const book: string = 'Christmas Town beta';
+const book = 'Christmas Town beta';
 const loader: TextLoader = new TextLoader(`novels/${book}.md`);
 const novelText = await loader.load();
 
@@ -148,7 +148,7 @@ const driver: Driver = neo4j.driver(
     }
 })();
 
-async function upsertEntitiesWithResolution(driver: Driver, entities: { name: string; type: string; description?: string }[], embeddings: CacheBackedEmbeddings): Promise<string[]> {
+async function upsertEntitiesWithResolution(driver: Driver, entities: { name: string, type: string, description?: string }[], embeddings: CacheBackedEmbeddings): Promise<string[]> {
     try {
         const entityTexts = _.map(entities,
             entity => `${entity.name}. Type: ${entity.type}. Description: ${entity.description || entity.name}`
@@ -164,7 +164,7 @@ async function upsertEntitiesWithResolution(driver: Driver, entities: { name: st
 
                 const similarEntities = await findSimilarEntities(driver, embeddingArray, entity.name);
 
-                if (similarEntities.length > 0) {
+                if(similarEntities.length > 0) {
                     const matchedEntity = similarEntities[0].node.properties;
                     logger.warn(chalk.yellow(`Found similar entity: ${entity.name} -> ${matchedEntity.name} (${similarEntities[0].similarity})`));
                     await session.run(
@@ -205,7 +205,7 @@ async function upsertEntitiesWithResolution(driver: Driver, entities: { name: st
     }
 }
 
-async function findSimilarEntities(driver: Driver, embedding: number[], name: string, similarity = 0.9): Promise<{ node: { properties: { id: string; name: string } }; similarity: number }[]> {
+async function findSimilarEntities(driver: Driver, embedding: number[], name: string, similarity = 0.9): Promise<{ node: { properties: { id: string, name: string } }, similarity: number }[]> {
     const session: Session = driver.session();
     try {
         const params = {
@@ -241,7 +241,7 @@ async function findSimilarEntities(driver: Driver, embedding: number[], name: st
     }
 }
 
-async function createRelationshipsWithResolution(driver: Driver, relationships: { source: string; target: string; type: string; description?: string }[], embeddings: CacheBackedEmbeddings, entitiesWithIDs: Record<string, { id: string }>): Promise<void> {
+async function createRelationshipsWithResolution(driver: Driver, relationships: { source: string, target: string, type: string, description?: string }[], embeddings: CacheBackedEmbeddings, entitiesWithIDs: Record<string, { id: string }>): Promise<void> {
     const session: Session = driver.session();
     try {
         const entityNames = [
@@ -310,7 +310,7 @@ async function createRelationshipsWithResolution(driver: Driver, relationships: 
     }
 }
 
-async function resolveEntity(driver: Driver, entityName: string, embeddings: CacheBackedEmbeddings): Promise<{ id: string; name: string; type: string } | null> {
+async function resolveEntity(driver: Driver, entityName: string, embeddings: CacheBackedEmbeddings): Promise<{ id: string, name: string, type: string } | null> {
     const session: Session = driver.session();
     try {
         const entityText = `${entityName}. Type: Unknown. Description: ${entityName}`;
@@ -320,13 +320,13 @@ async function resolveEntity(driver: Driver, entityName: string, embeddings: Cac
 
         const similarEntities = await findSimilarEntities(driver, embeddingArray, entityName, 0.5);
 
-        if (similarEntities.length > 0) {
+        if(similarEntities.length > 0) {
             return similarEntities[0].node.properties;
         } else {
             const response = await upsertEntityWithResolution(driver, { name: entityName, type: 'Unknown' }, embeddings);
             return { id: response, name: entityName, type: 'Unknown' };
         }
-    } catch (error) {
+    } catch(error) {
         logger.error(chalk.red('Failed to resolve entity:'), error);
         return null;
     } finally {
@@ -334,6 +334,6 @@ async function resolveEntity(driver: Driver, entityName: string, embeddings: Cac
     }
 }
 
-async function upsertEntityWithResolution(driver: Driver, entity: { name: string; type: string }, embeddings: CacheBackedEmbeddings): Promise<string> {
+async function upsertEntityWithResolution(driver: Driver, entity: { name: string, type: string }, embeddings: CacheBackedEmbeddings): Promise<string> {
     return (await upsertEntitiesWithResolution(driver, [entity], embeddings))[0];
 }

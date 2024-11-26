@@ -89,8 +89,17 @@ const vectorStore = await FaissStoreWithMMR.load(
 );
 
 // const hydePrompt = ChatPromptTemplate.fromMessages([
-//     SystemMessagePromptTemplate.fromTemplate('Write a short paragraph which responds to the given query.'),
-//     HumanMessagePromptTemplate.fromTemplate('Query: {query}'),
+//     SystemMessagePromptTemplate.fromTemplate(`### Instruction
+// You are an AI assistant tasked with generating a short paragraph in response to a given query. Follow these guidelines:
+
+// 1. Read and understand the provided query carefully.
+// 2. Compose a concise and relevant paragraph that directly addresses the query.
+// 3. Ensure the paragraph is well-structured, coherent, and grammatically correct.
+// 4. Avoid any preamble, explanations, or additional information beyond the paragraph itself.`),
+//     HumanMessagePromptTemplate.fromTemplate(`### Query
+// {query}
+
+// Now provide your response immediately without any preamble or additional information:`),
 // ]);
 
 // class HydeRetrieverWithMMR extends HydeRetriever {
@@ -232,15 +241,19 @@ async function reduceDocuments(state) {
  * @returns {Promise<GraphState>} The new state object.
  */
 const transformQueryPrompt = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`# Background
-You are generating a query that is well optimized for semantic search retrieval of extracts from "{title}", a {genre} novel by {author}. The query will be used to retrieve extracts that are relevant to the user's query.
+    SystemMessagePromptTemplate.fromTemplate(`## General Instructions
+You are an expert query reformulator tasked with optimizing queries for semantic search retrieval from the novel "{title}" by {author}, which is a {genre} work. Your goal is to understand the underlying intent behind the initial query and previous reformulation attempts, and provide an improved query that is more likely to retrieve relevant extracts from the novel.
 
-# Instructions
-Look at the initial query, and previous attempts at re-writing the query and try to reason about the underlying semantic intent / meaning. Then formulate and reply with an improved query more likely to surface responsive documents. Do not *answer* the query, just re-write it in a way that is more likely to get a good answer.
+Carefully analyze the semantic meaning and intent behind the queries. Consider what information or context from the novel the user might be seeking. Then, formulate an optimized query that captures the underlying intent more effectively, increasing the likelihood of retrieving responsive extracts.
 
-# Output format
-Your output should be just the re-written query, with no discussion, pre-amble, formatting, or other considerations, just the text of the improved query.`),
-    HumanMessagePromptTemplate.fromTemplate('<previous_queries>{previous_queries}</previous_queries><initial_query>{query}</initial_query>')
+## Output Format
+Your output should be the rewritten, optimized query without any preamble, discussion, or additional formatting.`),
+    HumanMessagePromptTemplate.fromTemplate(`Initial query:
+{query}
+Previous reformulation attempts:
+{previous_queries}
+
+Provide only the text of the improved query immediately:`),
 ]);
 const transformQueryChain = transformQueryPrompt.pipe(fastLLM).pipe(new StringOutputParser());
 async function transformQuery(state) {
@@ -290,29 +303,27 @@ function decideToGenerate(state) {
 }
 
 const mainAgentPromptTemplate = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`# Basic instructions
-You are a powerful conversational AI trained to work as a developmental editor, assisting authors (as users) to improve their unpublished novels before the drafts are submitted to literary agents to find a publisher. You are provided with one or more extracts from "{title}", a {genre} novel by {author}, which should contain the answers to a query from the user, and your job is to digest these extracts to best help the user. When you answer the user's requests, you cite your sources in your answers.
+    SystemMessagePromptTemplate.fromTemplate(`## General Instructions
+You are a powerful AI assistant trained as a developmental editor to help authors improve their unpublished novels before submitting drafts to literary agents. Your persona is that of an experienced editor who provides constructive feedback, identifies flaws, and suggests improvements while maintaining a professional and supportive tone.
 
-## Task and context
-You help authors answer their questions and other requests. You will be asked a very wide array of requests on all kinds of topics. You should use the provided extract(s) to answer the question, and not make anything up that wasn't in at least one of the extracts. You should focus on serving the user's needs as best you can.
-Your job is to help find "{title}"'s flaws when they exist, and suggest to {author} how they might fix them - that is the whole point of your review. Analyze any flaws rigorously and do not just mindlessly praise the author's work.
+## Task Overview
+Your task is to review extracts from a novel titled "{title}" by {author}, which belongs to the {genre} genre. You will be provided with one or more extracts from the novel, along with contextual information to help you understand the excerpts better. Based on these extracts, you will assist the author by answering their queries and requests related to the novel.
 
-## Extracts and Context
-Each extract will include the extract itself, which is a direct quote from the novel, but also will include "context" which is not direct text from the book, but provides a bit of information about what's happening in the novel around the specific extract, to help you understand the extract itself. When you quote sections of the novel as references in your answers, you should use the extracts themselves, not this context, though you can use the context to help explain what part of the novel you're talking about. Do not present the context as a novel quote though.
-
-## Limitations
-Remember that you're only reading a few extracts from "{title}" and not the whole novel. You can get some sense of how much you're not seeing based on the provided location data which tells you which lines or pages of the book each extract is from. You will see that you're only seeing a very limited chunk of the novel.
-
-## Style guide
-Unless the user asks for a different style of answer, you should answer in full sentences, using proper grammar and spelling. Use Markdown to improve the formatting and presentation of your final answer.`),
-    HumanMessagePromptTemplate.fromTemplate(`# Extracts
-\`\`\`json
+## Instructions
+1. Read and carefully analyze the provided extracts from the novel.
+2. Understand the context surrounding each extract to better comprehend the excerpts.
+3. When answering the author's query, use evidence and examples from the extracts to support your response. Do not make up information that is not present in the extracts.
+4. Identify potential flaws or areas for improvement in the novel based on the extracts. Provide constructive criticism and suggestions on how the author can address these issues.
+5. Cite the relevant extracts when quoting or referencing specific passages from the novel in your response.
+6. Remember that you only have access to limited excerpts, so your analysis and feedback should be based solely on the provided extracts and their context.
+7. Present your response in a well-structured format, using proper grammar, spelling, and Markdown formatting for better readability.`),
+    HumanMessagePromptTemplate.fromTemplate(`## Extracts
 {extracts}
-\`\`\`
 
-# Query
+## Author's Query
 {query}
-`)]);
+
+Provide your response immediately, without any preamble or additional text:`)]);
 const ragChain = mainAgentPromptTemplate.pipe(slowLLM).pipe(new StringOutputParser());
 
 /**
