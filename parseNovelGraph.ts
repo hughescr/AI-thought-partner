@@ -1,7 +1,7 @@
-import { OllamaEmbeddings } from '@langchain/ollama';
-import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
-import { InMemoryStore } from 'langchain/storage/in_memory';
-import { ChatOllama } from '@langchain/ollama';
+import {
+    cachedNomicEmbeddings as coreEmbeddings,
+    mistralLargeLLMChat
+} from './lib/LLMs.ts';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
@@ -20,21 +20,7 @@ const book = 'Christmas Town beta';
 const loader: TextLoader = new TextLoader(`novels/${book}.md`);
 const novelText = await loader.load();
 
-const coreEmbeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', numCtx: 2048 });
-
-const store = new InMemoryStore();
-const embeddings = CacheBackedEmbeddings.fromBytesStore(
-    coreEmbeddings,
-    store,
-    {
-        namespace: coreEmbeddings.modelName,
-    }
-);
-
-const commonOptions = { temperature: 0, seed: 19740822, keepAlive: '15m' };
-const commonOptions64k = { numCtx: 64 * 1024, ...commonOptions };
-
-const mistralLargeLLMChat = new ChatOllama({ model: 'mistral-large:latest', ...commonOptions64k });
+const embeddings = coreEmbeddings;
 
 const EntitySchema = z.object({
     name: z.string().describe('The name of the entity'),
