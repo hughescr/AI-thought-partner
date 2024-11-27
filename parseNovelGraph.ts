@@ -156,16 +156,8 @@ class ExtractWithContext {
  * @returns {Promise<number[]>} - The embedding of the entity description.
  */
 async function generateEntityEmbedding(entity: Entity): Promise<number[]> {
-    // Generate a plain-text description of the entity
-    const description = `
-        Name: ${entity.name}
-        Type: ${entity.type}
-        Description: ${entity.description}
-        Aliases: ${entity.aliases.join(', ')}
-    `;
-
-    // Trim the description using lodash
-    const trimmedDescription = _.trim(description);
+    // Get the trimmed string representation of the entity
+    const trimmedDescription = entityToStringRepresentation(entity);
 
     // Calculate the embedding of the trimmed description using the embeddings object
     return await embeddings.embedQuery(trimmedDescription);
@@ -431,4 +423,18 @@ const app = workflow.compile();
 // Now run:
 for await (const output of await app.stream({ streamMode: 'values', recursionLimit: 50 })) {
     logger.info(output);
+}
+/**
+ * Generate a plain-text string representation of an entity.
+ * @param {Entity} entity - The entity to represent as a string.
+ * @returns {string} - The trimmed string representation of the entity.
+ */
+function entityToStringRepresentation(entity: Entity): string {
+    const description = `
+        Name: ${entity.name}
+        Type: ${entity.type}
+        Description: ${entity.description}
+        Aliases: ${entity.aliases.join(', ')}
+    `;
+    return _.trim(description);
 }
