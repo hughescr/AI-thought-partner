@@ -122,7 +122,7 @@ async function extractEntitiesAndRelationships(chunk: string) {
         .withConfig({ runName: 'FetchRelevantExtracts' })
         .invoke(chunk);
 
-    const formattedResults = results.map(doc => ({
+    const formattedResults = _.map(results, doc => ({
         extract: doc.pageContent,
         context: doc.metadata.context,
     }));
