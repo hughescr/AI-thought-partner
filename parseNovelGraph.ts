@@ -80,6 +80,7 @@ const extractRetriever = vectorStore.asRetriever({
 // Define the Zod schema for structured output
 const EntitySchema = z.object({
     name: z.string().describe('The name of the entity'),
+    aliases: z.array(z.string()).describe('Known aliases for the entity'),
     type: z.enum(['Person', 'Location', 'Organization', 'Theme', 'Concept', 'Vehicle', 'Object']).describe('The type of the entity'),
     description: z.string().describe('Brief description or distinguishing details'),
 });
@@ -142,8 +143,15 @@ async function extractEntitiesAndRelationships(chunk: string) {
 
             for(const entity of entities) {
                 await session.run(
-                    'MERGE (e:Entity {name: $name, type: $type, description: $description})',
-                    entity
+                    `MERGE (e:Entity {name: $name})
+                     ON CREATE SET e.aliases = $aliases, e.type = $type, e.description = $description
+                     ON MATCH SET e.aliases = apoc.coll.union(e.aliases, $aliases)`,
+                    {
+                        name: entity.name,
+                        aliases: entity.aliases,
+                        type: entity.type,
+                        description: entity.description
+                    }
                 );
             }
 
