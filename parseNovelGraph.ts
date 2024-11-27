@@ -99,10 +99,46 @@ const ERExtractionAnnotation = Annotation.Root({
     novelMetadata: Annotation<NovelMetadata>,
 });
 
+async function extractEntitiesAndRelationships(chunk: string) {
+    const result = await structuredLlm.call({
+        input: chunk,
+    });
+
+    const { entities, relationships } = result;
+
+    const session: Session = driver.session();
+    try {
+        for (const entity of entities) {
+            await session.run(
+                'MERGE (e:Entity {name: $name, type: $type, description: $description})',
+                entity
+            );
+        }
+
+        for (const relationship of relationships) {
+            await session.run(
+                `MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
+                 MERGE (a)-[r:RELATIONSHIP {type: $type, description: $description}]->(b)`,
+                relationship
+            );
+        }
+    } finally {
+        await session.close();
+    }
+}
+
 const workflow = new StateGraph(ERExtractionAnnotation)
+    .addNode('processChunks', async (state) => {
+        const chunks = await splitter.split(novelText);
+        for (const chunk of chunks) {
+            await extractEntitiesAndRelationships(chunk);
+        }
+        return state;
+    })
     .addNode('setupMetadata', setupMetadata)
     .addEdge(START, 'setupMetadata')
-    .addEdge('setupMetadata', END);
+    .addEdge('setupMetadata', 'processChunks')
+    .addEdge('processChunks', END);
 
 const app = workflow.compile();
 
