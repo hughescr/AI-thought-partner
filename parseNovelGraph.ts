@@ -444,8 +444,11 @@ const entityAssessmentChain = entityAssessmentPrompt.pipe(entityAssessmentLLMWit
 
 async function extractEntities(state: { novelChunk: string }): Promise<{ entities: Entity[] }> {
     logger.info(chalk.blue('Extracting entities from the novel chunk...'));
+    logger.debug('Invoking entitiesExtractionChain...');
     const entitiesResult = await entitiesExtractionChain.invoke({ extract: state.novelChunk });
+    logger.debug('entitiesExtractionChain invocation complete.');
     logger.info(chalk.green(`Extracted ${entitiesResult.length} entities.`));
+    logger.debug(`Entities extracted: ${JSON.stringify(entitiesResult, null, 2)}`);
     return { entities: entitiesResult };
 }
 
