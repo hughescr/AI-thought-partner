@@ -114,6 +114,12 @@ async function extractEntitiesAndRelationships(chunk: string) {
 
     const { entities, relationships } = result;
 
+    // Use vectorStore to disambiguate entities
+    for (const entity of entities) {
+        const context = await vectorStore.retrieve(entity.name, 1);
+        entity.description += ` Context: ${context}`;
+    }
+
     const session: Session = driver.session();
     try {
         for (const entity of entities) {
