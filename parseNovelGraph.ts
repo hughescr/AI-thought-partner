@@ -39,7 +39,6 @@ const splitter = new SemanticTextSplitter({
     chunkSize: 2048, // Tokens!
     embeddings: embeddings, // Use fast embeddings for decent semantic splits
     embeddingBatchSize: 128,
-    relationships: Annotation<Relationship[]>
 });
 
 // NOVEL DATA
@@ -505,7 +504,7 @@ async function furtherRefineEntities(state: { entities: Entity[] }): Promise<{ e
 async function extractRelationships(state: { furtherRefinedEntities: Entity[], novelChunk: string }): Promise<{ relationships: Relationship[] }> {
     const relationshipsResult = await relationshipExtractionChain.invoke({
         extract: state.novelChunk,
-        entities: state.furtherRefinedEntities.map(entity => ({
+        entities: _.map(state.furtherRefinedEntities, entity => ({
             name: entity.name,
             type: entity.type,
             description: entity.description,
@@ -523,6 +522,7 @@ const ERExtractionAnnotation = Annotation.Root({
     novelMetadata: Annotation<NovelMetadata>,
     novelChunk: Annotation<string>,
     entities: Annotation<Entity[]>,
+    relationships: Annotation<Relationship[]>
 });
 
 const workflow = new StateGraph(ERExtractionAnnotation)
