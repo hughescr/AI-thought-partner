@@ -307,7 +307,6 @@ Here is some context about the extract:
 ]);
 const extractionChain = extractionPrompt.pipe(entitiesLLM);
 
-
 const relationshipsLLM = fastDumbLLM.withStructuredOutput(RelationshipsSchema);
 const relationshipExtractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
@@ -324,22 +323,7 @@ Here is some context about the extract:
 Here is the list of entities:
 {entities}`),
 ]);
-
 const relationshipExtractionChain = relationshipExtractionPrompt.pipe(relationshipsLLM);
-
-async function extractRelationships(extractWithContext: ExtractWithContext, entities: Entity[]): Promise<Relationship[]> {
-    const relationships = await relationshipExtractionChain.run({
-        extract: extractWithContext.extract,
-        context: extractWithContext.context,
-        entities: entities.map(entity => ({
-            name: entity.name,
-            type: entity.type,
-            description: entity.description,
-            aliases: entity.aliases
-        }))
-    });
-    return relationships;
-}
 
 // Create a new structured output LLM for a single EntitySchema
 const entityRefinementLLM = fastDumbLLM.withStructuredOutput(EntitySchema);
@@ -389,7 +373,6 @@ const insertEntityIntoNeo4jTool = tool(
 );
 
 const entityAssessmentLLMWithTools = fastDumbLLM.bindTools([updateEntityInNeo4jTool, insertEntityIntoNeo4jTool]);
-
 const entityAssessmentPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in entity assessment and refinement. Your task is to determine if a proposed entity matches any of the similar entities provided.
@@ -404,7 +387,6 @@ Here are the similar entities:
 {similarEntities}`
     )
 ]);
-
 const entityAssessmentChain = entityAssessmentPrompt.pipe(entityAssessmentLLMWithTools);
 
 // END OF CHAINS
