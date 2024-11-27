@@ -344,7 +344,7 @@ async function upsertRelationshipsIntoNeo4j(relationships: Relationship[]): Prom
 // CHAINS
 
 const entitiesLLM = fastDumbLLM.withStructuredOutput(EntitiesSchema);
-const extractionPrompt = ChatPromptTemplate.fromMessages([
+const entitiesExtractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in text analysis. Your task is to extract entities from the given text extract.
 You will receive a text extract in the user prompt.
@@ -354,7 +354,7 @@ For each entity, provide a brief description and categorize it into one of the f
     HumanMessagePromptTemplate.fromTemplate(`Here is the text extract:
 {extract}`),
 ]);
-const extractionChain = extractionPrompt.pipe(entitiesLLM);
+const entitiesExtractionChain = entitiesExtractionPrompt.pipe(entitiesLLM);
 
 const relationshipsLLM = fastDumbLLM.withStructuredOutput(RelationshipsSchema);
 const relationshipExtractionPrompt = ChatPromptTemplate.fromMessages([
