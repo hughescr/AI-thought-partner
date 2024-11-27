@@ -238,7 +238,7 @@ async function updateEntityInNeo4j(existingEntity: Entity, replacementEntity: En
             SET e.name = $replacementName,
                 e.type = $replacementType,
                 e.description = $replacementDescription,
-                e.aliases = $replacementAliases
+                e.aliases = $replacementAliases,
                 e.embedding = $replacementEmbedding
         `, {
             existingName: existingEntity.name,
