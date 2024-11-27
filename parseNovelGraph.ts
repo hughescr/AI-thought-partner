@@ -92,13 +92,12 @@ const RelationshipSchema = z.object({
     description: z.string().optional().describe('Optional description'),
 });
 
-const OutputSchema = z.object({
+const EntitiesAndRelationshipsSchema = z.object({
     entities: z.array(EntitySchema).describe('List of extracted entities'),
     relationships: z.array(RelationshipSchema).describe('List of extracted relationships'),
 }).describe('Extracted entities and relationships from the text.');
 
-const structuredLlm = fastDumbLLM.withStructuredOutput(OutputSchema);
-
+const entitiesAndRelationshipsLLM = fastDumbLLM.withStructuredOutput(EntitiesAndRelationshipsSchema);
 const extractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in text analysis. Your task is to extract entities and relationships from the given text extract and its context.
@@ -108,145 +107,18 @@ For each entity, provide a brief description and categorize it into one of the f
 Also, identify relationships between these entities, specifying the type and a brief description of each relationship.`
     ),
     HumanMessagePromptTemplate.fromTemplate(`Here is the text extract:
-{chunk}
+{extract}
 
 Here is some context about the extract:
 {context}`),
 ]);
+const extractionChain = extractionPrompt.pipe(entitiesAndRelationshipsLLM);
 
 const ERExtractionAnnotation = Annotation.Root({
     novelMetadata: Annotation<NovelMetadata>,
 });
 
-async function extractEntitiesAndRelationships(chunk: string) {
-    const results = await extractRetriever
-        .withConfig({ runName: 'FetchRelevantExtracts' })
-        .invoke(chunk);
-
-    const formattedResults = _.map(results, doc => ({
-        chunk: doc.pageContent,
-        context: doc.metadata.context,
-    }));
-
-    const session: Session = driver.session();
-    try {
-        for(const piece of formattedResults) {
-            const { entities, relationships } = await extractionPrompt.pipe(structuredLlm).invoke(piece);
-
-            // Use vectorStore to disambiguate entities
-            for(const entity of entities) {
-                const context = await extractRetriever
-                    .withConfig({ runName: 'FetchRelevantExtracts' })
-                    .invoke(entity.name);
-                entity.description += ` Context: ${context}`;
-            }
-
-            for(const entity of entities) {
-                await session.run(
-                    `MERGE (e:Entity {name: $name})
-                    ON CREATE SET e.aliases = $aliases, e.type = $type, e.description = $description
-                    ON MATCH SET e.aliases = apoc.coll.union(e.aliases, $aliases)`,
-                    {
-                        name: entity.name,
-                        aliases: entity.aliases,
-                        type: entity.type,
-                        description: entity.description
-                    }
-                );
-            }
-
-            for(const relationship of relationships) {
-                await session.run(
-                    `MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
-                    MERGE (a)-[r:RELATIONSHIP {type: $type, description: $description}]->(b)`,
-                    relationship
-                );
-            }
-        }
-    } finally {
-        await session.close();
-    }
-}
-
-const refineEntityPrompt = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`
-You are an expert in entity refinement. Your task is to refine a proposed entity extracted from a novel using additional context from the novel.
-You will receive a proposed entity, the original extract, its context, and additional extracts that might be relevant.
-Use the additional extracts to refine the entity proposal, update the list of aliases, and ensure the entity's name is the most common form.`),
-    HumanMessagePromptTemplate.fromTemplate(`
-Original proposed entity: {entity}
-Original extract: {extract}
-Original context: {context}
-Additional documents: {additionalDocuments}`),
-]);
-
-const structuredRefineLlm = slowSmartLLM.withStructuredOutput(EntitySchema);
-
-async function refineEntity(entity, extract, context) {
-    // Perform a lookup in the retriever
-    const query = `Name: ${entity.name}. Description: ${entity.description}. Known Aliases: ${entity.aliases.join(', ')}`;
-    const additionalExtracts = await extractRetriever
-        .withConfig({ runName: 'FetchRelevantExtracts' })
-        .invoke(query);
-
-    // Extract the extract and context for each additional document
-    const additionalDocuments = JSON.stringify(_.map(additionalExtracts, doc => ({
-        extract: doc.pageContent,
-        context: doc.metadata.context,
-    })));
-
-    // Refine the entity using the LLM with structured output
-    const refinedEntity = await refineEntityPrompt.pipe(structuredRefineLlm).invoke({
-        entity: JSON.stringify(entity),
-        extract,
-        context,
-        additionalDocuments,
-    });
-
-    return refinedEntity;
-}
-
-async function processNovelChunks() {
-    const session: Session = driver.session();
-    try {
-        for(const chunk of novelChunks) {
-            const { entities, relationships } = await extractEntitiesAndRelationships(chunk.pageContent);
-
-            for(const entity of entities) {
-                const refinedEntity = await refineEntity(entity, chunk.pageContent, chunk.metadata.context);
-
-                await session.run(
-                    `MERGE (e:Entity {name: $name})
-                    ON CREATE SET e.aliases = $aliases, e.entityType = $entityType, e.description = $description
-                    ON MATCH SET e.aliases = apoc.coll.union(e.aliases, $aliases)`,
-                    {
-                        name: refinedEntity.name,
-                        aliases: refinedEntity.aliases,
-                        entityType: refinedEntity.type,
-                        description: refinedEntity.description
-                    }
-                );
-            }
-
-            for(const relationship of relationships) {
-                await session.run(
-                    `MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
-                    MERGE (a)-[r:RELATIONSHIP {type: $type, description: $description}]->(b)`,
-                    relationship
-                );
-            }
-        }
-    } finally {
-        await session.close();
-    }
-}
-
-const workflow = new StateGraph(ERExtractionAnnotation)
-    .addNode('setupMetadata', setupMetadata)
-    .addNode('processNovelChunks', processNovelChunks)
-    .addEdge(START, 'setupMetadata')
-    .addEdge('setupMetadata', 'processNovelChunks')
-    .addEdge('processNovelChunks', END);
+const workflow = new StateGraph(ERExtractionAnnotation);
 
 const app = workflow.compile();
 
