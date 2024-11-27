@@ -1,4 +1,3 @@
-// TODO: Re-ranking - maybe wait for ollama to support rerankers
 // TODO: Improve use of document metadata for referencing/anchoring attributions
 
 import {
@@ -11,12 +10,10 @@ import { StringOutputParser } from '@langchain/core/output_parsers';
 // import { HumanMessage, BaseMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
-import { FaissStore } from '@langchain/community/vectorstores/faiss';
 // import { HydeRetriever } from 'langchain/retrievers/hyde';
+import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR.ts';
 // import { StringPromptValue, BasePromptValueInterface } from '@langchain/core/prompt_values';
-import { maximalMarginalRelevance } from '@langchain/core/utils/math';
 import { Document } from '@langchain/core/documents';
-import { MaxMarginalRelevanceSearchOptions } from '@langchain/core/vectorstores';
 // import { BM25Retriever } from '@langchain/community/retrievers/bm25';
 
 import { logger } from '@hughescr/logger';
@@ -57,31 +54,6 @@ async function setupMetadata(): Promise<{ novelMetadata: NovelMetadata }> {
         },
     };
 }
-
-/**
- * Return documents selected using the maximal marginal relevance.
- * Maximal marginal relevance optimizes for similarity to the query AND diversity
- * among selected documents.
- *
- * @param {string} query - Text to look up documents similar to.
- * @param {number} options.k - Number of documents to return.
- * @param {number} options.fetchK=20- Number of documents to fetch before passing to the MMR algorithm.
- * @param {number} options.lambda=0.5 - Number between 0 and 1 that determines the degree of diversity among the results,
- *                 where 0 corresponds to maximum diversity and 1 to minimum diversity.
- * @param {any} options.filter - filter parameter is ignored for FAISS stores.
- *
- * @returns {Promise<Document[]>} - List of documents selected by maximal marginal relevance.
- */
-class FaissStoreWithMMR extends FaissStore {
-    async maxMarginalRelevanceSearch(query: string, options: MaxMarginalRelevanceSearchOptions<this['FilterType']>, _callbacks?: undefined) {
-        const { k, fetchK = 20, lambda = 0.5 } = options;
-        const queryEmbedding = await this.embeddings.embedQuery(query);
-        const resultDocs = await this.similaritySearchVectorWithScore(queryEmbedding, fetchK);
-        const embeddingList = await this.embeddings.embedDocuments(_.map(resultDocs, '0.pageContent'));
-        const mmrIndexes = maximalMarginalRelevance(queryEmbedding, embeddingList, lambda, k);
-        return _.map(mmrIndexes, idx => resultDocs[idx][0]);
-    }
-};
 
 const vectorStore = await FaissStoreWithMMR.load(
     storeDirectory,
