@@ -84,30 +84,6 @@ const extractRetriever = vectorStore.asRetriever({
 
 // END OF WORKFLOW STAGE FUNCTIONS
 
-// HELPER FUNCTIONS
-
-/**
- * Generate a plain-text description of an entity and calculate its embedding.
- * @param {Entity} entity - The entity to describe and calculate the embedding for.
- * @returns {Promise<number[]>} - The embedding of the entity description.
- */
-async function generateEntityDescriptionAndEmbedding(entity: Entity): Promise<number[]> {
-    // Generate a plain-text description of the entity
-    const description = `
-        Name: ${entity.name}
-        Type: ${entity.type}
-        Description: ${entity.description}
-        Aliases: ${entity.aliases.join(', ')}
-    `.trim();
-
-    // Calculate the embedding of the generated description using the embeddings object
-    const embedding = await embeddings.embedQuery(description);
-
-    return embedding;
-}
-
-// END OF HELPER FUNCTIONS
-
 // SCHEMAS
 
 const EntitySchema = z.object({
@@ -130,6 +106,7 @@ const EntitiesAndRelationshipsSchema = z.object({
 }).describe('Entities and relationships');
 
 // END OF SCHEMAS
+
 // CLASSES
 
 class Entity {
@@ -171,6 +148,29 @@ class ExtractWithContext {
 }
 
 // END OF CLASSES
+
+// HELPER FUNCTIONS
+
+/**
+ * Generate a plain-text description of an entity and calculate its embedding.
+ * @param {Entity} entity - The entity to describe and calculate the embedding for.
+ * @returns {Promise<number[]>} - The embedding of the entity description.
+ */
+async function generateEntityEmbedding(entity: Entity): Promise<number[]> {
+    // Generate a plain-text description of the entity
+    const description = `
+        Name: ${entity.name}
+        Type: ${entity.type}
+        Description: ${entity.description}
+        Aliases: ${entity.aliases.join(', ')}
+    `.trim();
+
+    // Calculate the embedding of the generated description using the embeddings object
+    return await embeddings.embedQuery(description);
+}
+
+// END OF HELPER FUNCTIONS
+
 // CHAINS
 
 const entitiesAndRelationshipsLLM = fastDumbLLM.withStructuredOutput(EntitiesAndRelationshipsSchema);
