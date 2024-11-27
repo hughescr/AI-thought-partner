@@ -8,7 +8,7 @@ import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
 import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR.ts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
-import neo4j, { Driver, Session } from 'neo4j-driver';
+import neo4j, { Driver, Session, Node } from 'neo4j-driver';
 import z from 'zod';
 import { logger } from '@hughescr/logger';
 import _ from 'lodash';
@@ -175,9 +175,19 @@ async function generateEntityEmbedding(entity: Entity): Promise<number[]> {
 /**
  * Search the Neo4j store using gds.similarity.cosine to find entities matching the embedding of the given entity.
  * @param {Entity} entity - The entity to search for similar entities in the Neo4j store.
- * @returns {Promise<{ entity: Entity, score: number }[]>} - An array of found entities and their similarity scores.
+ * @returns {Promise<SimilarEntityResult[]>} - An array of found entities and their similarity scores.
  */
-async function findSimilarEntitiesInNeo4j(entity: Entity): Promise<{ entity: Entity, score: number }[]> {
+interface SimilarEntityResult {
+    entity: {
+        name: string;
+        aliases: string[];
+        type: 'Person' | 'Location' | 'Organization' | 'Theme' | 'Concept' | 'Vehicle' | 'Object';
+        description: string;
+    };
+    score: number;
+}
+
+async function findSimilarEntitiesInNeo4j(entity: Entity): Promise<SimilarEntityResult[]> {
     const session = driver.session();
 
     try {
@@ -194,7 +204,7 @@ async function findSimilarEntitiesInNeo4j(entity: Entity): Promise<{ entity: Ent
 
         // Process and return the results
         return _.map(result.records, record => ({
-            entity: record.get('e').properties,
+            entity: record.get('e').properties as SimilarEntityResult['entity'],
             score: record.get('score')
         }));
     } finally {
