@@ -1,7 +1,6 @@
 import {
     cachedJinaV2SmallENEmbeddings as embeddings,
-    qwen25_32bLLM as slowSmartLLM,
-    nemo_12bLLM as fastDumbLLM
+    qwen25_32bLLM as slowSmartLLM
 } from './lib/LLMs.ts';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
@@ -345,7 +344,7 @@ async function upsertRelationshipsIntoNeo4j(relationships: Relationship[]): Prom
 
 // CHAINS
 
-const entitiesLLM = fastDumbLLM.withStructuredOutput(EntitiesSchema);
+const entitiesLLM = slowSmartLLM.withStructuredOutput(EntitiesSchema);
 const entitiesExtractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in text analysis. Your task is to extract entities from the given text extract.
@@ -358,7 +357,7 @@ For each entity, provide a brief description and categorize it into one of the f
 ]);
 const entitiesExtractionChain = entitiesExtractionPrompt.pipe(entitiesLLM);
 
-const relationshipsLLM = fastDumbLLM.withStructuredOutput(RelationshipsSchema);
+const relationshipsLLM = slowSmartLLM.withStructuredOutput(RelationshipsSchema);
 const relationshipExtractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in relationship extraction. Your task is to identify relationships among the given entities within the provided text extract.
@@ -374,7 +373,7 @@ Here is the list of entities:
 const relationshipExtractionChain = relationshipExtractionPrompt.pipe(relationshipsLLM);
 
 // Create a new structured output LLM for a single EntitySchema
-const entityRefinementLLM = fastDumbLLM.withStructuredOutput(EntitySchema);
+const entityRefinementLLM = slowSmartLLM.withStructuredOutput(EntitySchema);
 // Define the prompt for refining an entity
 const entityRefinementPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
@@ -421,7 +420,7 @@ const insertEntityIntoNeo4jTool = tool(
 
 const entityAssessmentTools = [updateEntityInNeo4jTool, insertEntityIntoNeo4jTool];
 const entityAssessmentToolsNode = new ToolNode(entityAssessmentTools);
-const entityAssessmentLLMWithTools = fastDumbLLM.bindTools(entityAssessmentTools);
+const entityAssessmentLLMWithTools = slowSmartLLM.bindTools(entityAssessmentTools);
 const entityAssessmentPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in entity assessment and refinement. Your task is to determine if a proposed entity matches any of the similar entities provided.
