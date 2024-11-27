@@ -7,6 +7,7 @@ import { TextLoader } from 'langchain/document_loaders/fs/text';
 import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
 import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR.ts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
 import neo4j, { Driver, Session } from 'neo4j-driver';
 import z from 'zod';
 import { logger } from '@hughescr/logger';
@@ -75,7 +76,6 @@ const extractRetriever = vectorStore.asRetriever({
     k: 10,
 });
 
-
 // Define the Zod schema for structured output
 const EntitySchema = z.object({
     name: z.string().describe('The name of the entity'),
@@ -95,11 +95,9 @@ const OutputSchema = z.object({
     relationships: z.array(RelationshipSchema).describe('List of extracted relationships'),
 }).describe('Extracted entities and relationships from the text.');
 
-import { ChatTemplatePrompt } from 'langchain/prompts';
-
 const structuredLlm = slowSmartLLM.withStructuredOutput(OutputSchema);
 
-const extractionPrompt = new ChatTemplatePrompt()
+const extractionPrompt = new ChatPromptTemplate()
     .addSystemMessage(`
         You are an expert in text analysis. Your task is to extract entities and relationships from the given text.
         Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
