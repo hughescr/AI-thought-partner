@@ -8,7 +8,7 @@ import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
 import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR.ts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
-import neo4j, { Driver, Session, Node } from 'neo4j-driver';
+import neo4j, { Driver } from 'neo4j-driver';
 import { tool } from '@langchain/core/tools';
 import z from 'zod';
 import { logger } from '@hughescr/logger';
@@ -323,31 +323,25 @@ async function upsertRelationshipsIntoNeo4j(relationships: Relationship[]): Prom
 const entitiesLLM = fastDumbLLM.withStructuredOutput(EntitiesSchema);
 const extractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
-You are an expert in text analysis. Your task is to extract entities from the given text extract and its context.
-You will receive a text extract and some context about it in the user prompt.
+You are an expert in text analysis. Your task is to extract entities from the given text extract.
+You will receive a text extract in the user prompt.
 Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
 For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.`
     ),
     HumanMessagePromptTemplate.fromTemplate(`Here is the text extract:
-{extract}
-
-Here is some context about the extract:
-{context}`),
+{extract}`),
 ]);
 const extractionChain = extractionPrompt.pipe(entitiesLLM);
 
 const relationshipsLLM = fastDumbLLM.withStructuredOutput(RelationshipsSchema);
 const relationshipExtractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
-You are an expert in relationship extraction. Your task is to identify relationships among the given entities within the provided text extract and its context.
-You will receive a text extract, some context, and a list of entities. Identify any relationships between these entities, specifying the source, target, type, and an optional description for each relationship.`
+You are an expert in relationship extraction. Your task is to identify relationships among the given entities within the provided text extract.
+You will receive a text extract, and a list of entities. Identify any relationships between these entities, specifying the source, target, type, and an optional description for each relationship.`
     ),
     HumanMessagePromptTemplate.fromTemplate(`
 Here is the text extract:
 {extract}
-
-Here is some context about the extract:
-{context}
 
 Here is the list of entities:
 {entities}`),
@@ -360,19 +354,18 @@ const entityRefinementLLM = fastDumbLLM.withStructuredOutput(EntitySchema);
 const entityRefinementPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in entity refinement. Your task is to refine a proposed entity using additional context.
-You will receive a proposed entity, the original extract from which it was extracted, and additional extracts for context.
+You will receive a proposed entity, the original extract from which it was extracted, and supplemental extracts for context.
 Your goal is to improve the entity's data, particularly its list of aliases and the name by which it is most commonly known.
-Use the additional extracts to refine the entity's details and ensure the most accurate and complete representation.`
+Use the supplemental extracts to refine the entity's details and ensure the most accurate and complete representation.`
     ),
     HumanMessagePromptTemplate.fromTemplate(`
-Here is the proposed entity:
+Proposed Entity:
 {proposedEntity}
 
-Here is the original extract and context:
-Extract: {originalExtract}
-Context: {originalContext}
+Original Extract:
+{originalExtract}
 
-Here are additional extracts for context:
+Supplemental extracts:
 {additionalExtracts}`
     )
 ]);
