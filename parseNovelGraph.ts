@@ -229,14 +229,26 @@ async function updateEntityInNeo4j(existingEntity: Entity, replacementEntity: En
     const session = driver.session();
 
     try {
-        // Cypher query to update the existing entity with the replacement entity's properties
+        // Calculate the embedding for the replacement entity
+        const replacementEntityEmbedding = await generateEntityEmbedding(replacementEntity);
+
+        // Cypher query to update the existing entity with the replacement entity's properties, including the embedding
         await session.run(`
             MATCH (e:Entity {name: $existingName, type: $existingType, description: $existingDescription})
             SET e.name = $replacementName,
                 e.type = $replacementType,
                 e.description = $replacementDescription,
                 e.aliases = $replacementAliases
+                e.embedding = $replacementEmbedding
         `, {
+            existingName: existingEntity.name,
+            existingType: existingEntity.type,
+            existingDescription: existingEntity.description,
+            replacementName: replacementEntity.name,
+            replacementType: replacementEntity.type,
+            replacementDescription: replacementEntity.description,
+            replacementAliases: replacementEntity.aliases,
+            replacementEmbedding: replacementEntityEmbedding
             existingName: existingEntity.name,
             existingType: existingEntity.type,
             existingDescription: existingEntity.description,
@@ -259,14 +271,24 @@ async function insertEntityIntoNeo4j(entity: Entity): Promise<void> {
     const session = driver.session();
 
     try {
-        // Cypher query to create a new entity node with the given properties
+        // Calculate the embedding for the entity
+        const entityEmbedding = await generateEntityEmbedding(entity);
+
+        // Cypher query to create a new entity node with the given properties, including the embedding
         await session.run(`
             CREATE (e:Entity {
                 name: $name,
                 type: $type,
                 description: $description,
                 aliases: $aliases
+                embedding: $embedding
             })
+        `, {
+            name: entity.name,
+            type: entity.type,
+            description: entity.description,
+            aliases: entity.aliases,
+            embedding: entityEmbedding
         `, {
             name: entity.name,
             type: entity.type,
