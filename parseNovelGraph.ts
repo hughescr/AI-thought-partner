@@ -7,8 +7,6 @@ import { TextLoader } from 'langchain/document_loaders/fs/text';
 import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
 import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR.ts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
-import { tool } from '@langchain/core/tools';
-import { ToolNode } from '@langchain/langgraph/prebuilt';
 import neo4j, { Driver, Session } from 'neo4j-driver';
 import z from 'zod';
 import { logger } from '@hughescr/logger';
@@ -73,6 +71,10 @@ const vectorStore = await FaissStoreWithMMR.load(
     storeDirectory,
     embeddings
 );
+const extractRetriever = vectorStore.asRetriever({
+    k: 10,
+});
+
 
 // Define the Zod schema for structured output
 const EntitySchema = z.object({
@@ -107,7 +109,7 @@ async function extractEntitiesAndRelationships(chunk: string) {
         Also, identify relationships between these entities, specifying the type and a brief description of each relationship.
     `;
 
-    const result = await structuredLlm.call({
+    const result = await structuredLlm.invoke({
         prompt,
         input: chunk,
     });
@@ -115,24 +117,26 @@ async function extractEntitiesAndRelationships(chunk: string) {
     const { entities, relationships } = result;
 
     // Use vectorStore to disambiguate entities
-    for (const entity of entities) {
-        const context = await vectorStore.retrieve(entity.name, 1);
+    for(const entity of entities) {
+        const context = await extractRetriever
+                .withConfig({ runName: 'FetchRelevantExtracts' })
+                .invoke(entity.name);
         entity.description += ` Context: ${context}`;
     }
 
     const session: Session = driver.session();
     try {
-        for (const entity of entities) {
+        for(const entity of entities) {
             await session.run(
                 'MERGE (e:Entity {name: $name, type: $type, description: $description})',
                 entity
             );
         }
 
-        for (const relationship of relationships) {
+        for(const relationship of relationships) {
             await session.run(
                 `MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
-                 MERGE (a)-[r:RELATIONSHIP {type: $type, description: $description}]->(b)`,
+                MERGE (a)-[r:RELATIONSHIP {type: $type, description: $description}]->(b)`,
                 relationship
             );
         }
@@ -142,9 +146,9 @@ async function extractEntitiesAndRelationships(chunk: string) {
 }
 
 async function processChunks(state) {
-    const chunks = await splitter.split(novelText);
-    for (const chunk of chunks) {
-        await extractEntitiesAndRelationships(chunk);
+    const chunks = await splitter.splitDocuments(novelText);
+    for(const chunk of chunks) {
+        await extractEntitiesAndRelationships(chunk.pageContent);
     }
     return state;
 }
