@@ -308,6 +308,40 @@ Here is some context about the extract:
 ]);
 const extractionChain = extractionPrompt.pipe(entitiesLLM);
 
+const relationshipsLLM = fastDumbLLM.withStructuredOutput(z.array(RelationshipSchema));
+
+const relationshipExtractionPrompt = ChatPromptTemplate.fromMessages([
+    SystemMessagePromptTemplate.fromTemplate(`
+You are an expert in relationship extraction. Your task is to identify relationships among the given entities within the provided text extract and its context.
+You will receive a text extract, some context, and a list of entities. Identify any relationships between these entities, specifying the source, target, type, and an optional description for each relationship.`
+    ),
+    HumanMessagePromptTemplate.fromTemplate(`
+Here is the text extract:
+{extract}
+
+Here is some context about the extract:
+{context}
+
+Here is the list of entities:
+{entities}`),
+]);
+
+const relationshipExtractionChain = relationshipExtractionPrompt.pipe(relationshipsLLM);
+
+async function extractRelationships(extractWithContext: ExtractWithContext, entities: Entity[]): Promise<Relationship[]> {
+    const relationships = await relationshipExtractionChain.run({
+        extract: extractWithContext.extract,
+        context: extractWithContext.context,
+        entities: entities.map(entity => ({
+            name: entity.name,
+            type: entity.type,
+            description: entity.description,
+            aliases: entity.aliases
+        }))
+    });
+    return relationships;
+}
+
 // Create a new structured output LLM for a single EntitySchema
 const entityRefinementLLM = fastDumbLLM.withStructuredOutput(EntitySchema);
 // Define the prompt for refining an entity
