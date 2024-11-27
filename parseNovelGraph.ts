@@ -472,11 +472,10 @@ async function refineEntitiesWithContext(state: { novelChunk: string, entities: 
 
         progressBar.update(index + 1);
         return refinementResult;
-    });
+    }));
 
     progressBar.stop();
     logger.info(chalk.green('Entities refined with context.'));
-    }));
 
     return { entities: refinedEntities };
 }
@@ -513,7 +512,6 @@ async function furtherRefineEntities(state: { entities: Entity[] }): Promise<{ e
 
     progressBar.stop();
     logger.info(chalk.green('Entities further refined using Neo4j.'));
-    }));
 
     return { entities: updatedEntities };
 }
