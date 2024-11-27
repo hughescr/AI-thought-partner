@@ -280,7 +280,7 @@ async function insertEntityIntoNeo4j(entity: Entity): Promise<void> {
                 name: $name,
                 type: $type,
                 description: $description,
-                aliases: $aliases
+                aliases: $aliases,
                 embedding: $embedding
             })
         `, {
