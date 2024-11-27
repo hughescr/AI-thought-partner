@@ -151,6 +151,21 @@ class ExtractWithContext {
 // HELPER FUNCTIONS
 
 /**
+ * Generate a plain-text string representation of an entity.
+ * @param {Entity} entity - The entity to represent as a string.
+ * @returns {string} - The trimmed string representation of the entity.
+ */
+function entityToStringRepresentation(entity: Entity): string {
+    const description = `
+        Name: ${entity.name}
+        Type: ${entity.type}
+        Description: ${entity.description}
+        Aliases: ${entity.aliases.join(', ')}
+    `;
+    return _.trim(description);
+}
+
+/**
  * Generate a plain-text description of an entity and calculate its embedding.
  * @param {Entity} entity - The entity to describe and calculate the embedding for.
  * @returns {Promise<number[]>} - The embedding of the entity description.
@@ -423,18 +438,4 @@ const app = workflow.compile();
 // Now run:
 for await (const output of await app.stream({ streamMode: 'values', recursionLimit: 50 })) {
     logger.info(output);
-}
-/**
- * Generate a plain-text string representation of an entity.
- * @param {Entity} entity - The entity to represent as a string.
- * @returns {string} - The trimmed string representation of the entity.
- */
-function entityToStringRepresentation(entity: Entity): string {
-    const description = `
-        Name: ${entity.name}
-        Type: ${entity.type}
-        Description: ${entity.description}
-        Aliases: ${entity.aliases.join(', ')}
-    `;
-    return _.trim(description);
 }
