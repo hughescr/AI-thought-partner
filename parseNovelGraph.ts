@@ -141,14 +141,16 @@ async function extractEntitiesAndRelationships(chunk: string) {
     }
 }
 
+async function processChunks(state) {
+    const chunks = await splitter.split(novelText);
+    for (const chunk of chunks) {
+        await extractEntitiesAndRelationships(chunk);
+    }
+    return state;
+}
+
 const workflow = new StateGraph(ERExtractionAnnotation)
-    .addNode('processChunks', async (state) => {
-        const chunks = await splitter.split(novelText);
-        for (const chunk of chunks) {
-            await extractEntitiesAndRelationships(chunk);
-        }
-        return state;
-    })
+    .addNode('processChunks', processChunks)
     .addNode('setupMetadata', setupMetadata)
     .addEdge(START, 'setupMetadata')
     .addEdge('setupMetadata', 'processChunks')
