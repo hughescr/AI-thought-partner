@@ -125,7 +125,15 @@ class Relationship {
     }
 }
 
-// ExtractWithContext definition here
+class ExtractWithContext {
+    extract: string;
+    context: string;
+
+    constructor(extract: string, context: string) {
+        this.extract = extract;
+        this.context = context;
+    }
+}
 
 const entitiesAndRelationshipsLLM = fastDumbLLM.withStructuredOutput(EntitiesAndRelationshipsSchema);
 const extractionPrompt = ChatPromptTemplate.fromMessages([
