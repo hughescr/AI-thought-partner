@@ -190,7 +190,7 @@ async function findSimilarEntitiesInNeo4j(entity: Entity): Promise<{ entity: Ent
         `, { entityEmbedding });
 
         // Process and return the results
-        return result.records.map(record => ({
+        return _.map(result.records, record => ({
             entity: record.get('e').properties,
             score: record.get('score')
         }));
