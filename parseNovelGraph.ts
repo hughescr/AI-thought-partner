@@ -451,7 +451,7 @@ async function extractEntities(state: { novelChunk: string }): Promise<{ entitie
  * @param {Object} state - The current state containing novel chunk and entities.
  * @returns {Promise<Object>} - The updated state with refined entities.
  */
-async function refineEntitiesWithContext(state: { novelChunk: string, entities: Entity[] }): Promise<{entities: Entity[] }> {
+async function refineEntitiesWithContext(state: { novelChunk: string, entities: Entity[] }): Promise<{ entities: Entity[] }> {
     const refinedEntities = await Promise.all(_.map(state.entities, async (entity) => {
         // Retrieve additional extracts for the entity
         const additionalExtracts = await getExtractsForEntity(entity);
