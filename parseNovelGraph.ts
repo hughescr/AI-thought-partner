@@ -7,7 +7,6 @@ import { TextLoader } from 'langchain/document_loaders/fs/text';
 import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
 import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR.ts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
-import { ChatAnthropic } from '@langchain/anthropic';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
@@ -68,10 +67,7 @@ const entityExtractionTool = tool(async ({ text }) => {
 const tools = [entityExtractionTool];
 const toolNode = new ToolNode(tools);
 
-const model = new ChatAnthropic({
-    model: 'claude-3-5-sonnet-20240620',
-    temperature: 0,
-}).bindTools(tools);
+const model = slowSmartLLM.bindTools(tools);
 
 async function extractEntitiesAndRelationships(text: string) {
     // Use vectorStore to help identify and disambiguate entities
