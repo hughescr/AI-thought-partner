@@ -323,6 +323,34 @@ Here are additional extracts for context:
 ]);
 const entityRefinementChain = entityRefinementPrompt.pipe(entityRefinementLLM);
 
+// Define the tool-calling LLM
+const entityAssessmentLLM = fastDumbLLM.withToolCalling({
+    tools: {
+        updateEntityInNeo4j: async (existingEntity: Entity, refinedEntity: Entity) => {
+            await updateEntityInNeo4j(existingEntity, refinedEntity);
+        }
+    }
+});
+
+// Define the system and user prompts
+const entityAssessmentPrompt = ChatPromptTemplate.fromMessages([
+    SystemMessagePromptTemplate.fromTemplate(`
+You are an expert in entity assessment and refinement. Your task is to determine if a proposed entity matches any of the similar entities provided.
+If a match is found, refine the proposed entity by updating its name, aliases, description, and type as necessary.
+Then, call the updateEntityInNeo4j tool to update the existing entity in the database with the refined entity details.`
+    ),
+    HumanMessagePromptTemplate.fromTemplate(`
+Here is the proposed entity:
+{proposedEntity}
+
+Here are the similar entities:
+{similarEntities}`
+    )
+]);
+
+// Create the tool-calling chain
+const entityAssessmentChain = entityAssessmentPrompt.pipe(entityAssessmentLLM);
+
 // END OF CHAINS
 
 // AGENT WORKFLOW
