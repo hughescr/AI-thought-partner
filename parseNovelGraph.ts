@@ -100,7 +100,15 @@ const ERExtractionAnnotation = Annotation.Root({
 });
 
 async function extractEntitiesAndRelationships(chunk: string) {
+    const prompt = `
+        You are an expert in text analysis. Your task is to extract entities and relationships from the given text.
+        Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
+        For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.
+        Also, identify relationships between these entities, specifying the type and a brief description of each relationship.
+    `;
+
     const result = await structuredLlm.call({
+        prompt,
         input: chunk,
     });
 
