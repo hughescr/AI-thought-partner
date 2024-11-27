@@ -188,7 +188,7 @@ class SimilarEntityResult {
     }
 }
 
-async function findSimilarEntitiesInNeo4j(entity: Entity): Promise<SimilarEntityResult[]> {
+async function findSimilarEntitiesInNeo4j(entity: Entity, limit = 3): Promise<SimilarEntityResult[]> {
     const session = driver.session();
 
     try {
@@ -201,8 +201,8 @@ async function findSimilarEntitiesInNeo4j(entity: Entity): Promise<SimilarEntity
             WHERE e.embedding IS NOT NULL
             RETURN e, gds.similarity.cosine(e.embedding, $entityEmbedding) AS score
             ORDER BY score DESC
-            LIMIT 3
-        `, { entityEmbedding });
+            LIMIT $limit
+        `, { entityEmbedding, limit });
 
         // Process and return the results
         return _.map(result.records, record => new SimilarEntityResult(
