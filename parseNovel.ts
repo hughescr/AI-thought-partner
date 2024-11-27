@@ -1,5 +1,3 @@
-// TODO: Add BM25 for search
-
 import {
     cachedJinaV2BaseENEmbeddings as embeddings,
     cachedJinaV2SmallENEmbeddings as fastEmbeddings,
