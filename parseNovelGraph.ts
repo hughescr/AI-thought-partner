@@ -23,6 +23,35 @@ if(process.versions.bun === undefined) {
     logger.warn(chalk.yellowBright('Running under Bun, not setting global dispatcher so LLMs might timeout'));
 }
 
+/**
+ * Upsert an array of relationships into the Neo4j database.
+ * Assumes that the entities involved in the relationships are already present in the database.
+ * @param {Relationship[]} relationships - The array of relationships to upsert.
+ * @returns {Promise<void>} - A promise that resolves when the upsert is complete.
+ */
+async function upsertRelationshipsIntoNeo4j(relationships: Relationship[]): Promise<void> {
+    const session = driver.session();
+
+    try {
+        for (const relationship of relationships) {
+            // Cypher query to merge the relationship if it doesn't already exist
+            await session.run(`
+                MATCH (source:Entity {name: $sourceName})
+                MATCH (target:Entity {name: $targetName})
+                MERGE (source)-[r:RELATIONSHIP {type: $type}]->(target)
+                ON CREATE SET r.description = $description
+            `, {
+                sourceName: relationship.source,
+                targetName: relationship.target,
+                type: relationship.type,
+                description: relationship.description || null
+            });
+        }
+    } finally {
+        await session.close();
+    }
+}
+
 const neo4jURL = process.env.NEO4J_URI || '';
 const neo4jUsername = process.env.NEO4J_USER || '';
 const neo4jPassword = process.env.NEO4J_PASSWORD || '';
