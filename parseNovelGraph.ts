@@ -188,11 +188,6 @@ async function refineEntity(entity, extract, context) {
         .withConfig({ runName: 'FetchRelevantExtracts' })
         .invoke(query);
 
-    const additionalDocuments = JSON.stringify(_.map(additionalExtracts, doc => ({
-        extract: doc.pageContent,
-        context: doc.metadata.context,
-    })));
-
     const refinedEntity = await refineEntityPrompt.pipe(structuredRefineLlm).invoke({
         entity: JSON.stringify(entity),
         extract,
