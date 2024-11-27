@@ -440,18 +440,31 @@ const entityAssessmentChain = entityAssessmentPrompt.pipe(entityAssessmentLLMWit
 
 const ERExtractionAnnotation = Annotation.Root({
     novelMetadata: Annotation<NovelMetadata>,
+    novelChunk: Annotation<string>,
+    entities: Annotation<Entity[]>,
 });
 
+async function extractEntities(state: { novelChunk: string }): Promise<{ entities: Entity[] }> {
+    const entitiesResult = await entitiesExtractionChain.invoke({ extract: state.novelChunk });
+    return { entities: entitiesResult };
+}
+
 const workflow = new StateGraph(ERExtractionAnnotation)
+    .addNode('Extract Entities', extractEntities)
     .addNode('Setup Metadata', setupMetadata)
     .addEdge(START, 'Setup Metadata')
-    .addEdge('Setup Metadata', END);
+    .addEdge('Setup Metadata', 'Extract Entities')
+    .addEdge('Extract Entities', END);
 
 const app = workflow.compile();
 
 // END OF AGENT WORKFLOW
 
 // Now run:
-for await (const output of await app.stream({ streamMode: 'values', recursionLimit: 50 })) {
+const initialState = {
+    novelChunk: novelChunks[0],
+};
+
+for await (const output of await app.stream({ streamMode: 'values', recursionLimit: 50, initialState })) {
     logger.info(output);
 }
