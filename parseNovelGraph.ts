@@ -308,7 +308,9 @@ Here is some context about the extract:
 ]);
 const extractionChain = extractionPrompt.pipe(entitiesLLM);
 
-const relationshipsLLM = fastDumbLLM.withStructuredOutput(z.array(RelationshipSchema));
+const RelationshipsSchema = z.array(RelationshipSchema).describe('List of relationships');
+
+const relationshipsLLM = fastDumbLLM.withStructuredOutput(RelationshipsSchema);
 
 const relationshipExtractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
