@@ -217,6 +217,38 @@ async function findSimilarEntitiesInNeo4j(entity: Entity): Promise<SimilarEntity
     }
 }
 
+/**
+ * Update an existing entity in the Neo4j database with information from a replacement entity.
+ * The match is based on name, type, and description.
+ * @param {Entity} existingEntity - The existing entity to be updated.
+ * @param {Entity} replacementEntity - The replacement entity with updated information.
+ * @returns {Promise<void>} - A promise that resolves when the update is complete.
+ */
+async function updateEntityInNeo4j(existingEntity: Entity, replacementEntity: Entity): Promise<void> {
+    const session = driver.session();
+
+    try {
+        // Cypher query to update the existing entity with the replacement entity's properties
+        await session.run(`
+            MATCH (e:Entity {name: $existingName, type: $existingType, description: $existingDescription})
+            SET e.name = $replacementName,
+                e.type = $replacementType,
+                e.description = $replacementDescription,
+                e.aliases = $replacementAliases
+        `, {
+            existingName: existingEntity.name,
+            existingType: existingEntity.type,
+            existingDescription: existingEntity.description,
+            replacementName: replacementEntity.name,
+            replacementType: replacementEntity.type,
+            replacementDescription: replacementEntity.description,
+            replacementAliases: replacementEntity.aliases
+        });
+    } finally {
+        await session.close();
+    }
+}
+
 // END OF HELPER FUNCTIONS
 
 // CHAINS
