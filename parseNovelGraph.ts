@@ -472,7 +472,7 @@ async function refineEntitiesWithContext(state: { novelChunk: string, entities: 
 
         progressBar.update(index + 1);
         return refinementResult;
-    }));
+    });
 
     progressBar.stop();
     logger.info(chalk.green('Entities refined with context.'));
