@@ -1,23 +1,23 @@
 import {
     cachedJinaV2BaseENEmbeddings as embeddings,
     qwen25_32bLLM as slowSmartLLM,
-    nemo_12bLLM as fastDumbLLM,
+    nemo_12bLLM as fastDumbLLM
 } from './lib/LLMs.ts';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
 import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR.ts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
-import { ChatAnthropic } from "@langchain/anthropic";
-import { tool } from "@langchain/core/tools";
-import { z } from "zod";
-import { ToolNode } from "@langchain/langgraph/prebuilt";
+import { ChatAnthropic } from '@langchain/anthropic';
+import { tool } from '@langchain/core/tools';
+import { z } from 'zod';
+import { ToolNode } from '@langchain/langgraph/prebuilt';
 import neo4j, { Driver, Session } from 'neo4j-driver';
 import z from 'zod';
 import { logger } from '@hughescr/logger';
 import _ from 'lodash';
 import chalk from 'chalk';
 
-if (process.versions.bun === undefined) {
+if(process.versions.bun === undefined) {
     logger.info(chalk.greenBright('Running under Node, setting global dispatcher'));
     const { setGlobalDispatcher, Agent } = await import('undici');
     setGlobalDispatcher(new Agent({ headersTimeout: 0, bodyTimeout: 0 })); // ensure we wait for long ollama runs
@@ -58,10 +58,10 @@ const entityExtractionTool = tool(async ({ text }) => {
     // This should return entities and relationships found in the text
     return extractEntitiesAndRelationships(text);
 }, {
-    name: "entityExtraction",
-    description: "Extract entities and relationships from text.",
+    name: 'entityExtraction',
+    description: 'Extract entities and relationships from text.',
     schema: z.object({
-        text: z.string().describe("The text to analyze for entities and relationships."),
+        text: z.string().describe('The text to analyze for entities and relationships.'),
     }),
 });
 
@@ -69,7 +69,7 @@ const tools = [entityExtractionTool];
 const toolNode = new ToolNode(tools);
 
 const model = new ChatAnthropic({
-    model: "claude-3-5-sonnet-20240620",
+    model: 'claude-3-5-sonnet-20240620',
     temperature: 0,
 }).bindTools(tools);
 
@@ -78,11 +78,11 @@ async function extractEntitiesAndRelationships(text: string) {
     // Placeholder for actual logic
     return {
         entities: [
-            { name: "ACME Corp", type: "Organization" },
-            { name: "Q2 2023", type: "TimePeriod" }
+            { name: 'ACME Corp', type: 'Organization' },
+            { name: 'Q2 2023', type: 'TimePeriod' }
         ],
         relationships: [
-            { from: "ACME Corp", to: "Q2 2023", type: "Reported" }
+            { from: 'ACME Corp', to: 'Q2 2023', type: 'Reported' }
         ]
     };
 }
@@ -90,16 +90,16 @@ async function extractEntitiesAndRelationships(text: string) {
 async function storeInNeo4j(entities, relationships) {
     const session: Session = driver.session();
     try {
-        for (const entity of entities) {
+        for(const entity of entities) {
             await session.run(
                 'MERGE (e:Entity {name: $name, type: $type})',
                 { name: entity.name, type: entity.type }
             );
         }
-        for (const relationship of relationships) {
+        for(const relationship of relationships) {
             await session.run(
-                'MATCH (a:Entity {name: $from}), (b:Entity {name: $to}) ' +
-                'MERGE (a)-[:RELATIONSHIP {type: $type}]->(b)',
+                'MATCH (a:Entity {name: $from}), (b:Entity {name: $to}) '
+                + 'MERGE (a)-[:RELATIONSHIP {type: $type}]->(b)',
                 { from: relationship.from, to: relationship.to, type: relationship.type }
             );
         }
@@ -113,31 +113,31 @@ const workflow = new StateGraph(Annotation.Root({
         reducer: (x, y) => x.concat(y),
     })
 }))
-    .addNode("agent", async (state) => {
+    .addNode('agent', async (state) => {
         const messages = state.messages;
         const response = await model.invoke(messages);
         return { messages: [response] };
     })
-    .addNode("tools", toolNode)
-    .addEdge("__start__", "agent")
-    .addConditionalEdges("agent", (state) => {
+    .addNode('tools', toolNode)
+    .addEdge('__start__', 'agent')
+    .addConditionalEdges('agent', (state) => {
         const messages = state.messages;
         const lastMessage = messages[messages.length - 1];
-        if (lastMessage.tool_calls?.length) {
-            return "tools";
+        if(lastMessage.tool_calls?.length) {
+            return 'tools';
         }
-        return "__end__";
+        return '__end__';
     })
-    .addEdge("tools", "agent");
+    .addEdge('tools', 'agent');
 
 const checkpointer = new MemorySaver();
 const app = workflow.compile({ checkpointer });
 
 const chunks = splitter.split(novelText);
-for (const chunk of chunks) {
+for(const chunk of chunks) {
     const finalState = await app.invoke(
         { messages: [new HumanMessage(chunk)] },
-        { configurable: { thread_id: "42" } }
+        { configurable: { thread_id: '42' } }
     );
     const { entities, relationships } = await extractEntitiesAndRelationships(chunk);
     await storeInNeo4j(entities, relationships);
