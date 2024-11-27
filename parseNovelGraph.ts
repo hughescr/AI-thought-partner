@@ -169,6 +169,36 @@ async function generateEntityEmbedding(entity: Entity): Promise<number[]> {
     return await embeddings.embedQuery(description);
 }
 
+/**
+ * Search the Neo4j store using gds.similarity.cosine to find entities matching the embedding of the given entity.
+ * @param {Entity} entity - The entity to search for similar entities in the Neo4j store.
+ * @returns {Promise<{ entity: Entity, score: number }[]>} - An array of found entities and their similarity scores.
+ */
+async function findSimilarEntitiesInNeo4j(entity: Entity): Promise<{ entity: Entity, score: number }[]> {
+    const session = driver.session();
+
+    try {
+        // Generate the embedding for the given entity
+        const entityEmbedding = await generateEntityEmbedding(entity);
+
+        // Cypher query to find similar entities using cosine similarity
+        const result = await session.run(`
+            MATCH (e:Entity)
+            WHERE e.embedding IS NOT NULL
+            RETURN e, gds.similarity.cosine(e.embedding, $entityEmbedding) AS score
+            ORDER BY score DESC
+        `, { entityEmbedding });
+
+        // Process and return the results
+        return result.records.map(record => ({
+            entity: record.get('e').properties,
+            score: record.get('score')
+        }));
+    } finally {
+        await session.close();
+    }
+}
+
 // END OF HELPER FUNCTIONS
 
 // CHAINS
