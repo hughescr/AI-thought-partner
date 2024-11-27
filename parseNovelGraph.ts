@@ -201,16 +201,16 @@ async function refineEntity(entity, extract, context) {
 async function processNovelChunks() {
     const session: Session = driver.session();
     try {
-        for (const chunk of novelChunks) {
+        for(const chunk of novelChunks) {
             const { entities, relationships } = await extractEntitiesAndRelationships(chunk.pageContent);
 
-            for (const entity of entities) {
+            for(const entity of entities) {
                 const refinedEntity = await refineEntity(entity, chunk.pageContent, chunk.metadata.context);
 
                 await session.run(
                     `MERGE (e:Entity {name: $name})
-                     ON CREATE SET e.aliases = $aliases, e.entityType = $entityType, e.description = $description
-                     ON MATCH SET e.aliases = apoc.coll.union(e.aliases, $aliases)`,
+                    ON CREATE SET e.aliases = $aliases, e.entityType = $entityType, e.description = $description
+                    ON MATCH SET e.aliases = apoc.coll.union(e.aliases, $aliases)`,
                     {
                         name: refinedEntity.name,
                         aliases: refinedEntity.aliases,
@@ -220,7 +220,7 @@ async function processNovelChunks() {
                 );
             }
 
-            for (const relationship of relationships) {
+            for(const relationship of relationships) {
                 await session.run(
                     `MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
                     MERGE (a)-[r:RELATIONSHIP {type: $type, description: $description}]->(b)`,
@@ -232,11 +232,12 @@ async function processNovelChunks() {
         await session.close();
     }
 }
+
 const workflow = new StateGraph(ERExtractionAnnotation)
     .addNode('setupMetadata', setupMetadata)
+    .addNode('processNovelChunks', processNovelChunks)
     .addEdge(START, 'setupMetadata')
     .addEdge('setupMetadata', 'processNovelChunks')
-    .addNode('processNovelChunks', processNovelChunks)
     .addEdge('processNovelChunks', END);
 
 const app = workflow.compile();
