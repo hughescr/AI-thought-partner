@@ -183,11 +183,19 @@ Additional documents: {additionalDocuments}`),
 const structuredRefineLlm = slowSmartLLM.withStructuredOutput(EntitySchema);
 
 async function refineEntity(entity, extract, context) {
+    // Perform a lookup in the retriever
     const query = `Name: ${entity.name}. Description: ${entity.description}. Known Aliases: ${entity.aliases.join(', ')}`;
     const additionalExtracts = await extractRetriever
         .withConfig({ runName: 'FetchRelevantExtracts' })
         .invoke(query);
 
+    // Extract the extract and context for each additional document
+    const additionalDocuments = JSON.stringify(_.map(additionalExtracts, doc => ({
+        extract: doc.pageContent,
+        context: doc.metadata.context,
+    })));
+
+    // Refine the entity using the LLM with structured output
     const refinedEntity = await refineEntityPrompt.pipe(structuredRefineLlm).invoke({
         entity: JSON.stringify(entity),
         extract,
