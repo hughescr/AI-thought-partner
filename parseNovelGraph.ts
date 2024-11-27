@@ -144,8 +144,8 @@ async function extractEntitiesAndRelationships(chunk: string) {
             for(const entity of entities) {
                 await session.run(
                     `MERGE (e:Entity {name: $name})
-                     ON CREATE SET e.aliases = $aliases, e.type = $type, e.description = $description
-                     ON MATCH SET e.aliases = apoc.coll.union(e.aliases, $aliases)`,
+                    ON CREATE SET e.aliases = $aliases, e.type = $type, e.description = $description
+                    ON MATCH SET e.aliases = apoc.coll.union(e.aliases, $aliases)`,
                     {
                         name: entity.name,
                         aliases: entity.aliases,
@@ -186,7 +186,7 @@ async function refineEntity(entity, extract, context) {
         .withConfig({ runName: 'FetchRelevantExtracts' })
         .invoke(query);
 
-    const additionalDocuments = _.map(additionalExtracts, doc => doc.pageContent).join('\n');
+    const additionalDocuments = _.map(additionalExtracts, 'pageContent').join('\n');
 
     const refinedEntity = await refineEntityPrompt.pipe(slowSmartLLM).invoke({
         entity: JSON.stringify(entity),
