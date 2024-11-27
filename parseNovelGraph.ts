@@ -23,7 +23,6 @@ if(process.versions.bun === undefined) {
     logger.warn(chalk.yellowBright('Running under Bun, not setting global dispatcher so LLMs might timeout'));
 }
 
-
 const neo4jURL = process.env.NEO4J_URI || '';
 const neo4jUsername = process.env.NEO4J_USER || '';
 const neo4jPassword = process.env.NEO4J_PASSWORD || '';
@@ -325,45 +324,26 @@ Here are additional extracts for context:
 const entityRefinementChain = entityRefinementPrompt.pipe(entityRefinementLLM);
 
 const updateEntityInNeo4jTool = tool(
-  async ({ existingEntity, refinedEntity }: { existingEntity: Entity; refinedEntity: Entity }) => {
-    await updateEntityInNeo4j(existingEntity, refinedEntity);
-  },
-  {
-    name: "updateEntityInNeo4j",
-    description: "Update an existing entity in the Neo4j database with new information.",
-    schema: z.object({
-      existingEntity: z.object({
-        name: z.string(),
-        type: z.string(),
-        description: z.string(),
-        aliases: z.array(z.string())
-      }),
-      refinedEntity: z.object({
-        name: z.string(),
-        type: z.string(),
-        description: z.string(),
-        aliases: z.array(z.string())
-      })
-    })
-  }
+    async ({ existingEntity, refinedEntity }: { existingEntity: Entity, refinedEntity: Entity }) => updateEntityInNeo4j(existingEntity, refinedEntity),
+    {
+        name: 'updateEntityInNeo4j',
+        description: 'Update an existing entity in the Neo4j database with new information.',
+        schema: z.object({
+            existingEntity: EntitySchema,
+            refinedEntity: EntitySchema
+        })
+    }
 );
 
 const insertEntityIntoNeo4jTool = tool(
-  async ({ entity }: { entity: Entity }) => {
-    await insertEntityIntoNeo4j(entity);
-  },
-  {
-    name: "insertEntityIntoNeo4j",
-    description: "Insert a new entity into the Neo4j database.",
-    schema: z.object({
-      entity: z.object({
-        name: z.string(),
-        type: z.string(),
-        description: z.string(),
-        aliases: z.array(z.string())
-      })
-    })
-  }
+    async ({ entity }: { entity: Entity }) => insertEntityIntoNeo4j(entity),
+    {
+        name: 'insertEntityIntoNeo4j',
+        description: 'Insert a new entity into the Neo4j database.',
+        schema: z.object({
+            entity: EntitySchema
+        })
+    }
 );
 
 const entityAssessmentLLMWithTools = fastDumbLLM.bindTools([updateEntityInNeo4jTool, insertEntityIntoNeo4jTool]);
