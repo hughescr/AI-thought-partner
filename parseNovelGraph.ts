@@ -38,6 +38,7 @@ const splitter = new SemanticTextSplitter({
     chunkSize: 2048, // Tokens!
     embeddings: embeddings, // Use fast embeddings for decent semantic splits
     embeddingBatchSize: 128,
+    refinedEntities: Annotation<Entity[]> // Add this line
 });
 
 // NOVEL DATA
@@ -82,6 +83,30 @@ const extractRetriever = vectorStore.asRetriever({
 // END OF NOVEL DATA
 
 // WORKFLOW STAGE FUNCTIONS
+
+
+/**
+ * Refine entities using additional context from extracts.
+ * @param {Object} state - The current state containing novel chunk and entities.
+ * @returns {Promise<Object>} - The updated state with refined entities.
+ */
+async function refineEntitiesWithContext(state: { novelChunk: string, entities: Entity[] }): Promise<{ refinedEntities: Entity[] }> {
+    const refinedEntities = await Promise.all(state.entities.map(async (entity) => {
+        // Retrieve additional extracts for the entity
+        const additionalExtracts = await getExtractsForEntity(entity);
+
+        // Use entityRefinementChain to refine the entity with additional context
+        const refinementResult = await entityRefinementChain.invoke({
+            proposedEntity: entity,
+            originalExtract: state.novelChunk,
+            additionalExtracts: additionalExtracts.map(extract => extract.extract) // Pass only the extract text
+        });
+
+        return refinementResult;
+    }));
+
+    return { refinedEntities };
+}
 
 // END OF WORKFLOW STAGE FUNCTIONS
 
@@ -452,9 +477,11 @@ async function extractEntities(state: { novelChunk: string }): Promise<{ entitie
 const workflow = new StateGraph(ERExtractionAnnotation)
     .addNode('Extract Entities', extractEntities)
     .addNode('Setup Metadata', setupMetadata)
+    .addNode('Refine Entities with Context', refineEntitiesWithContext) // Add this line
     .addEdge(START, 'Setup Metadata')
     .addEdge('Setup Metadata', 'Extract Entities')
-    .addEdge('Extract Entities', END);
+    .addEdge('Extract Entities', 'Refine Entities with Context') // Add this line
+    .addEdge('Refine Entities with Context', END); // Add this line
 
 const app = workflow.compile();
 
