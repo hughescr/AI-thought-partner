@@ -99,12 +99,17 @@ const structuredLlm = slowSmartLLM.withStructuredOutput(OutputSchema);
 
 const extractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
-        You are an expert in text analysis. Your task is to extract entities and relationships from the given text.
-        Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
-        For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.
-        Also, identify relationships between these entities, specifying the type and a brief description of each relationship.
-    `),
-    HumanMessagePromptTemplate.fromTemplate('Here is the text extract with context: {context}'),
+You are an expert in text analysis. Your task is to extract entities and relationships from the given text.
+Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
+For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.
+Also, identify relationships between these entities, specifying the type and a brief description of each relationship.
+`
+    ),
+    HumanMessagePromptTemplate.fromTemplate(`Here is the text extract:
+{extract}
+
+Here is some context about the extract:
+{context}`),
 ]);
 
 const ERExtractionAnnotation = Annotation.Root({
