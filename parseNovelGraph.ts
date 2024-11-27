@@ -180,15 +180,27 @@ Original context: {context}
 Additional documents: {additionalDocuments}`),
 ]);
 
+const RefinedEntitySchema = z.object({
+    name: z.string().describe('The most common name of the entity'),
+    aliases: z.array(z.string()).describe('Updated list of known aliases for the entity'),
+    type: z.enum(['Person', 'Location', 'Organization', 'Theme', 'Concept', 'Vehicle', 'Object']).describe('The type of the entity'),
+    description: z.string().describe('Refined description of the entity'),
+});
+
+const structuredRefineLlm = slowSmartLLM.withStructuredOutput(RefinedEntitySchema);
+
 async function refineEntity(entity, extract, context) {
     const query = `Name: ${entity.name}. Description: ${entity.description}. Known Aliases: ${entity.aliases.join(', ')}`;
     const additionalExtracts = await extractRetriever
         .withConfig({ runName: 'FetchRelevantExtracts' })
         .invoke(query);
 
-    const additionalDocuments = _.map(additionalExtracts, 'pageContent').join('\n');
+    const additionalDocuments = JSON.stringify(_.map(additionalExtracts, doc => ({
+        extract: doc.pageContent,
+        context: doc.metadata.context,
+    })));
 
-    const refinedEntity = await refineEntityPrompt.pipe(slowSmartLLM).invoke({
+    const refinedEntity = await refineEntityPrompt.pipe(structuredRefineLlm).invoke({
         entity: JSON.stringify(entity),
         extract,
         context,
