@@ -77,7 +77,8 @@ const extractRetriever = vectorStore.asRetriever({
     k: 10,
 });
 
-// Define the Zod schema for structured output
+// SCHEMAS
+
 const EntitySchema = z.object({
     name: z.string().describe('The name of the entity'),
     aliases: z.array(z.string()).describe('Known aliases for the entity, if any'),
@@ -96,6 +97,9 @@ const EntitiesAndRelationshipsSchema = z.object({
     entities: z.array(EntitySchema).describe('List of entities'),
     relationships: z.array(RelationshipSchema).describe('List of relationships'),
 }).describe('Entities and relationships');
+
+// END OF SCHEMAS
+// CLASSES
 
 class Entity {
     name: string;
@@ -135,6 +139,9 @@ class ExtractWithContext {
     }
 }
 
+// END OF CLASSES
+// CHAINS
+
 const entitiesAndRelationshipsLLM = fastDumbLLM.withStructuredOutput(EntitiesAndRelationshipsSchema);
 const extractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
@@ -152,6 +159,10 @@ Here is some context about the extract:
 ]);
 const extractionChain = extractionPrompt.pipe(entitiesAndRelationshipsLLM);
 
+// END OF CHAINS
+
+// AGENT WORKFLOW
+
 const ERExtractionAnnotation = Annotation.Root({
     novelMetadata: Annotation<NovelMetadata>,
 });
@@ -163,6 +174,9 @@ const workflow = new StateGraph(ERExtractionAnnotation)
 
 const app = workflow.compile();
 
+// END OF AGENT WORKFLOW
+
+// Now run:
 for await (const output of await app.stream({ streamMode: 'values', recursionLimit: 50 })) {
     logger.info(output);
 }
