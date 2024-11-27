@@ -514,6 +514,14 @@ async function extractRelationships(state: { furtherRefinedEntities: Entity[], n
 
     return { relationships: relationshipsResult };
 }
+/**
+ * Save relationships to Neo4j using upsertRelationshipsIntoNeo4j.
+ * @param {Object} state - The current state containing relationships.
+ * @returns {Promise<void>} - A promise that resolves when the relationships are saved.
+ */
+async function saveRelationshipsToNeo4j(state: { relationships: Relationship[] }): Promise<void> {
+    await upsertRelationshipsIntoNeo4j(state.relationships);
+}
 // END OF WORKFLOW STAGE FUNCTIONS
 
 // AGENT WORKFLOW
@@ -536,7 +544,9 @@ const workflow = new StateGraph(ERExtractionAnnotation)
     .addEdge('Refine Entities with Context', 'Further Refine Entities') // Add this line
     .addNode('Extract Relationships', extractRelationships)
     .addEdge('Further Refine Entities', 'Extract Relationships')
-    .addEdge('Extract Relationships', END);
+    .addNode('Save Relationships to Neo4j', saveRelationshipsToNeo4j)
+    .addEdge('Extract Relationships', 'Save Relationships to Neo4j')
+    .addEdge('Save Relationships to Neo4j', END);
 
 const app = workflow.compile();
 
