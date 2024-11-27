@@ -39,11 +39,8 @@ const splitter = new SemanticTextSplitter({
     embeddingBatchSize: 128,
 });
 
+// NOVEL DATA
 const book = 'Christmas Town beta';
-const storeDirectory = `novels/${book}`;
-const loader: TextLoader = new TextLoader(`novels/${book}.md`);
-const novelText = await loader.load();
-const novelChunks = await splitter.splitDocuments(novelText);
 
 interface NovelMetadata {
     title: string
@@ -51,6 +48,7 @@ interface NovelMetadata {
     today: string
     genre: string
 }
+
 /**
  * Call the retriever to find matching documents
  * @param {GraphState} state - The current state of the agent, including the query.
@@ -69,6 +67,10 @@ async function setupMetadata(): Promise<{ novelMetadata: NovelMetadata }> {
     };
 }
 
+const storeDirectory = `novels/${book}`;
+const loader: TextLoader = new TextLoader(`novels/${book}.md`);
+const novelText = await loader.load();
+const novelChunks = await splitter.splitDocuments(novelText);
 const vectorStore = await FaissStoreWithMMR.load(
     storeDirectory,
     embeddings
@@ -76,6 +78,15 @@ const vectorStore = await FaissStoreWithMMR.load(
 const extractRetriever = vectorStore.asRetriever({
     k: 10,
 });
+// END OF NOVEL DATA
+
+// WORKFLOW STAGE FUNCTIONS
+
+// END OF WORKFLOW STAGE FUNCTIONS
+
+// HELPER FUNCTIONS
+
+// END OF HELPER FUNCTIONS
 
 // SCHEMAS
 
@@ -160,31 +171,28 @@ Here is some context about the extract:
 const extractionChain = extractionPrompt.pipe(entitiesAndRelationshipsLLM);
 
 // Create a new structured output LLM for a single EntitySchema
-const entityRefinerLLM = fastDumbLLM.withStructuredOutput(EntitySchema);
-
+const entityRefinementLLM = fastDumbLLM.withStructuredOutput(EntitySchema);
 // Define the prompt for refining an entity
 const entityRefinementPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in entity refinement. Your task is to refine a proposed entity using additional context.
 You will receive a proposed entity, the original extract from which it was extracted, and additional extracts for context.
 Your goal is to improve the entity's data, particularly its list of aliases and the name by which it is most commonly known.
-Use the additional extracts to refine the entity's details and ensure the most accurate and complete representation.
-`),
+Use the additional extracts to refine the entity's details and ensure the most accurate and complete representation.`
+    ),
     HumanMessagePromptTemplate.fromTemplate(`
 Here is the proposed entity:
 {proposedEntity}
 
 Here is the original extract and context:
-Extract: {originalExtract.extract}
-Context: {originalExtract.context}
+Extract: {originalExtract}
+Context: {originalContext}
 
 Here are additional extracts for context:
-{additionalExtracts.map(extract => \`Extract: \${extract.extract}\nContext: \${extract.context}\`).join('\n\n')}
-`)
+{additionalExtracts}`
+    )
 ]);
-
-// Combine the prompt with the LLM to create the refinement chain
-const entityRefinementChain = entityRefinementPrompt.pipe(entityRefinerLLM);
+const entityRefinementChain = entityRefinementPrompt.pipe(entityRefinementLLM);
 
 // END OF CHAINS
 
