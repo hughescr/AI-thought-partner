@@ -95,23 +95,30 @@ const OutputSchema = z.object({
     relationships: z.array(RelationshipSchema).describe('List of extracted relationships'),
 }).describe('Extracted entities and relationships from the text.');
 
+import { ChatTemplatePrompt } from 'langchain/prompts';
+
 const structuredLlm = slowSmartLLM.withStructuredOutput(OutputSchema);
+
+const extractionPrompt = new ChatTemplatePrompt()
+    .addSystemMessage(`
+        You are an expert in text analysis. Your task is to extract entities and relationships from the given text.
+        Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
+        For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.
+        Also, identify relationships between these entities, specifying the type and a brief description of each relationship.
+    `)
+    .addUserMessage('Here is the text extract with context: {context}');
 
 const ERExtractionAnnotation = Annotation.Root({
     novelMetadata: Annotation<NovelMetadata>,
 });
 
 async function extractEntitiesAndRelationships(chunk: string) {
-    const prompt = `
-        You are an expert in text analysis. Your task is to extract entities and relationships from the given text.
-        Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
-        For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.
-        Also, identify relationships between these entities, specifying the type and a brief description of each relationship.
-    `;
+    const context = await extractRetriever
+        .withConfig({ runName: 'FetchRelevantExtracts' })
+        .invoke(chunk);
 
     const result = await structuredLlm.invoke({
-        prompt,
-        input: chunk,
+        prompt: extractionPrompt.format({ context }),
     });
 
     const { entities, relationships } = result;
