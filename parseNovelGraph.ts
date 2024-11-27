@@ -163,7 +163,7 @@ async function generateEntityEmbedding(entity: Entity): Promise<number[]> {
         Type: ${entity.type}
         Description: ${entity.description}
         Aliases: ${entity.aliases.join(', ')}
-    `);
+    `;
 
     // Trim the description using lodash
     const trimmedDescription = _.trim(description);
