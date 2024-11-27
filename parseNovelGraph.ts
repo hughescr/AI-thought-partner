@@ -39,6 +39,7 @@ const splitter = new SemanticTextSplitter({
     chunkSize: 2048, // Tokens!
     embeddings: embeddings, // Use fast embeddings for decent semantic splits
     embeddingBatchSize: 128,
+    relationships: Annotation<Relationship[]>
 });
 
 // NOVEL DATA
@@ -496,6 +497,24 @@ async function furtherRefineEntities(state: { entities: Entity[] }): Promise<{ e
 
     return { entities: updatedEntities };
 }
+/**
+ * Extract relationships using the relationshipExtractionChain.
+ * @param {Object} state - The current state containing further refined entities and novel chunk.
+ * @returns {Promise<Object>} - The updated state with extracted relationships.
+ */
+async function extractRelationships(state: { furtherRefinedEntities: Entity[], novelChunk: string }): Promise<{ relationships: Relationship[] }> {
+    const relationshipsResult = await relationshipExtractionChain.invoke({
+        extract: state.novelChunk,
+        entities: state.furtherRefinedEntities.map(entity => ({
+            name: entity.name,
+            type: entity.type,
+            description: entity.description,
+            aliases: entity.aliases
+        }))
+    });
+
+    return { relationships: relationshipsResult };
+}
 // END OF WORKFLOW STAGE FUNCTIONS
 
 // AGENT WORKFLOW
@@ -515,7 +534,9 @@ const workflow = new StateGraph(ERExtractionAnnotation)
     .addEdge('Extract Entities', 'Refine Entities with Context') // Add this line
     .addNode('Further Refine Entities', furtherRefineEntities) // Add this line
     .addEdge('Refine Entities with Context', 'Further Refine Entities') // Add this line
-    .addEdge('Further Refine Entities', END); // Add this line
+    .addNode('Extract Relationships', extractRelationships)
+    .addEdge('Further Refine Entities', 'Extract Relationships')
+    .addEdge('Extract Relationships', END);
 
 const app = workflow.compile();
 
