@@ -9,6 +9,7 @@ import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR.ts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import neo4j, { Driver, Session, Node } from 'neo4j-driver';
+import { tool } from '@langchain/core/tools';
 import z from 'zod';
 import { logger } from '@hughescr/logger';
 import _ from 'lodash';
@@ -323,16 +324,49 @@ Here are additional extracts for context:
 ]);
 const entityRefinementChain = entityRefinementPrompt.pipe(entityRefinementLLM);
 
-const entityAssessmentLLM = fastDumbLLM.withToolCalling({
-    tools: {
-        updateEntityInNeo4j: async (existingEntity: Entity, refinedEntity: Entity) => {
-            await updateEntityInNeo4j(existingEntity, refinedEntity);
-        },
-        insertEntityIntoNeo4j: async (entity: Entity) => {
-            await insertEntityIntoNeo4j(entity);
-        }
-    }
-});
+const updateEntityInNeo4jTool = tool(
+  async ({ existingEntity, refinedEntity }: { existingEntity: Entity; refinedEntity: Entity }) => {
+    await updateEntityInNeo4j(existingEntity, refinedEntity);
+  },
+  {
+    name: "updateEntityInNeo4j",
+    description: "Update an existing entity in the Neo4j database with new information.",
+    schema: z.object({
+      existingEntity: z.object({
+        name: z.string(),
+        type: z.string(),
+        description: z.string(),
+        aliases: z.array(z.string())
+      }),
+      refinedEntity: z.object({
+        name: z.string(),
+        type: z.string(),
+        description: z.string(),
+        aliases: z.array(z.string())
+      })
+    })
+  }
+);
+
+const insertEntityIntoNeo4jTool = tool(
+  async ({ entity }: { entity: Entity }) => {
+    await insertEntityIntoNeo4j(entity);
+  },
+  {
+    name: "insertEntityIntoNeo4j",
+    description: "Insert a new entity into the Neo4j database.",
+    schema: z.object({
+      entity: z.object({
+        name: z.string(),
+        type: z.string(),
+        description: z.string(),
+        aliases: z.array(z.string())
+      })
+    })
+  }
+);
+
+const entityAssessmentLLMWithTools = fastDumbLLM.bindTools([updateEntityInNeo4jTool, insertEntityIntoNeo4jTool]);
 
 const entityAssessmentPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
@@ -349,7 +383,7 @@ Here are the similar entities:
     )
 ]);
 
-const entityAssessmentChain = entityAssessmentPrompt.pipe(entityAssessmentLLM);
+const entityAssessmentChain = entityAssessmentPrompt.pipe(entityAssessmentLLMWithTools);
 
 // END OF CHAINS
 
