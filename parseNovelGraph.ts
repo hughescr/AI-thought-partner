@@ -22,6 +22,34 @@ if(process.versions.bun === undefined) {
     logger.warn(chalk.yellowBright('Running under Bun, not setting global dispatcher so LLMs might timeout'));
 }
 
+/**
+ * Insert a new entity into the Neo4j database.
+ * @param {Entity} entity - The entity to be inserted.
+ * @returns {Promise<void>} - A promise that resolves when the insertion is complete.
+ */
+async function insertEntityIntoNeo4j(entity: Entity): Promise<void> {
+    const session = driver.session();
+
+    try {
+        // Cypher query to create a new entity node with the given properties
+        await session.run(`
+            CREATE (e:Entity {
+                name: $name,
+                type: $type,
+                description: $description,
+                aliases: $aliases
+            })
+        `, {
+            name: entity.name,
+            type: entity.type,
+            description: entity.description,
+            aliases: entity.aliases
+        });
+    } finally {
+        await session.close();
+    }
+}
+
 const neo4jURL = process.env.NEO4J_URI || '';
 const neo4jUsername = process.env.NEO4J_USER || '';
 const neo4jPassword = process.env.NEO4J_PASSWORD || '';
