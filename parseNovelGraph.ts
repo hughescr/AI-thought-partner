@@ -1,5 +1,5 @@
 import {
-    cachedJinaV2BaseENEmbeddings as embeddings,
+    cachedJinaV2SmallENEmbeddings as embeddings,
     qwen25_32bLLM as slowSmartLLM,
     nemo_12bLLM as fastDumbLLM
 } from './lib/LLMs.ts';
