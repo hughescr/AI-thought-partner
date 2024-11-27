@@ -122,9 +122,46 @@ async function extractEntitiesAndRelationships(chunk: string) {
         .withConfig({ runName: 'FetchRelevantExtracts' })
         .invoke(chunk);
 
-    const result = await structuredLlm.invoke({
-        prompt: extractionPrompt.format({ extract, context }),
-    });
+    const formattedResults = results.map(doc => ({
+        extract: doc.pageContent,
+        context: doc.metadata.context,
+    }));
+
+    for (const { extract, context } of formattedResults) {
+        const result = await structuredLlm.invoke({
+            prompt: extractionPrompt.format({ extract, context }),
+        });
+
+        const { entities, relationships } = result;
+
+        // Use vectorStore to disambiguate entities
+        for (const entity of entities) {
+            const context = await extractRetriever
+                .withConfig({ runName: 'FetchRelevantExtracts' })
+                .invoke(entity.name);
+            entity.description += ` Context: ${context}`;
+        }
+
+        const session: Session = driver.session();
+        try {
+            for (const entity of entities) {
+                await session.run(
+                    'MERGE (e:Entity {name: $name, type: $type, description: $description})',
+                    entity
+                );
+            }
+
+            for (const relationship of relationships) {
+                await session.run(
+                    `MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
+                    MERGE (a)-[r:RELATIONSHIP {type: $type, description: $description}]->(b)`,
+                    relationship
+                );
+            }
+        } finally {
+            await session.close();
+        }
+    }
 
     const { entities, relationships } = result;
 
