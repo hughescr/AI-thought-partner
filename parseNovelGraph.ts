@@ -168,10 +168,75 @@ async function extractEntitiesAndRelationships(chunk: string) {
     }
 }
 
-const workflow = new StateGraph(ERExtractionAnnotation)
+const refineEntityPrompt = ChatPromptTemplate.fromMessages([
+    SystemMessagePromptTemplate.fromTemplate(`
+You are an expert in entity refinement. Your task is to refine a proposed entity extracted from a novel using additional context from the novel.
+You will receive a proposed entity, the original extract, its context, and additional extracts that might be relevant.
+Use the additional extracts to refine the entity proposal, update the list of aliases, and ensure the entity's name is the most common form.`),
+    HumanMessagePromptTemplate.fromTemplate(`
+Original proposed entity: {entity}
+Original extract: {extract}
+Original context: {context}
+Additional documents: {additionalDocuments}`),
+]);
+
+async function refineEntity(entity, extract, context) {
+    const query = `Name: ${entity.name}. Description: ${entity.description}. Known Aliases: ${entity.aliases.join(', ')}`;
+    const additionalExtracts = await extractRetriever
+        .withConfig({ runName: 'FetchRelevantExtracts' })
+        .invoke(query);
+
+    const additionalDocuments = _.map(additionalExtracts, doc => doc.pageContent).join('\n');
+
+    const refinedEntity = await refineEntityPrompt.pipe(slowSmartLLM).invoke({
+        entity: JSON.stringify(entity),
+        extract,
+        context,
+        additionalDocuments,
+    });
+
+    return refinedEntity;
+}
+
+async function processNovelChunks() {
+    const session: Session = driver.session();
+    try {
+        for (const chunk of novelChunks) {
+            const { entities, relationships } = await extractEntitiesAndRelationships(chunk.pageContent);
+
+            for (const entity of entities) {
+                const refinedEntity = await refineEntity(entity, chunk.pageContent, chunk.metadata.context);
+
+                await session.run(
+                    `MERGE (e:Entity {name: $name})
+                     ON CREATE SET e.aliases = $aliases, e.entityType = $entityType, e.description = $description
+                     ON MATCH SET e.aliases = apoc.coll.union(e.aliases, $aliases)`,
+                    {
+                        name: refinedEntity.name,
+                        aliases: refinedEntity.aliases,
+                        entityType: refinedEntity.type,
+                        description: refinedEntity.description
+                    }
+                );
+            }
+
+            for (const relationship of relationships) {
+                await session.run(
+                    `MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
+                    MERGE (a)-[r:RELATIONSHIP {type: $type, description: $description}]->(b)`,
+                    relationship
+                );
+            }
+        }
+    } finally {
+        await session.close();
+    }
+}
     .addNode('setupMetadata', setupMetadata)
     .addEdge(START, 'setupMetadata')
-    .addEdge('setupMetadata', END);
+    .addEdge('setupMetadata', 'processNovelChunks')
+    .addNode('processNovelChunks', processNovelChunks)
+    .addEdge('processNovelChunks', END);
 
 const app = workflow.compile();
 
