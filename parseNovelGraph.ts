@@ -101,10 +101,9 @@ const RelationshipSchema = z.object({
     description: z.string().optional().describe('Optional description'),
 });
 
-const EntitiesAndRelationshipsSchema = z.object({
+const EntitiesSchema = z.object({
     entities: z.array(EntitySchema).describe('List of entities'),
-    relationships: z.array(RelationshipSchema).describe('List of relationships'),
-}).describe('Entities and relationships');
+}).describe('Entities');
 
 // END OF SCHEMAS
 
@@ -293,14 +292,13 @@ async function insertEntityIntoNeo4j(entity: Entity): Promise<void> {
 
 // CHAINS
 
-const entitiesAndRelationshipsLLM = fastDumbLLM.withStructuredOutput(EntitiesAndRelationshipsSchema);
+const entitiesLLM = fastDumbLLM.withStructuredOutput(EntitiesSchema);
 const extractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
-You are an expert in text analysis. Your task is to extract entities and relationships from the given text extract and its context.
+You are an expert in text analysis. Your task is to extract entities from the given text extract and its context.
 You will receive a text extract and some context about it in the user prompt.
 Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
-For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.
-Also, identify relationships between these entities, specifying the type and a brief description of each relationship.`
+For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.`
     ),
     HumanMessagePromptTemplate.fromTemplate(`Here is the text extract:
 {extract}
@@ -308,7 +306,7 @@ Also, identify relationships between these entities, specifying the type and a b
 Here is some context about the extract:
 {context}`),
 ]);
-const extractionChain = extractionPrompt.pipe(entitiesAndRelationshipsLLM);
+const extractionChain = extractionPrompt.pipe(entitiesLLM);
 
 // Create a new structured output LLM for a single EntitySchema
 const entityRefinementLLM = fastDumbLLM.withStructuredOutput(EntitySchema);
