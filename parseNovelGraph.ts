@@ -23,6 +23,22 @@ if(process.versions.bun === undefined) {
     logger.warn(chalk.yellowBright('Running under Bun, not setting global dispatcher so LLMs might timeout'));
 }
 
+/**
+ * Retrieve matching documents for an entity and map them to ExtractWithContext objects.
+ * @param {Entity} entity - The entity to search for in the vectorstore.
+ * @returns {Promise<ExtractWithContext[]>} - An array of ExtractWithContext objects.
+ */
+async function getExtractsForEntity(entity: Entity): Promise<ExtractWithContext[]> {
+    // Get the string representation of the entity
+    const entityString = entityToStringRepresentation(entity);
+
+    // Query the extractRetriever to get matching documents
+    const documents = await extractRetriever.invoke(entityString);
+
+    // Map the documents to ExtractWithContext objects
+    return documents.map(doc => new ExtractWithContext(doc.pageContent, doc.metadata.context));
+}
+
 const neo4jURL = process.env.NEO4J_URI || '';
 const neo4jUsername = process.env.NEO4J_USER || '';
 const neo4jPassword = process.env.NEO4J_PASSWORD || '';
