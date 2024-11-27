@@ -101,9 +101,8 @@ const RelationshipSchema = z.object({
     description: z.string().optional().describe('Optional description'),
 });
 
-const EntitiesSchema = z.object({
-    entities: z.array(EntitySchema).describe('List of entities'),
-}).describe('Entities');
+const EntitiesSchema = z.array(EntitySchema).describe('List of entities');
+const RelationshipsSchema = z.array(RelationshipSchema).describe('List of relationships');
 
 // END OF SCHEMAS
 
@@ -308,10 +307,8 @@ Here is some context about the extract:
 ]);
 const extractionChain = extractionPrompt.pipe(entitiesLLM);
 
-const RelationshipsSchema = z.array(RelationshipSchema).describe('List of relationships');
 
 const relationshipsLLM = fastDumbLLM.withStructuredOutput(RelationshipsSchema);
-
 const relationshipExtractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in relationship extraction. Your task is to identify relationships among the given entities within the provided text extract and its context.
