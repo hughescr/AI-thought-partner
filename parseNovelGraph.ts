@@ -150,34 +150,6 @@ class ExtractWithContext {
 
 // END OF CLASSES
 
-/**
- * Insert a new entity into the Neo4j database.
- * @param {Entity} entity - The entity to be inserted.
- * @returns {Promise<void>} - A promise that resolves when the insertion is complete.
- */
-async function insertEntityIntoNeo4j(entity: Entity): Promise<void> {
-    const session = driver.session();
-
-    try {
-        // Cypher query to create a new entity node with the given properties
-        await session.run(`
-            CREATE (e:Entity {
-                name: $name,
-                type: $type,
-                description: $description,
-                aliases: $aliases
-            })
-        `, {
-            name: entity.name,
-            type: entity.type,
-            description: entity.description,
-            aliases: entity.aliases
-        });
-    } finally {
-        await session.close();
-    }
-}
-
 // HELPER FUNCTIONS
 
 /**
@@ -272,6 +244,34 @@ async function updateEntityInNeo4j(existingEntity: Entity, replacementEntity: En
             replacementType: replacementEntity.type,
             replacementDescription: replacementEntity.description,
             replacementAliases: replacementEntity.aliases
+        });
+    } finally {
+        await session.close();
+    }
+}
+
+/**
+ * Insert a new entity into the Neo4j database.
+ * @param {Entity} entity - The entity to be inserted.
+ * @returns {Promise<void>} - A promise that resolves when the insertion is complete.
+ */
+async function insertEntityIntoNeo4j(entity: Entity): Promise<void> {
+    const session = driver.session();
+
+    try {
+        // Cypher query to create a new entity node with the given properties
+        await session.run(`
+            CREATE (e:Entity {
+                name: $name,
+                type: $type,
+                description: $description,
+                aliases: $aliases
+            })
+        `, {
+            name: entity.name,
+            type: entity.type,
+            description: entity.description,
+            aliases: entity.aliases
         });
     } finally {
         await session.close();
