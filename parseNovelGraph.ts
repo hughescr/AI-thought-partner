@@ -255,7 +255,7 @@ async function updateEntityInNeo4j(existingEntity: Entity, replacementEntity: En
             replacementName: replacementEntity.name,
             replacementType: replacementEntity.type,
             replacementDescription: replacementEntity.description,
-            replacementAliases: replacementEntity.aliases
+            replacementAliases: replacementEntity.aliases,
         });
     } finally {
         await session.close();
@@ -293,7 +293,7 @@ async function insertEntityIntoNeo4j(entity: Entity): Promise<void> {
             name: entity.name,
             type: entity.type,
             description: entity.description,
-            aliases: entity.aliases
+            aliases: entity.aliases,
         });
     } finally {
         await session.close();
