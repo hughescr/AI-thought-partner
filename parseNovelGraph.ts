@@ -10,6 +10,7 @@ import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import neo4j, { Driver } from 'neo4j-driver';
 import { tool } from '@langchain/core/tools';
+import { ToolNode } from '@langchain/langgraph/prebuilt';
 import z from 'zod';
 import { logger } from '@hughescr/logger';
 import _ from 'lodash';
@@ -38,7 +39,6 @@ const splitter = new SemanticTextSplitter({
     chunkSize: 2048, // Tokens!
     embeddings: embeddings, // Use fast embeddings for decent semantic splits
     embeddingBatchSize: 128,
-    furtherRefinedEntities: Annotation<Entity[]> // Add this line
 });
 
 // NOVEL DATA
@@ -244,7 +244,7 @@ async function findSimilarEntitiesInNeo4j(entity: Entity, limit = 3): Promise<Si
  * @param {Entity} replacementEntity - The replacement entity with updated information.
  * @returns {Promise<void>} - A promise that resolves when the update is complete.
  */
-async function updateEntityInNeo4j(existingEntity: Entity, replacementEntity: Entity): Promise<void> {
+async function updateEntityInNeo4j(existingEntity: Entity, replacementEntity: Entity): Promise<Entity> {
     const session = driver.session();
 
     try {
@@ -272,6 +272,8 @@ async function updateEntityInNeo4j(existingEntity: Entity, replacementEntity: En
     } finally {
         await session.close();
     }
+
+    return replacementEntity;
 }
 
 /**
@@ -279,7 +281,7 @@ async function updateEntityInNeo4j(existingEntity: Entity, replacementEntity: En
  * @param {Entity} entity - The entity to be inserted.
  * @returns {Promise<void>} - A promise that resolves when the insertion is complete.
  */
-async function insertEntityIntoNeo4j(entity: Entity): Promise<void> {
+async function insertEntityIntoNeo4j(entity: Entity): Promise<Entity> {
     const session = driver.session();
 
     try {
@@ -305,6 +307,8 @@ async function insertEntityIntoNeo4j(entity: Entity): Promise<void> {
     } finally {
         await session.close();
     }
+
+    return entity;
 }
 
 /**
@@ -414,7 +418,9 @@ const insertEntityIntoNeo4jTool = tool(
     }
 );
 
-const entityAssessmentLLMWithTools = fastDumbLLM.bindTools([updateEntityInNeo4jTool, insertEntityIntoNeo4jTool]);
+const entityAssessmentTools = [updateEntityInNeo4jTool, insertEntityIntoNeo4jTool];
+const entityAssessmentToolsNode = new ToolNode(entityAssessmentTools);
+const entityAssessmentLLMWithTools = fastDumbLLM.bindTools(entityAssessmentTools);
 const entityAssessmentPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in entity assessment and refinement. Your task is to determine if a proposed entity matches any of the similar entities provided.
@@ -445,7 +451,7 @@ async function extractEntities(state: { novelChunk: string }): Promise<{ entitie
  * @param {Object} state - The current state containing novel chunk and entities.
  * @returns {Promise<Object>} - The updated state with refined entities.
  */
-async function refineEntitiesWithContext(state: { novelChunk: string, entities: Entity[] }): Promise<{ refinedEntities: Entity[] }> {
+async function refineEntitiesWithContext(state: { novelChunk: string, entities: Entity[] }): Promise<{entities: Entity[] }> {
     const refinedEntities = await Promise.all(_.map(state.entities, async (entity) => {
         // Retrieve additional extracts for the entity
         const additionalExtracts = await getExtractsForEntity(entity);
@@ -460,7 +466,7 @@ async function refineEntitiesWithContext(state: { novelChunk: string, entities: 
         return refinementResult;
     }));
 
-    return { refinedEntities };
+    return { entities: refinedEntities };
 }
 
 /**
@@ -468,26 +474,27 @@ async function refineEntitiesWithContext(state: { novelChunk: string, entities: 
  * @param {Object} state - The current state containing refined entities.
  * @returns {Promise<Object>} - The updated state with further refined entities.
  */
-async function furtherRefineEntities(state: { refinedEntities: Entity[] }): Promise<{ furtherRefinedEntities: Entity[] }> {
-    const furtherRefinedEntities = await Promise.all(state.refinedEntities.map(async (entity) => {
+async function furtherRefineEntities(state: { entities: Entity[] }): Promise<{ entities: Entity[] }> {
+    const updatedEntities = await Promise.all(_.map(state.entities, async (entity) => {
         // Find similar entities in Neo4j
         const similarEntities = await findSimilarEntitiesInNeo4j(entity);
 
         // Use entityAssessmentChain to refine the entity with similar entities
         const assessmentResult = await entityAssessmentChain.invoke({
             proposedEntity: entity,
-            similarEntities: similarEntities.map(similar => ({
+            similarEntities: _.map(similarEntities, similar => ({
                 name: similar.entity.name,
                 type: similar.entity.type,
                 description: similar.entity.description,
                 aliases: similar.entity.aliases
             }))
         });
+        const toolResult = JSON.parse(await entityAssessmentToolsNode.invoke({ messages: [assessmentResult] }));
 
-        return assessmentResult;
+        return toolResult;
     }));
 
-    return { furtherRefinedEntities };
+    return { entities: updatedEntities };
 }
 // END OF WORKFLOW STAGE FUNCTIONS
 
