@@ -1,17 +1,8 @@
-import {
-    cachedJinaV2BaseENEmbeddings as embeddings,
-    qwen25_32bLLM as structureableLLM
-} from './lib/LLMs.ts';
-import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
-import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
+import { qwen25_32bLLM as structureableLLM } from './lib/LLMs.ts';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import neo4j, { Driver, Session } from 'neo4j-driver';
 import z from 'zod';
-import _ from 'lodash';
-import chalk from 'chalk';
-import cliProgress from 'cli-progress';
-import { logger } from '@hughescr/logger';
 
 const neo4jURL = process.env.NEO4J_URI || '';
 const neo4jUsername = process.env.NEO4J_USER || '';
@@ -21,6 +12,12 @@ const driver: Driver = neo4j.driver(
     neo4jURL,
     neo4j.auth.basic(neo4jUsername, neo4jPassword)
 );
+const textSplitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 8 * 1024,
+    keepSeparator: true,
+    separators: ['##'],
+});
+
 const loader: TextLoader = new TextLoader(`novels/${book}.md`);
 const novelText = await loader.load();
 const textChunks = textSplitter.splitText(novelText);
@@ -50,30 +47,23 @@ async function extractEntitiesAndRelationships(text: string) {
     return response;
 }
 
-async function upsertEntities(session: Session, entities: any[]) {
+async function upsertEntities(session: Session, entities: Array<{ name: string; type: string; description: string }>) {
     for (const entity of entities) {
         await session.run(
-            `MERGE (e:Entity {name: $name, type: $type, description: $description})`,
+            'MERGE (e:Entity {name: $name, type: $type, description: $description})',
             entity
         );
     }
 }
 
-async function upsertRelationships(session: Session, relationships: any[]) {
+async function upsertRelationships(session: Session, relationships: Array<{ source: string; target: string; type: string; description?: string }>) {
     for (const relationship of relationships) {
         await session.run(
-            `MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
-             MERGE (a)-[:${relationship.type} {description: $description}]->(b)`,
+            'MATCH (a:Entity {name: $source}), (b:Entity {name: $target}) MERGE (a)-[:' + relationship.type + ' {description: $description}]->(b)',
             relationship
         );
     }
 }
-
-const textSplitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 8 * 1024,
-    keepSeparator: true,
-    separators: ['##'],
-});
 
 const session = driver.session();
 try {
