@@ -43,6 +43,7 @@ const book = 'Christmas Town beta';
 const storeDirectory = `novels/${book}`;
 const loader: TextLoader = new TextLoader(`novels/${book}.md`);
 const novelText = await loader.load();
+const novelChunks = await splitter.splitDocuments(novelText);
 
 interface NovelMetadata {
     title: string
@@ -95,7 +96,7 @@ const OutputSchema = z.object({
     relationships: z.array(RelationshipSchema).describe('List of extracted relationships'),
 }).describe('Extracted entities and relationships from the text.');
 
-const structuredLlm = slowSmartLLM.withStructuredOutput(OutputSchema);
+const structuredLlm = fastDumbLLM.withStructuredOutput(OutputSchema);
 
 const extractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
@@ -103,11 +104,10 @@ You are an expert in text analysis. Your task is to extract entities and relatio
 You will receive a text extract and some context about it in the user prompt.
 Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
 For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.
-Also, identify relationships between these entities, specifying the type and a brief description of each relationship.
-`
+Also, identify relationships between these entities, specifying the type and a brief description of each relationship.`
     ),
     HumanMessagePromptTemplate.fromTemplate(`Here is the text extract:
-{extract}
+{chunk}
 
 Here is some context about the extract:
 {context}`),
@@ -123,91 +123,47 @@ async function extractEntitiesAndRelationships(chunk: string) {
         .invoke(chunk);
 
     const formattedResults = _.map(results, doc => ({
-        extract: doc.pageContent,
+        chunk: doc.pageContent,
         context: doc.metadata.context,
     }));
 
-    for (const { extract, context } of formattedResults) {
-        const result = await structuredLlm.invoke({
-            prompt: extractionPrompt.format({ extract, context }),
-        });
+    const session: Session = driver.session();
+    try {
+        for(const piece of formattedResults) {
+            const { entities, relationships } = await extractionPrompt.pipe(structuredLlm).invoke(piece);
 
-        const { entities, relationships } = result;
+            // Use vectorStore to disambiguate entities
+            for(const entity of entities) {
+                const context = await extractRetriever
+                    .withConfig({ runName: 'FetchRelevantExtracts' })
+                    .invoke(entity.name);
+                entity.description += ` Context: ${context}`;
+            }
 
-        // Use vectorStore to disambiguate entities
-        for (const entity of entities) {
-            const context = await extractRetriever
-                .withConfig({ runName: 'FetchRelevantExtracts' })
-                .invoke(entity.name);
-            entity.description += ` Context: ${context}`;
-        }
-
-        const session: Session = driver.session();
-        try {
-            for (const entity of entities) {
+            for(const entity of entities) {
                 await session.run(
                     'MERGE (e:Entity {name: $name, type: $type, description: $description})',
                     entity
                 );
             }
 
-            for (const relationship of relationships) {
+            for(const relationship of relationships) {
                 await session.run(
                     `MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
                     MERGE (a)-[r:RELATIONSHIP {type: $type, description: $description}]->(b)`,
                     relationship
                 );
             }
-        } finally {
-            await session.close();
-        }
-    }
-
-    const { entities, relationships } = result;
-
-    // Use vectorStore to disambiguate entities
-    for(const entity of entities) {
-        const context = await extractRetriever
-                .withConfig({ runName: 'FetchRelevantExtracts' })
-                .invoke(entity.name);
-        entity.description += ` Context: ${context}`;
-    }
-
-    const session: Session = driver.session();
-    try {
-        for(const entity of entities) {
-            await session.run(
-                'MERGE (e:Entity {name: $name, type: $type, description: $description})',
-                entity
-            );
-        }
-
-        for(const relationship of relationships) {
-            await session.run(
-                `MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
-                MERGE (a)-[r:RELATIONSHIP {type: $type, description: $description}]->(b)`,
-                relationship
-            );
         }
     } finally {
         await session.close();
     }
 }
 
-async function processChunks(state) {
-    const chunks = await splitter.splitDocuments(novelText);
-    for(const chunk of chunks) {
-        await extractEntitiesAndRelationships(chunk.pageContent);
-    }
-    return state;
-}
-
 const workflow = new StateGraph(ERExtractionAnnotation)
-    .addNode('processChunks', processChunks)
     .addNode('setupMetadata', setupMetadata)
     .addEdge(START, 'setupMetadata')
-    .addEdge('setupMetadata', 'processChunks')
-    .addEdge('processChunks', END);
+    .addEdge('setupMetadata', END);
 
 const app = workflow.compile();
 
