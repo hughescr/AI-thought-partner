@@ -201,6 +201,7 @@ async function findSimilarEntitiesInNeo4j(entity: Entity): Promise<SimilarEntity
             WHERE e.embedding IS NOT NULL
             RETURN e, gds.similarity.cosine(e.embedding, $entityEmbedding) AS score
             ORDER BY score DESC
+            LIMIT 3
         `, { entityEmbedding });
 
         // Process and return the results
