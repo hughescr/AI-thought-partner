@@ -231,7 +231,7 @@ async function processNovelChunks() {
     } finally {
         await session.close();
     }
-}
+const workflow = new StateGraph(ERExtractionAnnotation)
     .addNode('setupMetadata', setupMetadata)
     .addEdge(START, 'setupMetadata')
     .addEdge('setupMetadata', 'processNovelChunks')
