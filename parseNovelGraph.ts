@@ -35,7 +35,7 @@ const driver: Driver = neo4j.driver(
 );
 
 const splitter = new SemanticTextSplitter({
-    showProgress: false,
+    showProgress: true,
     initialChunkSize: 32, // Tokens!
     chunkSize: 2048, // Tokens!
     embeddings: embeddings, // Use fast embeddings for decent semantic splits
