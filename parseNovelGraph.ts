@@ -38,6 +38,7 @@ const splitter = new SemanticTextSplitter({
     chunkSize: 2048, // Tokens!
     embeddings: embeddings, // Use fast embeddings for decent semantic splits
     embeddingBatchSize: 128,
+    furtherRefinedEntities: Annotation<Entity[]> // Add this line
 });
 
 // NOVEL DATA
@@ -462,6 +463,32 @@ async function refineEntitiesWithContext(state: { novelChunk: string, entities: 
     return { refinedEntities };
 }
 
+/**
+ * Further refine entities using similar entities from Neo4j and entityAssessmentChain.
+ * @param {Object} state - The current state containing refined entities.
+ * @returns {Promise<Object>} - The updated state with further refined entities.
+ */
+async function furtherRefineEntities(state: { refinedEntities: Entity[] }): Promise<{ furtherRefinedEntities: Entity[] }> {
+    const furtherRefinedEntities = await Promise.all(state.refinedEntities.map(async (entity) => {
+        // Find similar entities in Neo4j
+        const similarEntities = await findSimilarEntitiesInNeo4j(entity);
+
+        // Use entityAssessmentChain to refine the entity with similar entities
+        const assessmentResult = await entityAssessmentChain.invoke({
+            proposedEntity: entity,
+            similarEntities: similarEntities.map(similar => ({
+                name: similar.entity.name,
+                type: similar.entity.type,
+                description: similar.entity.description,
+                aliases: similar.entity.aliases
+            }))
+        });
+
+        return assessmentResult;
+    }));
+
+    return { furtherRefinedEntities };
+}
 // END OF WORKFLOW STAGE FUNCTIONS
 
 // AGENT WORKFLOW
@@ -479,7 +506,9 @@ const workflow = new StateGraph(ERExtractionAnnotation)
     .addEdge(START, 'Setup Metadata')
     .addEdge('Setup Metadata', 'Extract Entities')
     .addEdge('Extract Entities', 'Refine Entities with Context') // Add this line
-    .addEdge('Refine Entities with Context', END); // Add this line
+    .addNode('Further Refine Entities', furtherRefineEntities) // Add this line
+    .addEdge('Refine Entities with Context', 'Further Refine Entities') // Add this line
+    .addEdge('Further Refine Entities', END); // Add this line
 
 const app = workflow.compile();
 
