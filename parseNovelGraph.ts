@@ -178,12 +178,7 @@ async function generateEntityEmbedding(entity: Entity): Promise<number[]> {
  * @returns {Promise<SimilarEntityResult[]>} - An array of found entities and their similarity scores.
  */
 interface SimilarEntityResult {
-    entity: {
-        name: string;
-        aliases: string[];
-        type: 'Person' | 'Location' | 'Organization' | 'Theme' | 'Concept' | 'Vehicle' | 'Object';
-        description: string;
-    };
+    entity: Entity;
     score: number;
 }
 
@@ -204,7 +199,12 @@ async function findSimilarEntitiesInNeo4j(entity: Entity): Promise<SimilarEntity
 
         // Process and return the results
         return _.map(result.records, record => ({
-            entity: record.get('e').properties as SimilarEntityResult['entity'],
+            entity: new Entity(
+                record.get('e').properties.name,
+                record.get('e').properties.type,
+                record.get('e').properties.description,
+                record.get('e').properties.aliases
+            ),
             score: record.get('score')
         }));
     } finally {
