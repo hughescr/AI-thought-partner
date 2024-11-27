@@ -80,7 +80,7 @@ const extractRetriever = vectorStore.asRetriever({
 // Define the Zod schema for structured output
 const EntitySchema = z.object({
     name: z.string().describe('The name of the entity'),
-    aliases: z.array(z.string()).describe('Known aliases for the entity'),
+    aliases: z.array(z.string()).describe('Known aliases for the entity, if any'),
     type: z.enum(['Person', 'Location', 'Organization', 'Theme', 'Concept', 'Vehicle', 'Object']).describe('The type of the entity'),
     description: z.string().describe('Brief description or distinguishing details'),
 });
@@ -93,9 +93,9 @@ const RelationshipSchema = z.object({
 });
 
 const EntitiesAndRelationshipsSchema = z.object({
-    entities: z.array(EntitySchema).describe('List of extracted entities'),
-    relationships: z.array(RelationshipSchema).describe('List of extracted relationships'),
-}).describe('Extracted entities and relationships from the text.');
+    entities: z.array(EntitySchema).describe('List of entities'),
+    relationships: z.array(RelationshipSchema).describe('List of relationships'),
+}).describe('Entities and relationships');
 
 class Entity {
     name: string;
@@ -103,7 +103,7 @@ class Entity {
     type: 'Person' | 'Location' | 'Organization' | 'Theme' | 'Concept' | 'Vehicle' | 'Object';
     description: string;
 
-    constructor(name: string, aliases: string[], type: 'Person' | 'Location' | 'Organization' | 'Theme' | 'Concept' | 'Vehicle' | 'Object', description: string) {
+    constructor(name: string, type: 'Person' | 'Location' | 'Organization' | 'Theme' | 'Concept' | 'Vehicle' | 'Object', description: string, aliases: string[] = []) {
         this.name = name;
         this.aliases = aliases;
         this.type = type;
@@ -124,6 +124,10 @@ class Relationship {
         this.description = description;
     }
 }
+
+// ExtractWithContext definition here
+
+const entitiesAndRelationshipsLLM = fastDumbLLM.withStructuredOutput(EntitiesAndRelationshipsSchema);
 const extractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in text analysis. Your task is to extract entities and relationships from the given text extract and its context.
@@ -144,7 +148,10 @@ const ERExtractionAnnotation = Annotation.Root({
     novelMetadata: Annotation<NovelMetadata>,
 });
 
-const workflow = new StateGraph(ERExtractionAnnotation);
+const workflow = new StateGraph(ERExtractionAnnotation)
+    .addNode('Setup Metadata', setupMetadata)
+    .addEdge(START, 'Setup Metadata')
+    .addEdge('Setup Metadata', END);
 
 const app = workflow.compile();
 
