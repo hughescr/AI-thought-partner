@@ -118,12 +118,12 @@ const ERExtractionAnnotation = Annotation.Root({
 });
 
 async function extractEntitiesAndRelationships(chunk: string) {
-    const context = await extractRetriever
+    const results = await extractRetriever
         .withConfig({ runName: 'FetchRelevantExtracts' })
         .invoke(chunk);
 
     const result = await structuredLlm.invoke({
-        prompt: extractionPrompt.format({ context }),
+        prompt: extractionPrompt.format({ extract, context }),
     });
 
     const { entities, relationships } = result;
