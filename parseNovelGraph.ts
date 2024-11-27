@@ -97,7 +97,33 @@ const EntitiesAndRelationshipsSchema = z.object({
     relationships: z.array(RelationshipSchema).describe('List of extracted relationships'),
 }).describe('Extracted entities and relationships from the text.');
 
-const entitiesAndRelationshipsLLM = fastDumbLLM.withStructuredOutput(EntitiesAndRelationshipsSchema);
+class Entity {
+    name: string;
+    aliases: string[];
+    type: 'Person' | 'Location' | 'Organization' | 'Theme' | 'Concept' | 'Vehicle' | 'Object';
+    description: string;
+
+    constructor(name: string, aliases: string[], type: 'Person' | 'Location' | 'Organization' | 'Theme' | 'Concept' | 'Vehicle' | 'Object', description: string) {
+        this.name = name;
+        this.aliases = aliases;
+        this.type = type;
+        this.description = description;
+    }
+}
+
+class Relationship {
+    source: string;
+    target: string;
+    type: string;
+    description?: string;
+
+    constructor(source: string, target: string, type: string, description?: string) {
+        this.source = source;
+        this.target = target;
+        this.type = type;
+        this.description = description;
+    }
+}
 const extractionPrompt = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`
 You are an expert in text analysis. Your task is to extract entities and relationships from the given text extract and its context.
