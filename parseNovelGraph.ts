@@ -7,7 +7,7 @@ import { TextLoader } from 'langchain/document_loaders/fs/text';
 import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
 import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR.ts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
-import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import neo4j, { Driver, Session } from 'neo4j-driver';
 import z from 'zod';
 import { logger } from '@hughescr/logger';
@@ -98,19 +98,13 @@ const OutputSchema = z.object({
 const structuredLlm = slowSmartLLM.withStructuredOutput(OutputSchema);
 
 const extractionPrompt = ChatPromptTemplate.fromMessages([
-    {
-        role: 'system',
-        content: `
-            You are an expert in text analysis. Your task is to extract entities and relationships from the given text.
-            Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
-            For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.
-            Also, identify relationships between these entities, specifying the type and a brief description of each relationship.
-        `,
-    },
-    {
-        role: 'user',
-        content: 'Here is the text extract with context: {context}',
-    },
+    SystemMessagePromptTemplate.fromTemplate(`
+        You are an expert in text analysis. Your task is to extract entities and relationships from the given text.
+        Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
+        For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.
+        Also, identify relationships between these entities, specifying the type and a brief description of each relationship.
+    `),
+    HumanMessagePromptTemplate.fromTemplate('Here is the text extract with context: {context}'),
 ]);
 
 const ERExtractionAnnotation = Annotation.Root({
