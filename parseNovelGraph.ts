@@ -13,6 +13,7 @@ import { tool } from '@langchain/core/tools';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
 import z from 'zod';
 import { logger } from '@hughescr/logger';
+import cliProgress from 'cli-progress';
 import _ from 'lodash';
 import chalk from 'chalk';
 
@@ -442,7 +443,9 @@ const entityAssessmentChain = entityAssessmentPrompt.pipe(entityAssessmentLLMWit
 // WORKFLOW STAGE FUNCTIONS
 
 async function extractEntities(state: { novelChunk: string }): Promise<{ entities: Entity[] }> {
+    logger.info(chalk.blue('Extracting entities from the novel chunk...'));
     const entitiesResult = await entitiesExtractionChain.invoke({ extract: state.novelChunk });
+    logger.info(chalk.green(`Extracted ${entitiesResult.length} entities.`));
     return { entities: entitiesResult };
 }
 
@@ -452,7 +455,11 @@ async function extractEntities(state: { novelChunk: string }): Promise<{ entitie
  * @returns {Promise<Object>} - The updated state with refined entities.
  */
 async function refineEntitiesWithContext(state: { novelChunk: string, entities: Entity[] }): Promise<{ entities: Entity[] }> {
-    const refinedEntities = await Promise.all(_.map(state.entities, async (entity) => {
+    logger.info(chalk.blue('Refining entities with additional context...'));
+    const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
+    progressBar.start(state.entities.length, 0);
+
+    const refinedEntities = await Promise.all(_.map(state.entities, async (entity, index) => {
         // Retrieve additional extracts for the entity
         const additionalExtracts = await getExtractsForEntity(entity);
 
@@ -463,7 +470,12 @@ async function refineEntitiesWithContext(state: { novelChunk: string, entities: 
             additionalExtracts: additionalExtracts
         });
 
+        progressBar.update(index + 1);
         return refinementResult;
+    }));
+
+    progressBar.stop();
+    logger.info(chalk.green('Entities refined with context.'));
     }));
 
     return { entities: refinedEntities };
@@ -475,7 +487,11 @@ async function refineEntitiesWithContext(state: { novelChunk: string, entities: 
  * @returns {Promise<Object>} - The updated state with further refined entities.
  */
 async function furtherRefineEntities(state: { entities: Entity[] }): Promise<{ entities: Entity[] }> {
-    const updatedEntities = await Promise.all(_.map(state.entities, async (entity) => {
+    logger.info(chalk.blue('Further refining entities using Neo4j...'));
+    const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
+    progressBar.start(state.entities.length, 0);
+
+    const updatedEntities = await Promise.all(_.map(state.entities, async (entity, index) => {
         // Find similar entities in Neo4j
         const similarEntities = await findSimilarEntitiesInNeo4j(entity);
 
@@ -491,7 +507,12 @@ async function furtherRefineEntities(state: { entities: Entity[] }): Promise<{ e
         });
         const toolResult = JSON.parse(await entityAssessmentToolsNode.invoke({ messages: [assessmentResult] }));
 
+        progressBar.update(index + 1);
         return toolResult;
+    }));
+
+    progressBar.stop();
+    logger.info(chalk.green('Entities further refined using Neo4j.'));
     }));
 
     return { entities: updatedEntities };
@@ -502,6 +523,7 @@ async function furtherRefineEntities(state: { entities: Entity[] }): Promise<{ e
  * @returns {Promise<Object>} - The updated state with extracted relationships.
  */
 async function extractRelationships(state: { furtherRefinedEntities: Entity[], novelChunk: string }): Promise<{ relationships: Relationship[] }> {
+    logger.info(chalk.blue('Extracting relationships from the novel chunk...'));
     const relationshipsResult = await relationshipExtractionChain.invoke({
         extract: state.novelChunk,
         entities: _.map(state.furtherRefinedEntities, entity => ({
@@ -512,6 +534,7 @@ async function extractRelationships(state: { furtherRefinedEntities: Entity[], n
         }))
     });
 
+    logger.info(chalk.green(`Extracted ${relationshipsResult.length} relationships.`));
     return { relationships: relationshipsResult };
 }
 /**
@@ -520,7 +543,9 @@ async function extractRelationships(state: { furtherRefinedEntities: Entity[], n
  * @returns {Promise<void>} - A promise that resolves when the relationships are saved.
  */
 async function saveRelationshipsToNeo4j(state: { relationships: Relationship[] }): Promise<void> {
+    logger.info(chalk.blue('Saving relationships to Neo4j...'));
     await upsertRelationshipsIntoNeo4j(state.relationships);
+    logger.info(chalk.green('Relationships saved to Neo4j.'));
 }
 // END OF WORKFLOW STAGE FUNCTIONS
 
