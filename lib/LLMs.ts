@@ -32,19 +32,20 @@ export const cachedBgeM3Embeddings = makeCachedEmbeddings(bgeM3Embeddings);
 // LLMs
 
 // Apache License 2.0
-export const qwen25_1_5bLLM = new ChatOllama({ model: 'qwen2.5:1.5b-instruct-fp16', ...commonOptions32k });
-export const qwen25_14bLLM = new ChatOllama({ model: 'qwen2.5:14b-instruct-q8_0', ...commonOptions32k });
-export const qwen25_32bLLM = new ChatOllama({ model: 'qwen2.5:32b-instruct-q8_0', ...commonOptions32k });
-export const nemo_12bLLM = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q8_0', ...commonOptions32k });
+export const qwen25_1_5bLLM = new ChatOllama({ model: 'qwen2.5:1.5b-instruct-q6_k_l', ...commonOptions32k });
+export const qwen25_14bLLM = new ChatOllama({ model: 'qwen2.5:14b-instruct-q6_k_l', ...commonOptions32k });
+export const qwen25_32bLLM = new ChatOllama({ model: 'qwen2.5:32b-instruct-q6_k_l', ...commonOptions32k });
+export const qwq_32bLLM = new ChatOllama({ model: 'qwq:32b-q6_k_l', ...commonOptions32k });
+export const nemo_12bLLM = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q6_k_l', ...commonOptions32k });
 
 // MIT License
-export const phi35_4bLLM = new ChatOllama({ model: 'phi3.5:3.8b-mini-instruct-fp16', ...commonOptions32k });
-export const phi3_14bLLM = new ChatOllama({ model: 'phi3:14b-medium-128k-instruct-q8_0', ...commonOptions32k });
+export const phi35_4bLLM = new ChatOllama({ model: 'phi3.5:3.8b-mini-instruct-q6_k_l', ...commonOptions32k });
+export const phi3_14bLLM = new ChatOllama({ model: 'phi3:14b-medium-128k-instruct-q6_k_l', ...commonOptions32k });
 
 // Llama Community License
-export const llama32_3bLLM = new ChatOllama({ model: 'llama3.2:3b-instruct-fp16', ...commonOptions32k });
-export const llama31_8bLLM = new ChatOllama({ model: 'llama3.1:8b-instruct-q8_0', ...commonOptions64k });
-export const llama31_70bLLM = new ChatOllama({ model: 'llama3.1:70b-instruct-q8_0', ...commonOptions32k });
+export const llama32_3bLLM = new ChatOllama({ model: 'llama3.2:3b-instruct-q6_k_l', ...commonOptions32k });
+export const llama31_8bLLM = new ChatOllama({ model: 'llama3.1:8b-instruct-q6_k_l', ...commonOptions64k });
+export const llama31_70bLLM = new ChatOllama({ model: 'llama3.1-nemotron:70b-instruct-q6_k_l', ...commonOptions32k });
 
 // CC-Attribution-Non-Commercial
 export const bespokeMinicheckLLM = new ChatOllama({ model: 'bespoke-minicheck:7b-q8_0', ...commonOptions32k });
