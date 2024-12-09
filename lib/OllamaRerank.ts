@@ -36,8 +36,8 @@ export class OllamaRerank extends BaseDocumentCompressor {
         this.client = new Ollama({
             host: fields?.baseUrl,
         });
-        this.model = fields?.model ?? this.model;
-        this.topN = fields?.topN ?? this.topN;
+        this.model = fields?.model ?? 'llama3.1';
+        this.topN = fields?.topN ?? 3;
     }
 
     /**
