@@ -4,7 +4,7 @@ import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
 import { InMemoryStore } from 'langchain/storage/in_memory';
 import { OllamaRerank } from './OllamaRerank.ts';
 
-const commonOptions = { temperature: 1, seed: 19740822, keepAlive: '15m' };
+const commonOptions = { temperature: 0, seed: 19740822, keepAlive: '15m' };
 const commonOptions32k = { ...commonOptions, numCtx: 32 * 1024 };
 const commonOptions64k = { ...commonOptions, numCtx: 64 * 1024 };
 
