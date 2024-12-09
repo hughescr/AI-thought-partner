@@ -58,9 +58,11 @@ export class OllamaRerank extends BaseDocumentCompressor {
         });
         const finalResults: DocumentInterface[] = [];
         for(const result of results) {
-            const doc = documents[result.document];
-            doc.metadata.relevanceScore = result.relevance_score;
-            finalResults.push(doc);
+            const doc = _.find(documents, { pageContent: result.document });
+            if(doc) {
+                doc.metadata.relevanceScore = result.relevance_score;
+                finalResults.push(doc);
+            }
         }
         return finalResults;
     }
