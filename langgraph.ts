@@ -286,7 +286,8 @@ Your task is to review extracts from a novel titled "{title}" by {author}, which
 4. Identify potential flaws or areas for improvement in the novel based on the extracts. Provide constructive criticism and suggestions on how the author can address these issues.
 5. Cite the relevant extracts when quoting or referencing specific passages from the novel in your response.
 6. Remember that you only have access to limited excerpts, so your analysis and feedback should be based solely on the provided extracts and their context.
-7. Present your response in a well-structured format, using proper grammar, spelling, and Markdown formatting for better readability.`),
+7. Present your response in a well-structured format, using proper grammar, spelling, and Markdown formatting for better readability.
+8. Do not reply in Chinese unless specifically asked to reply in Chinese.`),
     HumanMessagePromptTemplate.fromTemplate(`## Extracts
 {extracts}
 
