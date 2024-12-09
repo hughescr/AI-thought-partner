@@ -5,7 +5,7 @@ import { Embeddings } from '@langchain/core/embeddings';
 import _ from 'lodash';
 import { cosineSimilarity } from './utils.ts';
 import { getEncoding } from '@langchain/core/utils/tiktoken';
-import { Tiktoken, TiktokenEncoding } from 'js-tiktoken/lite';
+import { TiktokenEncoding } from 'js-tiktoken/lite';
 import cliProgress from 'cli-progress';
 
 interface SemanticTextSplitterOptions {
@@ -39,7 +39,6 @@ export class SemanticTextSplitter extends TextSplitter {
     private embeddingBatchSize: number;
     private tokenizer: TiktokenEncoding;
     private initialChunkSize: number;
-    private tokenizerInstance: Tiktoken;
     private showProgress: boolean;
 
     constructor(options: SemanticTextSplitterOptions) {
@@ -51,10 +50,8 @@ export class SemanticTextSplitter extends TextSplitter {
         this.initialChunkSize = options.initialChunkSize || 32;
         this.showProgress = options.showProgress || false;
         this.lengthFunction = async (text: string): Promise<number> => {
-            if(this.tokenizerInstance === undefined) {
-                this.tokenizerInstance = await getEncoding(this.tokenizer);
-            }
-            return this.tokenizerInstance.encode(text).length;
+            const tokenizerInstance = await getEncoding(this.tokenizer);
+            return tokenizerInstance.encode(text).length;
         };
     }
 
