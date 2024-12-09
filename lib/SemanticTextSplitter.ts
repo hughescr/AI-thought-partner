@@ -81,24 +81,16 @@ export class SemanticTextSplitter extends TextSplitter {
         const chunkBatches = _.chunk(mergedChunks, this.embeddingBatchSize);
         const progressBar = this.showProgress ? new cliProgress.SingleBar({ barsize: 80, format: '{bar} {value}/{total} embeddings | {percentage}% | Time: {duration_formatted} | ETA: {eta_formatted}' }, cliProgress.Presets.shades_classic) : null;
 
-        if(this.showProgress) {
-            progressBar?.start(mergedChunks.length, 0);
-        }
-
+        progressBar?.start(mergedChunks.length, 0);
         const embeddedChunks: number[][] = [];
         for(let i = 0; i < chunkBatches.length; i++) {
             const batch = chunkBatches[i];
             const embeddings = await this.embeddings.embedDocuments(batch);
             embeddedChunks.push(...embeddings);
 
-            if(this.showProgress) {
-                progressBar?.update(Math.min((i + 1) * this.embeddingBatchSize, mergedChunks.length));
-            }
+            progressBar?.update(Math.min((i + 1) * this.embeddingBatchSize, mergedChunks.length));
         }
-
-        if(this.showProgress) {
-            progressBar?.stop();
-        }
+        progressBar?.stop();
 
         return embeddedChunks;
     }
