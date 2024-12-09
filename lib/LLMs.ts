@@ -1,4 +1,5 @@
 import { ChatOllama, OllamaEmbeddings } from '@langchain/ollama';
+import { ChatBedrockConverse } from '@langchain/aws';
 import { CacheBackedEmbeddings } from 'langchain/embeddings/cache_backed';
 import { InMemoryStore } from 'langchain/storage/in_memory';
 import { OllamaRerank } from './OllamaRerank.ts';
@@ -16,6 +17,42 @@ const makeCachedEmbeddings = (model: OllamaEmbeddings) => CacheBackedEmbeddings.
         namespace: model.model,
     }
 );
+
+// AWS Bedrock
+export const novaLiteLLM = new ChatBedrockConverse({
+    model: 'us.amazon.nova-lite-v1:0',
+    temperature: 1,
+    topP: 1,
+    additionalModelRequestFields: {
+        inferenceConfig: {
+            topK: 1,
+        }
+    },
+    maxTokens: 2048,
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+    verbose: true,
+});
+export const novaProLLM = new ChatBedrockConverse({
+    model: 'us.amazon.nova-pro-v1:0',
+    temperature: 1,
+    topP: 1,
+    additionalModelRequestFields: {
+        inferenceConfig: {
+            topK: 1,
+        }
+    },
+    maxTokens: 2048,
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+    verbose: true,
+});
 
 // Apache License 2.0
 export const nomicEmbeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', requestOptions: { numCtx: 2048 } });
@@ -45,7 +82,7 @@ export const phi3_14bLLM = new ChatOllama({ model: 'phi3:14b-medium-128k-instruc
 // Llama Community License
 export const llama32_3bLLM = new ChatOllama({ model: 'llama3.2:3b-instruct-q6_k_l', ...commonOptions32k });
 export const llama31_8bLLM = new ChatOllama({ model: 'llama3.1:8b-instruct-q6_k_l', ...commonOptions64k });
-export const llama31_70bLLM = new ChatOllama({ model: 'llama3.1-nemotron:70b-instruct-q6_k_l', ...commonOptions32k });
+export const llama33_70bLLM = new ChatOllama({ model: 'llama3.3:70b-instruct-q6_k_l', ...commonOptions32k });
 
 // CC-Attribution-Non-Commercial
 export const bespokeMinicheckLLM = new ChatOllama({ model: 'bespoke-minicheck:7b-q8_0', ...commonOptions32k });
@@ -54,4 +91,5 @@ export const bespokeMinicheckLLM = new ChatOllama({ model: 'bespoke-minicheck:7b
 
 // Apache License 2.0
 export const jinaV1TinyENReranker = new OllamaRerank({ model: 'jina-reranker-v1-tiny-en:bf16', topN: 10 });
+export const jinaV1TurboENReranker = new OllamaRerank({ model: 'jina-reranker-v1-turbo-en:bf16', topN: 10 });
 export const bgeV2M3Reranker = new OllamaRerank({ model: 'bge-reranker-v2-m3:bf16', topN: 5 });
