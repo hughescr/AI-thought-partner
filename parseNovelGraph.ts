@@ -1,13 +1,13 @@
 import {
-    cachedJinaV2SmallENEmbeddings as embeddings,
-    qwen25_32bLLM as slowSmartLLM
+    cachedJinaV2BaseENEmbeddings as embeddings,
+    llama33_70bLLM as LLM
 } from './lib/LLMs.ts';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
-import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR.ts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
-import neo4j, { Driver } from 'neo4j-driver';
+import neo4j from 'neo4j-driver';
 import { tool } from '@langchain/core/tools';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
 import z from 'zod';
@@ -15,6 +15,7 @@ import { logger } from '@hughescr/logger';
 import cliProgress from 'cli-progress';
 import _ from 'lodash';
 import chalk from 'chalk';
+import { execa } from 'execa';
 
 if(process.versions.bun === undefined) {
     logger.info(chalk.greenBright('Running under Node, setting global dispatcher'));
@@ -28,17 +29,52 @@ const neo4jURL = process.env.NEO4J_URI || '';
 const neo4jUsername = process.env.NEO4J_USER || '';
 const neo4jPassword = process.env.NEO4J_PASSWORD || '';
 
-const driver: Driver = neo4j.driver(
+const driver = neo4j.driver(
     neo4jURL,
     neo4j.auth.basic(neo4jUsername, neo4jPassword)
 );
 
-const splitter = new SemanticTextSplitter({
-    showProgress: true,
-    initialChunkSize: 32, // Tokens!
-    chunkSize: 2048, // Tokens!
-    embeddings: embeddings, // Use fast embeddings for decent semantic splits
-    embeddingBatchSize: 128,
+const bars = new cliProgress.MultiBar({
+    clearOnComplete: true,
+    hideCursor: false,
+    format: '{bar} {percentage}% | {duration_formatted} | ETA: {eta_formatted} | {value}/{total} | {name}',
+}, cliProgress.Presets.shades_classic);
+
+// Strategy per https://blog.getbind.co/2024/09/25/claude-contextual-retrieval-vs-rag-how-is-it-different/
+// Break the source into large chunks (maybe 8k tokens semantically)
+// Then, for each large chunk, break it into small chunks (maybe 256 tokens), and ask an LLM to describe the context of each small chunk (adding another 256 tokens)
+// Then, concat the context and the extract, calculate encodings, and store in a vector store
+
+class RecursiveCharacterTextSplitterSeparatorMod extends RecursiveCharacterTextSplitter {
+    // Override the splitOnSeparator method to allow for keeping the separator attached to the earlier chunk not the later chunk
+    // Without this, punctuation ends up on the wrong chunk... for example
+    // Sentence 1. Sentence 2. ==> ['Sentence 1', '. Sentence 2', '.'] instead of ['Sentence 1.', 'Sentence 2.' ]
+    // The former is clearly dumber than shit and will confuse the LLM with its weird leading periods and no end to the sentence, etc.
+    splitOnSeparator(text: string, separator: string): string[] {
+        let splits: string[] = [];
+        if(separator) {
+            if(this.keepSeparator) {
+                const regexEscapedSeparator: string = _.replace(
+                    separator,
+                    /[/\-\\^$*+?.()|[\]{}]/g,
+                    '\\$&'
+                );
+                splits = _.split(text, new RegExp(`(?<=${regexEscapedSeparator})`));
+            } else {
+                splits = _.split(text, separator);
+            }
+        } else {
+            splits = _.split(text, '');
+        }
+        return _.filter(splits, s => s !== '');
+    }
+};
+
+const chapterSplitter = new RecursiveCharacterTextSplitterSeparatorMod({
+    separators: ['\n#', '\n\n', '.', '!', '?'], // Chapters, paragraphs, sentences
+    chunkSize: 8192,
+    keepSeparator: true,
+    chunkOverlap: 0,
 });
 
 // NOVEL DATA
@@ -57,8 +93,6 @@ interface NovelMetadata {
  * @returns {Promise<GraphState>} - The updated state with the documents added.
  */
 async function setupMetadata(): Promise<{ novelMetadata: NovelMetadata }> {
-    logger.debug('---METADATA---');
-
     return {
         novelMetadata: {
             title: 'Christmas Town',
@@ -72,24 +106,26 @@ async function setupMetadata(): Promise<{ novelMetadata: NovelMetadata }> {
 const storeDirectory = `novels/${book}`;
 const loader: TextLoader = new TextLoader(`novels/${book}.md`);
 const novelText = await loader.load();
-const novelChunks = await splitter.splitDocuments(novelText);
+const chapterChunks = await chapterSplitter.splitDocuments(novelText);
 const vectorStore = await FaissStoreWithMMR.load(
     storeDirectory,
     embeddings
 );
 const extractRetriever = vectorStore.asRetriever({
-    k: 10,
+    k: 2,
 });
 // END OF NOVEL DATA
 
 // SCHEMAS
 
 const EntitySchema = z.object({
-    name: z.string().describe('The name of the entity'),
-    aliases: z.array(z.string()).describe('Known aliases for the entity, if any'),
-    type: z.enum(['Person', 'Location', 'Organization', 'Theme', 'Concept', 'Vehicle', 'Object']).describe('The type of the entity'),
-    description: z.string().describe('Brief description or distinguishing details'),
+    name: z.string().describe('The name of the entity - the primary name by which this entity is known'),
+    aliases: z.array(z.string()).optional().describe('Known aliases for the entity, if any, as an array not a string'),
+    type: z.string().describe("The type of the entity, including 'Person', 'Location', 'Organization', 'Work of art', 'Theme', 'Concept', 'Vehicle', 'Animal', 'Object'"),
+    // .or(z.enum(['Person', 'Location', 'Organization', 'Work of art', 'Theme', 'Concept', 'Vehicle', 'Animal', 'Object']))
+    description: z.string().optional().describe('Optional description or distinguishing details'),
 });
+type Entity = z.infer<typeof EntitySchema>;
 
 const RelationshipSchema = z.object({
     source: z.string().describe('The name of the source entity'),
@@ -97,41 +133,14 @@ const RelationshipSchema = z.object({
     type: z.string().describe('The type of the relationship'),
     description: z.string().optional().describe('Optional description'),
 });
+type Relationship = z.infer<typeof RelationshipSchema>;
 
-const EntitiesSchema = z.array(EntitySchema).describe('List of entities');
-const RelationshipsSchema = z.array(RelationshipSchema).describe('List of relationships');
+const EntitiesSchema = z.object({ entities: z.array(EntitySchema).describe('List of entities as an array, not a string') });
+const RelationshipsSchema = z.object({ relationships: z.array(RelationshipSchema).describe('List of relationships as an array, not a string') });
 
 // END OF SCHEMAS
 
 // CLASSES
-
-class Entity {
-    name: string;
-    aliases: string[];
-    type: 'Person' | 'Location' | 'Organization' | 'Theme' | 'Concept' | 'Vehicle' | 'Object';
-    description: string;
-
-    constructor(name: string, type: 'Person' | 'Location' | 'Organization' | 'Theme' | 'Concept' | 'Vehicle' | 'Object', description: string, aliases: string[] = []) {
-        this.name = name;
-        this.aliases = aliases;
-        this.type = type;
-        this.description = description;
-    }
-}
-
-class Relationship {
-    source: string;
-    target: string;
-    type: string;
-    description?: string;
-
-    constructor(source: string, target: string, type: string, description?: string) {
-        this.source = source;
-        this.target = target;
-        this.type = type;
-        this.description = description;
-    }
-}
 
 class ExtractWithContext {
     extract: string;
@@ -157,7 +166,7 @@ function entityToStringRepresentation(entity: Entity): string {
         Name: ${entity.name}
         Type: ${entity.type}
         Description: ${entity.description}
-        Aliases: ${entity.aliases.join(', ')}
+        Aliases: ${_.join(entity.aliases, ', ')}
     `;
     return _.trim(description);
 }
@@ -215,23 +224,27 @@ async function findSimilarEntitiesInNeo4j(entity: Entity, limit = 3): Promise<Si
 
         // Cypher query to find similar entities using cosine similarity
         const result = await session.run(`
-            MATCH (e:Entity)
-            WHERE e.embedding IS NOT NULL
-            RETURN e, gds.similarity.cosine(e.embedding, $entityEmbedding) AS score
+            MATCH (entity)
+            WHERE entity.embedding IS NOT NULL
+            RETURN entity, gds.similarity.cosine(entity.embedding, $entityEmbedding) AS score
             ORDER BY score DESC
-            LIMIT $limit
+            LIMIT toInteger($limit)
         `, { entityEmbedding, limit });
 
         // Process and return the results
-        return _.map(result.records, record => new SimilarEntityResult(
-            new Entity(
-                record.get('e').properties.name,
-                record.get('e').properties.type,
-                record.get('e').properties.description,
-                record.get('e').properties.aliases
-            ),
-            record.get('score')
-        ));
+        return _.map(result.records, (record) => {
+            const similarEntity = record.get('entity').properties;
+            const result = new SimilarEntityResult(
+                {
+                    name: similarEntity.name,
+                    type: similarEntity.type,
+                    description: similarEntity.description,
+                    aliases: similarEntity.aliases || []
+                },
+                record.get('score')
+            );
+            return result;
+        });
     } finally {
         await session.close();
     }
@@ -252,13 +265,15 @@ async function updateEntityInNeo4j(existingEntity: Entity, replacementEntity: En
         const replacementEntityEmbedding = await generateEntityEmbedding(replacementEntity);
 
         // Cypher query to update the existing entity with the replacement entity's properties, including the embedding
+        // We will add the replacement entity's type as a label and merge the aliases
         await session.run(`
-            MATCH (e:Entity {name: $existingName, type: $existingType, description: $existingDescription})
-            SET e.name = $replacementName,
-                e.type = $replacementType,
-                e.description = $replacementDescription,
-                e.aliases = $replacementAliases,
-                e.embedding = $replacementEmbedding
+            MATCH (e {name: $existingName, description: $existingDescription})
+            WHERE $existingType IN labels(e)
+            CALL apoc.create.addLabels(e, [$replacementType]) YIELD node
+            SET node.aliases = apoc.coll.toSet(node.aliases + $replacementAliases + [node.name, $replacementName]),
+                node.name = $replacementName,
+                node.description = $replacementDescription,
+                node.embedding = $replacementEmbedding
         `, {
             existingName: existingEntity.name,
             existingType: existingEntity.type,
@@ -273,6 +288,7 @@ async function updateEntityInNeo4j(existingEntity: Entity, replacementEntity: En
         await session.close();
     }
 
+    logger.info(`Updated entity ${existingEntity.name} in Neo4j.\n`);
     return replacementEntity;
 }
 
@@ -290,13 +306,15 @@ async function insertEntityIntoNeo4j(entity: Entity): Promise<Entity> {
 
         // Cypher query to create a new entity node with the given properties, including the embedding
         await session.run(`
-            CREATE (e:Entity {
+            CREATE (e {
                 name: $name,
-                type: $type,
                 description: $description,
                 aliases: $aliases,
                 embedding: $embedding
             })
+            WITH e
+            CALL apoc.create.setLabels(e, [$type]) YIELD node
+            return node
         `, {
             name: entity.name,
             type: entity.type,
@@ -308,6 +326,7 @@ async function insertEntityIntoNeo4j(entity: Entity): Promise<Entity> {
         await session.close();
     }
 
+    logger.info(`Inserted entity ${entity.name} into Neo4j.\n`);
     return entity;
 }
 
@@ -322,13 +341,21 @@ async function upsertRelationshipsIntoNeo4j(relationships: Relationship[]): Prom
 
     try {
         for(const relationship of relationships) {
+            logger.info(`Upserting relationship: ${JSON.stringify(relationship)}\n`);
             // Cypher query to merge the relationship if it doesn't already exist
             await session.run(`
-                MATCH (source:Entity {name: $sourceName})
-                MATCH (target:Entity {name: $targetName})
-                MERGE (source)-[r:RELATIONSHIP {type: $type}]->(target)
-                ON CREATE SET r.description = $description
-            `, {
+                MATCH (a {name: $sourceName}), (b { name: $targetName })
+                OPTIONAL MATCH (a)-[r]->(b)
+                WHERE type(r) = $type
+                WITH a, b, r
+                CALL apoc.do.when(
+                    r IS NULL,
+                    'CALL apoc.create.relationship($a, $relType, $props, $b) YIELD rel RETURN rel',
+                    'with $r as r set r += $props RETURN r AS rel',
+                    {a: a, b: b, r: r, relType: $type, props: {description: $description}}
+                ) YIELD value
+                RETURN value.rel
+                `, {
                 sourceName: relationship.source,
                 targetName: relationship.target,
                 type: relationship.type,
@@ -338,32 +365,32 @@ async function upsertRelationshipsIntoNeo4j(relationships: Relationship[]): Prom
     } finally {
         await session.close();
     }
+
+    logger.info(`Upserted ${relationships.length} relationships into Neo4j.\n`);
 }
 
 // END OF HELPER FUNCTIONS
 
 // CHAINS
 
-const entitiesLLM = slowSmartLLM.withStructuredOutput(EntitiesSchema);
-const entitiesExtractionPrompt = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`
-You are an expert in text analysis. Your task is to extract entities from the given text extract.
-You will receive a text extract in the user prompt.
-Identify entities such as people, locations, organizations, themes, concepts, vehicles, and objects.
-For each entity, provide a brief description and categorize it into one of the following types: Person, Location, Organization, Theme, Concept, Vehicle, Object.`
-    ),
-    HumanMessagePromptTemplate.fromTemplate(`Here is the text extract:
-{extract}`),
-]);
-const entitiesExtractionChain = entitiesExtractionPrompt.pipe(entitiesLLM);
-
-const relationshipsLLM = slowSmartLLM.withStructuredOutput(RelationshipsSchema);
+const relationshipsLLM = LLM.withStructuredOutput(RelationshipsSchema, { name: 'found_relationships' });
 const relationshipExtractionPrompt = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`
-You are an expert in relationship extraction. Your task is to identify relationships among the given entities within the provided text extract.
-You will receive a text extract, and a list of entities. Identify any relationships between these entities, specifying the source, target, type, and an optional description for each relationship.`
-    ),
     HumanMessagePromptTemplate.fromTemplate(`
+You are an expert in entity-relationship extraction. Your task is to identify relationships or connections among the given entities within the provided text.
+You will receive a text extract, and a list of entities. Identify any relationships or connections among these entities, specifying the source entity, target entity, relationship type, and an optional description for each relationship.
+Relationships can be any type of association between the entities, such as "friends with", is located in", "is a member of", "is related to", etc.
+If you do not find any relationships, then call the tool with an empty array. But try hard to find some relationships among the entities - there almost always will be at least one.
+
+When calling a tool, do not JSON stringify the arguments, just pass them as objects or arrays, so for example do this:
+\`\`\`
+"args": {{"some_array": ["thing1", "thing2"], "other_param": "value"}}
+\`\`\`
+and not:
+\`\`\`
+"args": "{{\\"some_array\\": [\\"thing1\\", \\"thing2\\"], \\"other_param\\": \\"value\\"}}" nor
+"args": {{ "some_array": "[\\"thing1\\", \\"thing2\\"]", "other_param": "value" }}
+\`\`\`
+
 Here is the text extract:
 {extract}
 
@@ -372,18 +399,27 @@ Here is the list of entities:
 ]);
 const relationshipExtractionChain = relationshipExtractionPrompt.pipe(relationshipsLLM);
 
-// Create a new structured output LLM for a single EntitySchema
-const entityRefinementLLM = slowSmartLLM.withStructuredOutput(EntitySchema);
-// Define the prompt for refining an entity
+// Create a new structured output LLM for an array of EntitySchema
+const entityRefinementLLM = LLM.withStructuredOutput(EntitiesSchema, { name: 'refined_entities' });
+// Define the prompt for refining entities
 const entityRefinementPrompt = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`
-You are an expert in entity refinement. Your task is to refine a proposed entity using additional context.
-You will receive a proposed entity, the original extract from which it was extracted, and supplemental extracts for context.
-Your goal is to improve the entity's data, particularly its list of aliases and the name by which it is most commonly known.
-Use the supplemental extracts to refine the entity's details and ensure the most accurate and complete representation.`
-    ),
     HumanMessagePromptTemplate.fromTemplate(`
-Proposed Entity:
+You are an expert in entity refinement. Your task is to refine a proposed entity using additional context.
+You will receive a list of proposed entities, the original extract from which they were extracted, and supplemental extracts for context.
+Your goal is to improve the entities' data, particularly their lists of aliases and the names by which they are most commonly known.
+Use the supplemental extracts to refine the entities' details and ensure the most accurate and complete representation.
+
+When calling a tool, do not JSON stringify the arguments, just pass them as objects or arrays, so for example do this:
+\`\`\`
+"args": {{"some_array": ["thing1", "thing2"], "other_param": "value"}}
+\`\`\`
+and not:
+\`\`\`
+"args": "{{\\"some_array\\": [\\"thing1\\", \\"thing2\\"], \\"other_param\\": \\"value\\"}}" nor
+"args": {{ "some_array": "[\\"thing1\\", \\"thing2\\"]", "other_param": "value" }}
+\`\`\`
+
+Proposed Entities:
 {proposedEntity}
 
 Original Extract:
@@ -398,6 +434,7 @@ const entityRefinementChain = entityRefinementPrompt.pipe(entityRefinementLLM);
 const updateEntityInNeo4jTool = tool(
     async ({ existingEntity, refinedEntity }: { existingEntity: Entity, refinedEntity: Entity }) => updateEntityInNeo4j(existingEntity, refinedEntity),
     {
+        verboseParsingErrors: true,
         name: 'updateEntityInNeo4j',
         description: 'Update an existing entity in the Neo4j database with new information.',
         schema: z.object({
@@ -410,6 +447,7 @@ const updateEntityInNeo4jTool = tool(
 const insertEntityIntoNeo4jTool = tool(
     async ({ entity }: { entity: Entity }) => insertEntityIntoNeo4j(entity),
     {
+        verboseParsingErrors: true,
         name: 'insertEntityIntoNeo4j',
         description: 'Insert a new entity into the Neo4j database.',
         schema: z.object({
@@ -420,18 +458,28 @@ const insertEntityIntoNeo4jTool = tool(
 
 const entityAssessmentTools = [updateEntityInNeo4jTool, insertEntityIntoNeo4jTool];
 const entityAssessmentToolsNode = new ToolNode(entityAssessmentTools);
-const entityAssessmentLLMWithTools = slowSmartLLM.bindTools(entityAssessmentTools);
+const entityAssessmentLLMWithTools = LLM.bindTools(entityAssessmentTools);
 const entityAssessmentPrompt = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(`
-You are an expert in entity assessment and refinement. Your task is to determine if a proposed entity matches any of the similar entities provided.
-If a match is found, refine the proposed entity by updating its name, aliases, description, and type as necessary, and call the updateEntityInNeo4j tool.
-If no match is found, call the insertEntityIntoNeo4j tool to add the proposed entity to the database.`
-    ),
     HumanMessagePromptTemplate.fromTemplate(`
-Here is the proposed entity:
-{proposedEntity}
+You are an expert in entity assessment and refinement. Your task is to determine if a proposed entities matches any of the similar entities provided.
+If a match for a given entity is found, refine the proposed entity by updating its name, aliases, description, and type as necessary, and call the updateEntityInNeo4j tool.
+If no match is found for a given entity, call the insertEntityIntoNeo4j tool to add the proposed entity to the database.
+Repeat this process for each proposed entity, calling either tool for each proposed entity as needed.
 
-Here are the similar entities:
+When calling a tool, do not JSON stringify the arguments, just pass them as objects or arrays, so for example do this:
+\`\`\`
+"args": {{"some_array": ["thing1", "thing2"], "other_param": "value"}}
+\`\`\`
+and not:
+\`\`\`
+"args": "{{\\"some_array\\": [\\"thing1\\", \\"thing2\\"], \\"other_param\\": \\"value\\"}}" nor
+"args": {{ "some_array": "[\\"thing1\\", \\"thing2\\"]", "other_param": "value" }}
+\`\`\`
+
+Here are the proposed entities:
+{proposedEntities}
+
+Here are the possibly similar entities:
 {similarEntities}`
     )
 ]);
@@ -441,14 +489,17 @@ const entityAssessmentChain = entityAssessmentPrompt.pipe(entityAssessmentLLMWit
 
 // WORKFLOW STAGE FUNCTIONS
 
-async function extractEntities(state: { novelChunk: string }): Promise<{ entities: Entity[] }> {
-    logger.info(chalk.blue('Extracting entities from the novel chunk...'));
-    logger.debug('Invoking entitiesExtractionChain...');
-    const entitiesResult = await entitiesExtractionChain.invoke({ extract: state.novelChunk });
-    logger.debug('entitiesExtractionChain invocation complete.');
-    logger.info(chalk.green(`Extracted ${entitiesResult.length} entities.`));
-    logger.debug(`Entities extracted: ${JSON.stringify(entitiesResult, null, 2)}`);
-    return { entities: entitiesResult };
+async function extractEntities(state: { novelChunk: { pageContent: string } }): Promise<{ entities: Entity[] }> {
+    const pythonScript = 'ner.py'; // Path to your python script
+
+    try {
+        const { stdout } = await execa('venv/bin/python', [pythonScript], { input: state.novelChunk.pageContent });
+        const entities = JSON.parse(stdout);
+        logger.info(chalk.yellow(`Entities extracted: ${JSON.stringify(entities)}\n`));
+        return { entities };
+    } catch(error) {
+        throw new Error(`Failed to extract entities: ${error}`);
+    }
 }
 
 /**
@@ -456,30 +507,28 @@ async function extractEntities(state: { novelChunk: string }): Promise<{ entitie
  * @param {Object} state - The current state containing novel chunk and entities.
  * @returns {Promise<Object>} - The updated state with refined entities.
  */
-async function refineEntitiesWithContext(state: { novelChunk: string, entities: Entity[] }): Promise<{ entities: Entity[] }> {
-    logger.info(chalk.blue('Refining entities with additional context...'));
-    const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
-    progressBar.start(state.entities.length, 0);
+async function refineEntitiesWithContext(state: { novelChunk: { pageContent: string }, entities: Entity[] }): Promise<{ entities: Entity[] }> {
+    logger.info(chalk.blue('Refining entities with additional context...\n'));
+    const progressBar = bars.create(state.entities.length, 0, { name: state.entities[0]?.name || '' });
 
-    const refinedEntities = await Promise.all(_.map(state.entities, async (entity, index) => {
+    let extracts: ExtractWithContext[] = [];
+    for(const entity of state.entities) {
+        progressBar.increment({ name: `${entity.name} - extracts` });
         // Retrieve additional extracts for the entity
-        const additionalExtracts = await getExtractsForEntity(entity);
-
-        // Use entityRefinementChain to refine the entity with additional context
-        const refinementResult = await entityRefinementChain.invoke({
-            proposedEntity: entity,
-            originalExtract: state.novelChunk,
-            additionalExtracts: additionalExtracts
-        });
-
-        progressBar.update(index + 1);
-        return refinementResult;
-    }));
+        extracts = [...extracts, ...(await getExtractsForEntity(entity))];
+    }
+    progressBar.update({ name: 'Refining entities' });
+    // Use entityRefinementChain to refine the entity with additional context
+    const refinementResult = await entityRefinementChain.invoke({
+        proposedEntity: JSON.stringify(state.entities),
+        originalExtract: state.novelChunk.pageContent,
+        additionalExtracts: JSON.stringify(extracts),
+    });
 
     progressBar.stop();
-    logger.info(chalk.green('Entities refined with context.'));
+    logger.info(chalk.yellow(`Entities refined with context: ${JSON.stringify(_.map(refinementResult.entities, 'name'))}\n`));
 
-    return { entities: refinedEntities };
+    return { entities: refinementResult.entities };
 }
 
 /**
@@ -488,54 +537,73 @@ async function refineEntitiesWithContext(state: { novelChunk: string, entities: 
  * @returns {Promise<Object>} - The updated state with further refined entities.
  */
 async function furtherRefineEntities(state: { entities: Entity[] }): Promise<{ entities: Entity[] }> {
-    logger.info(chalk.blue('Further refining entities using Neo4j...'));
-    const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
-    progressBar.start(state.entities.length, 0);
+    logger.info(chalk.blue('Further refining entities using Neo4j...\n'));
+    const progressBar = bars.create(state.entities.length, 0, { name: state.entities[0]?.name || '' });
 
-    const updatedEntities = await Promise.all(_.map(state.entities, async (entity, index) => {
+    let similarEntities: SimilarEntityResult[] = [];
+    for(const entity of state.entities) {
+        progressBar.increment({ name: `${entity.name} - find similar` });
         // Find similar entities in Neo4j
-        const similarEntities = await findSimilarEntitiesInNeo4j(entity);
+        similarEntities = [...similarEntities, ...(await findSimilarEntitiesInNeo4j(entity))];
+    }
+    logger.debug(chalk.yellow(`Similar entities found: ${JSON.stringify(similarEntities)}\n`));
 
-        // Use entityAssessmentChain to refine the entity with similar entities
-        const assessmentResult = await entityAssessmentChain.invoke({
-            proposedEntity: entity,
-            similarEntities: _.map(similarEntities, similar => ({
-                name: similar.entity.name,
-                type: similar.entity.type,
-                description: similar.entity.description,
-                aliases: similar.entity.aliases
-            }))
-        });
-        const toolResult = JSON.parse(await entityAssessmentToolsNode.invoke({ messages: [assessmentResult] }));
+    // Use entityAssessmentChain to refine the entity with similar entities
+    const assessmentResult = await entityAssessmentChain.invoke({
+        proposedEntities: JSON.stringify(state.entities),
+        similarEntities: JSON.stringify(_.map(similarEntities, similar => ({
+            name: similar.entity.name,
+            type: similar.entity.type,
+            description: similar.entity.description,
+            aliases: similar.entity.aliases
+        })))
+    });
+    const refinedEntities: Entity[] = [];
+    try {
+        logger.debug(chalk.yellow(`assessmentResult: ${JSON.stringify(assessmentResult)}\n`));
+        const toolResult = await entityAssessmentToolsNode.invoke({ messages: [assessmentResult] });
+        try {
+            logger.info(chalk.yellow(`toolResult: ${toolResult?.messages?.[0]?.content}\n`));
+            const refinedEntity = JSON.parse(toolResult?.messages?.[0]?.content || null);
+            logger.info(chalk.green(`entityAssessmentToolsNode invocation complete: ${JSON.stringify(refinedEntity || toolResult)}\n`));
 
-        progressBar.update(index + 1);
-        return toolResult;
-    }));
+            if(refinedEntity) {
+                refinedEntities.push(refinedEntity);
+            }
+        } catch(error) {
+            logger.info(chalk.red(`Failed to parse tool result: ${error} for ${JSON.stringify(assessmentResult)}\n`));
+        }
+    } catch(error) {
+        logger.error(chalk.red(`Failed to invoke entityAssessmentToolsNode: ${error} for ${JSON.stringify(assessmentResult)}\n`));
+    }
 
     progressBar.stop();
-    logger.info(chalk.green('Entities further refined using Neo4j.'));
+    logger.info(chalk.yellow(`Entities refined with Neo4j: ${JSON.stringify(_.map(refinedEntities, 'name'))}\n`));
 
-    return { entities: updatedEntities };
+    return { entities: refinedEntities };
 }
 /**
  * Extract relationships using the relationshipExtractionChain.
  * @param {Object} state - The current state containing further refined entities and novel chunk.
  * @returns {Promise<Object>} - The updated state with extracted relationships.
  */
-async function extractRelationships(state: { furtherRefinedEntities: Entity[], novelChunk: string }): Promise<{ relationships: Relationship[] }> {
-    logger.info(chalk.blue('Extracting relationships from the novel chunk...'));
-    const relationshipsResult = await relationshipExtractionChain.invoke({
-        extract: state.novelChunk,
-        entities: _.map(state.furtherRefinedEntities, entity => ({
-            name: entity.name,
-            type: entity.type,
-            description: entity.description,
-            aliases: entity.aliases
-        }))
-    });
+async function extractRelationships(state: { entities: Entity[], novelChunk: { pageContent: string } }): Promise<{ relationships: Relationship[] }> {
+    if(state.entities.length === 0) {
+        logger.info(chalk.yellow('No entities to extract relationships from.\n'));
+        return { relationships: [] };
+    }
 
-    logger.info(chalk.green(`Extracted ${relationshipsResult.length} relationships.`));
-    return { relationships: relationshipsResult };
+    logger.info(chalk.blue('Extracting relationships from the novel chunk...\n'));
+    let relationshipsResult = await relationshipExtractionChain.invoke({
+        extract: state.novelChunk.pageContent,
+        entities: JSON.stringify(state.entities)
+    });
+    if(_.isString(relationshipsResult)) {
+        relationshipsResult = JSON.parse(relationshipsResult);
+    }
+
+    logger.info(chalk.green(`Extracted ${relationshipsResult.relationships.length} relationships.\n`));
+    return { relationships: relationshipsResult.relationships };
 }
 /**
  * Save relationships to Neo4j using upsertRelationshipsIntoNeo4j.
@@ -543,9 +611,9 @@ async function extractRelationships(state: { furtherRefinedEntities: Entity[], n
  * @returns {Promise<void>} - A promise that resolves when the relationships are saved.
  */
 async function saveRelationshipsToNeo4j(state: { relationships: Relationship[] }): Promise<void> {
-    logger.info(chalk.blue('Saving relationships to Neo4j...'));
+    logger.info(chalk.blue('Saving relationships to Neo4j...\n'));
     await upsertRelationshipsIntoNeo4j(state.relationships);
-    logger.info(chalk.green('Relationships saved to Neo4j.'));
+    logger.info(chalk.green('Relationships saved to Neo4j.\n'));
 }
 // END OF WORKFLOW STAGE FUNCTIONS
 
@@ -577,11 +645,19 @@ const app = workflow.compile();
 
 // END OF AGENT WORKFLOW
 
-// Now run:
-const initialState = {
-    novelChunk: novelChunks[0],
-};
+// // Now run:
+const totalProgress = bars.create(chapterChunks.length, 0);
+for(const novelChunk of chapterChunks) {
+    totalProgress.update({ name: `${JSON.stringify(novelChunk.pageContent).substring(0, 48)}...(${novelChunk.pageContent.length})` });
+    const initialState = {
+        novelChunk: novelChunk,
+    };
 
-for await (const output of await app.stream({ streamMode: 'values', recursionLimit: 50, initialState })) {
-    logger.info(output);
+    for await (const output of await app.stream(initialState, { streamMode: 'values', recursionLimit: 50 })) {
+        logger.info(chalk.green(`Entities: ${output?.entities?.length || 0} Relationships: ${output?.relationships?.length || 0}\n`));
+    }
+    totalProgress.increment();
 }
+
+bars.stop();
+await driver.close();
