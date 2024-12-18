@@ -14,7 +14,6 @@ export default
     ...tseslint.configs.stylistic,
     {
         rules: {
-            '@stylistic/space-before-blocks': ['warn', { functions: 'always', keywords: 'always', classes: 'always' }],
             '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
         },
     },
