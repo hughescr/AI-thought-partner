@@ -1,7 +1,7 @@
 import {
     cachedJinaV2BaseENEmbeddings as embeddings,
     phi35_4bLLM as fastLLM,
-    qwen25_32bLLM as slowLLM,
+    llama33_70bLLM as slowLLM,
     jinaV1TinyENReranker as fastReranker,
     bgeV2M3Reranker as goodReranker } from './lib/LLMs.ts';
 import { StringOutputParser } from '@langchain/core/output_parsers';

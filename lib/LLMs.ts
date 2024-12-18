@@ -53,6 +53,17 @@ export const novaProLLM = new ChatBedrockConverse({
     },
     verbose: true,
 });
+export const llama31_70bLLM = new ChatBedrockConverse({
+    model: 'meta.llama3-1-70b-instruct-v1:0',
+    temperature: 0,
+    maxTokens: 2048,
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+    verbose: true,
+});
 
 // Apache License 2.0
 export const nomicEmbeddings = new OllamaEmbeddings({ model: 'nomic-embed-text', requestOptions: { numCtx: 2048 } });
@@ -82,7 +93,7 @@ export const phi3_14bLLM = new ChatOllama({ model: 'phi3:14b-medium-128k-instruc
 // Llama Community License
 export const llama32_3bLLM = new ChatOllama({ model: 'llama3.2:3b-instruct-q6_k_l', ...commonOptions32k });
 export const llama31_8bLLM = new ChatOllama({ model: 'llama3.1:8b-instruct-q6_k_l', ...commonOptions64k });
-export const llama33_70bLLM = new ChatOllama({ model: 'llama3.3:70b-instruct-q6_k_l', ...commonOptions32k });
+export const llama33_70bLLM = new ChatOllama({ model: 'llama3.3:70b-instruct-q6_k_l', ...commonOptions64k });
 
 // CC-Attribution-Non-Commercial
 export const bespokeMinicheckLLM = new ChatOllama({ model: 'bespoke-minicheck:7b-q8_0', ...commonOptions32k });
