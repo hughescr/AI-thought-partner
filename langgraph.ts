@@ -59,7 +59,7 @@ const vectorStore = await FaissStoreWithMMR.load(
 );
 
 const qaRetriever = vectorStore.asRetriever({
-    k: 100,
+    k: 75,
 });
 
 const sortDocsFormatAsJSON = (documents) => {
@@ -78,14 +78,6 @@ const sortDocsFormatAsJSON = (documents) => {
 const QuestionAnswerAnnotation = Annotation.Root({
     novelMetadata: Annotation<NovelMetadata>,
     documents: Annotation<Document[]>,
-    filteredDocuments: Annotation<Document[]>({
-        reducer: (left, right) => _.uniqBy([...left, ...right], 'pageContent'),
-        'default': () => [],
-    }),
-    uselessDocuments: Annotation<Document[]>({
-        reducer: (left, right) => _.uniqBy([...left, ...right], 'pageContent'),
-        'default': () => [],
-    }),
     origQuery: Annotation<string>,
     priorQueries: Annotation<string[]>({
         reducer: (left, right) => _.concat(left, right),
@@ -110,7 +102,8 @@ async function retrieve(state) {
         .withConfig({ runName: 'FetchRelevantDocuments' })
         .invoke(state.query || state.origQuery);
     logger.debug(`Retrieved ${documents.length} documents`);
-    return { documents: documents, query: state.query || state.origQuery };
+    const mergedDocs = _.unionBy(state.documents, documents, 'pageContent');
+    return { documents: mergedDocs, query: state.query || state.origQuery };
 }
 
 async function rerankDocuments(state) {
@@ -120,13 +113,13 @@ async function rerankDocuments(state) {
                         .value() as unknown as string[]; // Confused about types for some reason
     logger.debug(`Reranking ${docsToRerank.length} documents`);
 
-    fastReranker.topN = Math.max(Math.floor(docsToRerank.length / 4), 5);
-    const preRerankedDocuments = await fastReranker.rerank(docsToRerank, state.query);
+    fastReranker.topN = Math.min(docsToRerank.length, 100);
+    const preRerankedDocuments = await fastReranker.rerank(docsToRerank, state.origQuery);
 
     const preRerankedDocs = _.map(preRerankedDocuments, 'doc');
 
-    goodReranker.topN = Math.max(Math.floor(preRerankedDocs.length / 4), 3);
-    const rerankedDocuments = await goodReranker.rerank(preRerankedDocs, state.query);
+    goodReranker.topN = Math.min(preRerankedDocs.length, 50);
+    const rerankedDocuments = await goodReranker.rerank(preRerankedDocs, state.origQuery);
 
     logger.debug(`Reranked ${rerankedDocuments.length} documents`);
     // Now figure out which the original documents were
@@ -136,20 +129,7 @@ async function rerankDocuments(state) {
         return found;
     });
     // const ditchedDocs = _.difference(state.documents, rerankedDocs);
-    return { filteredDocuments: rerankedDocs, documents: [] };
-}
-
-async function reduceDocuments(state) {
-    logger.debug(`${state.documents.length} orig docs`);
-    const reducedDocs = _(state.documents)
-        .filter(d => !_.some(state.filteredDocuments, { pageContent: d.pageContent }))
-        .filter(d => !_.some(state.uselessDocuments, { pageContent: d.pageContent }))
-        .value() as Document[];
-    logger.debug(`${reducedDocs.length} reduced docs`);
-    // const BM25RetrieverInstance = BM25Retriever.fromDocuments(reducedDocs, { k: ~~(reducedDocs.length/4) });
-    // const bm25Docs = await BM25RetrieverInstance.invoke(state.query || state.origQuery);
-    // logger.debug(`BM25 retrieved ${bm25Docs.length} documents`);
-    return { documents: reducedDocs };
+    return { documents: rerankedDocs };
 }
 
 /**
@@ -205,10 +185,10 @@ async function transformQuery(state) {
  * @returns {"transformQuery" | "generate"} Next node to call
  */
 function decideToGenerate(state) {
-    logger.debug(`---DECIDE TO GENERATE: ${state.filteredDocuments.length} RELEVANT DOCUMENTS---`);
-    const filteredDocuments = state.filteredDocuments;
+    logger.debug(`---DECIDE TO GENERATE: ${state.documents.length} RELEVANT DOCUMENTS---`);
+    const documents = state.documents;
 
-    if(filteredDocuments.length <= 20 && state.priorQueries.length < 5) {
+    if(documents.length <= 250 && state.priorQueries.length < 5) {
         //
         // Too many documents have been filtered checkRelevance
         // We will re-generate a new query
@@ -217,12 +197,12 @@ function decideToGenerate(state) {
     }
     // We have relevant documents, so generate answer
     logger.debug('---DECISION: GENERATE---');
-    return 'generate';
+    return 'gradeDocuments';
 }
 
 const mainAgentPromptTemplate = ChatPromptTemplate.fromMessages([
     SystemMessagePromptTemplate.fromTemplate(`## General Instructions
-You are a powerful AI assistant trained as a developmental editor to help authors improve their unpublished novels before submitting drafts to literary agents. Your persona is that of an experienced editor who provides constructive feedback, identifies flaws, and suggests improvements while maintaining a professional and supportive tone.
+You are a powerful AI assistant trained as a developmental editor to help authors improve their unpublished novels before submitting drafts to literary agents. Your persona is that of an experienced editor who provides constructive feedback, identifies flaws, and suggests improvements while maintaining a professional and supportive but frank tone. You do not blow smoke up authors' asses.
 
 ## Task Overview
 Your task is to review extracts from a novel titled "{title}" by {author}, which belongs to the {genre} genre. You will be provided with one or more extracts from the novel, along with contextual information to help you understand the excerpts better. Based on these extracts, you will assist the author by answering their queries and requests related to the novel.
@@ -230,7 +210,7 @@ Your task is to review extracts from a novel titled "{title}" by {author}, which
 ## Instructions
 1. Read and carefully analyze the provided extracts from the novel.
 2. Understand the context surrounding each extract to better comprehend the excerpts.
-3. When answering the author's query, use evidence and examples from the extracts to support your response. Do not make up information that is not present in the extracts.
+3. When answering the author's query, use evidence and examples from the extracts to support your response. Do not make up information that is not present in the extracts. When referencing an extract, mention the chapter it's from.
 4. Identify potential flaws or areas for improvement in the novel based on the extracts. Provide constructive criticism and suggestions on how the author can address these issues.
 5. Cite the relevant extracts when quoting or referencing specific passages from the novel in your response.
 6. Remember that you only have access to limited excerpts, so your analysis and feedback should be based solely on the provided extracts and their context.
@@ -253,10 +233,10 @@ const ragChain = mainAgentPromptTemplate.pipe(slowLLM).pipe(new StringOutputPars
  * @returns {Promise<GraphState>} The new state object.
  */
 async function generate(state) {
-    logger.debug(`---GENERATE FROM ${state.filteredDocuments.length} DOCS---`);
+    logger.debug(`---GENERATE FROM ${state.documents.length} DOCS---`);
     // Pull in the prompt
 
-    const docs = sortDocsFormatAsJSON(state.filteredDocuments);
+    const docs = sortDocsFormatAsJSON(state.documents);
     logger.debug(`Context has length ${docs.length}`);
 
     const generation = await ragChain.invoke({
@@ -268,7 +248,7 @@ async function generate(state) {
     });
 
     return {
-        filteredDocuments: [],
+        documents: [],
         generation,
     };
 }
@@ -280,17 +260,16 @@ const workflow = new StateGraph(QuestionAnswerAnnotation)
     .addNode('retrieve', retrieve)
     .addEdge('setupMetadata', 'retrieve')
 
-    .addNode('reduceDocuments', reduceDocuments)
-    .addEdge('retrieve', 'reduceDocuments')
-
-    .addNode('gradeDocuments', rerankDocuments)
-    .addEdge('reduceDocuments', 'gradeDocuments')
-    .addConditionalEdges('gradeDocuments', decideToGenerate)
-
     .addNode('transformQuery', transformQuery)
     .addEdge('transformQuery', 'retrieve')
 
+    .addConditionalEdges('retrieve', decideToGenerate)
+
+    .addNode('gradeDocuments', rerankDocuments)
+
     .addNode('generate', generate)
+    .addEdge('gradeDocuments', 'generate')
+
     .addEdge('generate', END);
 
 const app = workflow.compile();
@@ -346,7 +325,7 @@ const inputs = {
 let finalState;
 for await (const output of await app.stream(inputs, { streamMode: 'values', recursionLimit: 50 })) {
     if(!output.generation) {
-        // logger.info(_(output.filteredDocuments)
+        // logger.info(_(output.documents)
         //     .sortBy(['metadata.source', 'metadata.loc.pageNumber', 'metadata.loc.lines.from'])
         //     .map('pageContent')
         //     .join('\n')
