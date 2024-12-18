@@ -58,58 +58,6 @@ const vectorStore = await FaissStoreWithMMR.load(
     embeddings
 );
 
-// const hydePrompt = ChatPromptTemplate.fromMessages([
-//     SystemMessagePromptTemplate.fromTemplate(`### Instruction
-// You are an AI assistant tasked with generating a short paragraph in response to a given query. Follow these guidelines:
-
-// 1. Read and understand the provided query carefully.
-// 2. Compose a concise and relevant paragraph that directly addresses the query.
-// 3. Ensure the paragraph is well-structured, coherent, and grammatically correct.
-// 4. Avoid any preamble, explanations, or additional information beyond the paragraph itself.`),
-//     HumanMessagePromptTemplate.fromTemplate(`### Query
-// {query}
-
-// Now provide your response immediately without any preamble or additional information:`),
-// ]);
-
-// class HydeRetrieverWithMMR extends HydeRetriever {
-//     async _getRelevantDocuments(query: string, runManager?: CallbackManagerForRetrieverRun) {
-//         let value: BasePromptValueInterface = new StringPromptValue(query);
-//         // Use a custom template if provided
-//         if(this.promptTemplate) {
-//             value = await this.promptTemplate.formatPromptValue({ query });
-//         }
-//         // Get a hypothetical answer from the LLM
-//         const res = await this.llm.generatePrompt([value]);
-//         const answer = res.generations[0][0].text;
-//         // Retrieve relevant documents based on the hypothetical answer
-//         if(this.searchType === 'mmr') {
-//             if(_.isFunction(this.vectorStore.maxMarginalRelevanceSearch) === false) {
-//                 throw new Error(`The vector store backing this retriever, ${this._vectorstoreType()} does not support max marginal relevance search.`);
-//             }
-//             return this.vectorStore.maxMarginalRelevanceSearch(answer, {
-//                 k: this.k,
-//                 filter: this.filter,
-//                 ...this.searchKwargs,
-//             }, runManager?.getChild('vectorstore'));
-//         }
-//         return this.vectorStore.similaritySearch(answer, this.k, this.filter, runManager?.getChild('vectorstore'));
-//     }
-// };
-
-// const qaRetriever = new HydeRetrieverWithMMR({
-//     // verbose: true,
-//     vectorStore,
-//     llm: fastLLM, // Basic task to write the prompt so do it quickly
-//     searchType: 'mmr',
-//     searchKwargs: {
-//         lambda: 0.5,
-//         fetchK: 100,
-//     },
-//     k: 50,
-//     promptTemplate: hydePrompt,
-// });
-
 const qaRetriever = vectorStore.asRetriever({
     k: 100,
 });
