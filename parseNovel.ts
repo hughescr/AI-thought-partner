@@ -22,7 +22,7 @@ _.mixin({
 { chain: true } // Enable chaining for this mixin
 );
 
-const book = 'Christmas Town beta';
+const book = 'DMK_V9';
 // const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: true });
 const loader = new TextLoader(`novels/${book}.md`);
 const docs = await loader.load();

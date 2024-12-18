@@ -26,7 +26,7 @@ if(process.versions.bun === undefined) {
     logger.warn(chalk.yellowBright('Running under Bun, not setting global dispatcher so LLMs might timeout'));
 }
 
-const book = 'Christmas Town beta';
+const book = 'DMK_V9';
 const storeDirectory = `novels/${book}`;
 
 interface NovelMetadata {
@@ -45,10 +45,10 @@ async function setupMetadata(): Promise<{ novelMetadata: NovelMetadata }> {
 
     return {
         novelMetadata: {
-            title: 'Christmas Town',
-            author: 'Erica S. Hughes',
+            title: 'Dean Martin’s Kiss',
+            author: 'Amy Schottenfels',
             today: new Date().toISOString(),
-            genre: 'Literary Fiction/Young Adult',
+            genre: 'Historical fiction',
         },
     };
 }
@@ -293,7 +293,7 @@ const input =
     // `Active voice: Does the writing use active voice instead of passive voice whenever possible?`
     // `Vary sentence structure: Does the writing break up long sentences with shorter ones to create rhythm and variety?`
     // `Analyze the story from the point of view of a potential reader who purchases the book. Would they be likely to enjoy reading it?`
-    // `Analyze the story from the point of view of a literary agent reading this book for the first time and trying to decide if they want to represent this author to publishers.`
+    `Analyze the story from the point of view of a literary agent reading this book for the first time and trying to decide if they want to represent this author to publishers.`
     // `Provide suggestions on how to improve any confusing parts of the plot. If there are other narrative elements which should be revised and improved, point them out.`
     // `List all the chapters in the book, and give a one-sentence summary of each chapter.`
     // `What do you dislike the most about the book? What needs fixing most urgently?`
@@ -310,7 +310,7 @@ const input =
     // `What is the age of the main character and what are some of the challenges she faces throughout the novel?`
     // `How can the story be adjusted to make it appealing to a wider audience without losing its core themes of trauma, loss, and redemption?`
     // `Are there any secondary characters or subplots in the novel that could be expanded upon to provide additional perspectives or interests?`
-    'Can you provide more context about Roger and his role in the novel? How does he relate to the themes of family, loss, and personal growth?'
+    // 'Can you provide more context about Roger and his role in the novel? How does he relate to the themes of family, loss, and personal growth?'
     // `Can you provide a brief overview of the main plot points? Is the story believable?`
     // `Pick any quotation from the book and count the number of words in it.`
     // `Should Tyler's body be found earlier in the narrative? I'm not talking about figuring out how he died, just the actual discovery of his death. Typically, this discovery would be the inciting incident in a mystery novel but this isn't purely a mystery novel. Have I been successful in engaging readers in Meghan's life so that postponing the mystery elements of the novel works?`
@@ -320,7 +320,9 @@ const input =
     // `Pick an iconic scene from the book, and describe it in visual detail. The description will be provided to an AI image generator using a Stable Diffusion type model. Include in your description all the important elements which will allow the AI model to properly generate the image. The image generator knows nothing of the novel, so if it's important, include things like the period/era of the story, the geographical setting, etc. so an accurate image can be generated. Do not include any preamble, discussion or any other meta-information, merely output the description of the desired image.`
     // `When is this story set? What decade, or if you can be more specific, what year? How can you tell? Are there any clues in pop culture references in the story like TV shows, movies, songs, books, or anything similar?`
     // `Can you check the novel for pacing issues. Are there any parts of the novel that feel too slow or too fast? If so, can you suggest ways to improve the pacing?`
+    // `Does Dulcy have a clear and compelling character arc in the novel?`
     // `Are there scenes which don't work well in the novel? If so, can you suggest ways to improve them?`
+    // `Does Chapter 40 work in the novel? If not, what are the issues with it and how can it be improved?`
     ;
 
 const inputs = {
