@@ -15,36 +15,37 @@
     "postversion": "git commit -m \"Bump package version to $npm_package_version\" package.json; git flow release start $npm_package_version; git flow release finish -m $npm_package_version $npm_package_version; git checkout develop; git merge master"
   },
   "devDependencies": {
-    "@eslint/config-inspector": "^0.5.6",
+    "@eslint/config-inspector": "^0.6.0",
     "@eslint/eslintrc": "^3.2.0",
-    "@hughescr/eslint-config-default": "^3.0.3",
+    "@hughescr/eslint-config-default": "^3.0.4",
     "@hughescr/serverless-plugin-git-version-json": "^1.1.0",
     "@types/bun": "^1.1.14",
     "@types/jest": "^29.5.14",
     "@types/lodash": "^4.17.13",
-    "eslint": "^9.16.0",
+    "eslint": "^9.17.0",
     "eslint-plugin-jest": "^28.9.0",
-    "typescript-eslint": "^8.18.0"
+    "typescript-eslint": "^8.18.1"
   },
   "dependencies": {
     "@hughescr/logger": "^2.6.0",
     "@langchain/aws": "^0.1.2",
-    "@langchain/community": "^0.3.17",
-    "@langchain/core": "^0.3.22",
-    "@langchain/langgraph": "^0.2.27",
-    "@langchain/ollama": "^0.1.2",
+    "@langchain/community": "^0.3.19",
+    "@langchain/core": "^0.3.24",
+    "@langchain/langgraph": "^0.2.34",
+    "@langchain/ollama": "^0.1.4",
     "@langchain/textsplitters": "^0.1.0",
-    "chalk": "^5.3.0",
+    "chalk": "^5.4.0",
     "cli-progress": "^3.12.0",
+    "execa": "^9.5.2",
     "faiss-node": "^0.5.1",
-    "langchain": "^0.3.6",
+    "langchain": "^0.3.7",
     "lodash": "^4.17.21",
     "luxon": "^3.5.0",
     "neo4j-driver": "^5.27.0",
     "ollama": "link:ollama",
     "pdf-parse": "^1.1.1",
     "tolerant-json-parser": "^1.0.1",
-    "undici": "^7.1.0"
+    "undici": "^7.2.0"
   },
   "trustedDependencies": [
     "esbuild",
