@@ -286,7 +286,7 @@ const input =
     // `Where would this novel fit in the pantheon of books? How good is it? Would it be at all fair to compare it to any other books? Be realistic and honest.`
     // `Proofreading: are there any spelling, grammar, or punctuation errors that can distract readers from the story itself? Please list them all, including reference information for where they occur in the novel.`
     // `Character development: Identify the important characters and then assess how well-developed they are, with distinct personalities, backgrounds, and motivations.`
-    // `Plot structure: Analyze whether the story's events are in a clear and coherent sequence, with rising action, climax, falling action, and resolution.`
+    // `Plot structure: Analyze whether the story's events are in a clear and coherent sequence, with rising action, climax, falling action, and resolution, thinking about the sequence of events across the extracts from chapter to chapter.`
     // `Subplots: Analyze the sub-plots and minor characters to verify that they add to the story instead of distracting from it. Sub-plots and side-characters should enhance the story and not confuse the reader. Point out any flaws.`
     // `Show, don't tell: Analyze whether the story simply tells readers what is happening or how characters feel, or whether it uses vivid descriptions and actions to show them. This will make the writing more engaging and immersive.`
     // `Consistent point of view: Does the novel stick to one consistent point of view throughout, whether it be first person, third person limited, or omniscient? This will help maintain a cohesive narrative voice.`
@@ -319,6 +319,8 @@ const input =
     // `Write a 1000-word comparative literature essay about this novel written in 2024, thinking about it as an allegory for the modern world of AI, even though the story is set in the 1990s before such AI had been developed. How do the novel's themes mirror issues of social isolation in a world full of robots? How does it help us understand how human societies can co-exist with robots while maintaining any notion of a human "self"? Do not invent things which are not in the novel itself; use quotes from the novel as appropriate to support your arguments. Draw on external sources as necessary. Use markdown formatting in the essay, including markdown footnotes for bibliographic references.`
     // `Pick an iconic scene from the book, and describe it in visual detail. The description will be provided to an AI image generator using a Stable Diffusion type model. Include in your description all the important elements which will allow the AI model to properly generate the image. The image generator knows nothing of the novel, so if it's important, include things like the period/era of the story, the geographical setting, etc. so an accurate image can be generated. Do not include any preamble, discussion or any other meta-information, merely output the description of the desired image.`
     // `When is this story set? What decade, or if you can be more specific, what year? How can you tell? Are there any clues in pop culture references in the story like TV shows, movies, songs, books, or anything similar?`
+    // `Can you check the novel for pacing issues. Are there any parts of the novel that feel too slow or too fast? If so, can you suggest ways to improve the pacing?`
+    // `Are there scenes which don't work well in the novel? If so, can you suggest ways to improve them?`
     ;
 
 const inputs = {
