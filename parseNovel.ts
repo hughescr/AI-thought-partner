@@ -277,8 +277,8 @@ for(const chunk of splitChunks) {
     }
     bar.increment(chunk.length);
 }
-if(vectorStore) {
-    vectorStore.save(`novels/${book}`);
+if (vectorStore) {
+    await vectorStore.save(`novels/${book}`);
 }
 bar.stop();
 multiBar.stop();
