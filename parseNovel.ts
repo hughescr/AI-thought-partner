@@ -70,7 +70,7 @@ const chapterSplitter = new RecursiveCharacterTextSplitterSeparatorMod({
 
 const chapterChunks = await chapterSplitter.splitDocuments(docs);
 
-const targetSummarySize = idealContextSize / 10; // 400 tokens if idealContextSize is 4000
+const targetSummarySize = idealContextSize / 10; // 3276.8 tokens if idealContextSize is 32768
 
 const summaryGeneratorLevel1 = new SummaryGenerator({
     llm: summarizerLLM,
