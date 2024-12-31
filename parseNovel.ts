@@ -132,7 +132,6 @@ const multiBar = new cliProgress.MultiBar(
     },
     cliProgress.Presets.shades_classic
 );
-const totalChapters: number = chapterChunks.length;
 // Create main progress bar for chapters
 // for(const chapter of chapterChunks) {
 //     chapterBar.increment();
@@ -250,15 +249,14 @@ while(true) {
 
             for(let i = 0; i < currentSummaries.length; i += batchSize) {
                 const batch = currentSummaries.slice(i, i + batchSize);
-                const currentLevel = level; // Capture current value of 'level'
                 const promise = limitedThrottledInvoke({
-                    'long': _.map(batch, (doc) => doc.pageContent).join('\n'), // Assuming concatenation; adjust as needed
-                    'short': ' ' // Provide appropriate short passage if required
+                    long: _.map(batch, doc => doc.pageContent).join('\n'), // Assuming concatenation; adjust as needed
+                    short: ' ' // Provide appropriate short passage if required
                 }).then((summary) => {
                     newSummaries.push(summary);
                     multiBar.log(chalk.green(`Generated Level ${level} summary for batch ${i + 1} to ${i + batch.length}`));
-                return summary; // Added return statement
-                }).catch((error) => {
+                    return summary; // Added return statement
+                }).catch(error => {
                     multiBar.log(chalk.red(`Error generating summary for batch ${i + 1} to ${i + batch.length}: ${error.message}`));
                 });
                 batchPromises.push(promise);
