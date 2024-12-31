@@ -248,16 +248,15 @@ while(true) {
             const batchPromises: Promise<void>[] = [];
 
             for(let i = 0; i < currentSummaries.length; i += batchSize) {
-                const currentLevel = level; // Capture current value of 'level'
                 const batch = currentSummaries.slice(i, i + batchSize);
                 const promise = limitedThrottledInvoke({
-                    'long': _.map(batch, doc => doc.pageContent).join('\n'), // Assuming concatenation; adjust as needed
-                    'short': ' ' // Provide appropriate short passage if required
-                }).then(summary => {
+                    long: _.map(batch, doc => doc.pageContent).join('\n'), // Assuming concatenation; adjust as needed
+                    short: ' ' // Provide appropriate short passage if required
+                }).then((summary) => {
                     newSummaries.push(summary);
                     multiBar.log(chalk.green(`Generated Level ${level} summary for batch ${i + 1} to ${i + batch.length}`));
                     return summary; // Added return statement
-                }).catch(error => {
+                }).catch((error) => {
                     multiBar.log(chalk.red(`Error generating summary for batch ${i + 1} to ${i + batch.length}: ${error.message}`));
                 });
                 batchPromises.push(promise);
