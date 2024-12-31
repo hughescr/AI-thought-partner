@@ -72,17 +72,7 @@ const chapterChunks = await chapterSplitter.splitDocuments(docs);
 
 const targetSummarySize = idealContextSize / 10; // 3276.8 tokens if idealContextSize is 32768
 
-const summaryGeneratorLevel1 = new SummaryGenerator({
-    llm: summarizerLLM,
-    targetSummarySize: targetSummarySize, // 400 tokens
-});
-
-const summaryGeneratorLevel2 = new SummaryGenerator({
-    llm: summarizerLLM,
-    targetSummarySize: targetSummarySize, // 400 tokens
-});
-
-const summaryGeneratorLevel3 = new SummaryGenerator({
+const summaryGenerator = new SummaryGenerator({
     llm: summarizerLLM,
     targetSummarySize: targetSummarySize, // 400 tokens
 });
@@ -224,16 +214,6 @@ while(true) {
         const newSummaries: Document[] = [];
         for(let i = 0; i < currentSummaries.length; i += 10) {
             const batch = currentSummaries.slice(i, i + 10);
-            let summaryGenerator: SummaryGenerator;
-
-            if (level === 1) {
-                summaryGenerator = summaryGeneratorLevel1;
-            } else if (level === 2) {
-                summaryGenerator = summaryGeneratorLevel2;
-            } else {
-                summaryGenerator = summaryGeneratorLevel3;
-            }
-
             const summary = await summaryGenerator.generateSummary(batch);
             newSummaries.push(summary);
             multiBar.log(chalk.green(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`));
