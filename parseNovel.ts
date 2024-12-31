@@ -94,7 +94,7 @@ const summaryGenerator = new SummaryGenerator({
 
 const splitter: SemanticTextSplitter = new SemanticTextSplitter({
     showProgress: true,
-    initialChunkSize: targetSummarySize/4, // Tokens!
+    initialChunkSize: targetSummarySize / 4, // Tokens!
     chunkSize: targetSummarySize, // Tokens!
     embeddings: fastEmbeddings, // Use fast embeddings for decent semantic splits
     embeddingBatchSize: 128,
@@ -245,70 +245,70 @@ while(true) {
         break;
     }
 
-try {
-    const newSummaries: Document[] = [];
+    try {
+        const newSummaries: Document[] = [];
 
-    // Concatenate all summaries into a single text
-    const concatenatedText = currentSummaries.map(doc => doc.pageContent).join('\n\n');
-    const concatenatedDocument = new Document({ pageContent: concatenatedText });
-    const concatenatedChunks = await splitter.splitDocuments([concatenatedDocument]);
+        // Concatenate all summaries into a single text
+        const concatenatedText = currentSummaries.map(doc => doc.pageContent).join('\n\n');
+        const concatenatedDocument = new Document({ pageContent: concatenatedText });
+        const concatenatedChunks = await splitter.splitDocuments([concatenatedDocument]);
 
-    if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
+        if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
         // Serial Processing for Ollama
-        for(let i = 0; i < concatenatedChunks.length; i++) {
-            const chunk = concatenatedChunks[i];
-            const summary = await summaryGenerator.generateSummary([chunk]);
-            newSummaries.push(summary);
-            console.log(chalk.green(`Generated Level ${level} summary for chunk ${i + 1}`));
-        }
-    } else {
+            for(let i = 0; i < concatenatedChunks.length; i++) {
+                const chunk = concatenatedChunks[i];
+                const summary = await summaryGenerator.generateSummary([chunk]);
+                newSummaries.push(summary);
+                console.log(chalk.green(`Generated Level ${level} summary for chunk ${i + 1}`));
+            }
+        } else {
         // Parallel Processing for Non-Ollama LLMs using limitedThrottledSummaryGenerator
-        console.log(chalk.yellow(`Processing ${concatenatedChunks.length} chunks in parallel...\n`));
+            console.log(chalk.yellow(`Processing ${concatenatedChunks.length} chunks in parallel...\n`));
 
-        const batchSize = 10; // Define an appropriate batch size within each level
-        const batchPromises: Promise<Document | null>[] = [];
+            const batchSize = 10; // Define an appropriate batch size within each level
+            const batchPromises: Promise<Document | null>[] = [];
 
-        for(let i = 0; i < concatenatedChunks.length; i += batchSize) {
-            const batch = concatenatedChunks.slice(i, i + batchSize);
-            const promise = limitedThrottledSummaryGenerator({ docs: batch })
-                .then(summary => {
+            for(let i = 0; i < concatenatedChunks.length; i += batchSize) {
+                const batch = concatenatedChunks.slice(i, i + batchSize);
+                const promise = limitedThrottledSummaryGenerator({ docs: batch })
+                .then((summary) => {
                     console.log(chalk.green(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`));
                     return summary;
                 })
-                .catch(error => {
+                .catch((error) => {
                     console.log(chalk.red(`Error generating summary for batches ${i + 1} to ${i + batch.length}: ${error.message}`));
                     return null; // Handle error by returning null or appropriate placeholder
                 });
-            batchPromises.push(promise);
+                batchPromises.push(promise);
+            }
+
+            const summaries = await Promise.all(batchPromises);
+
+            // Filter out any null summaries due to errors
+            const successfulSummaries = summaries.filter(summary => summary !== null) as Document[];
+
+            newSummaries.push(...successfulSummaries);
+
+            console.log(chalk.yellow(`Finished processing ${successfulSummaries.length} summaries in parallel.\n`));
         }
 
-        const summaries = await Promise.all(batchPromises);
+        // Save the summaries to a plain text file
+        await saveSummariesToFile(newSummaries, level, book);
 
-        // Filter out any null summaries due to errors
-        const successfulSummaries = summaries.filter(summary => summary !== null) as Document[];
+        // Optionally, index the new summaries into FaissStore (Uncomment if indexing is still needed)
+        console.log(chalk.blue(`Indexing Level ${level} summaries...\n`));
+        const vectorStoreLevel = await FaissStore.fromDocuments(newSummaries, embeddings);
+        await vectorStoreLevel.save(`novels/${book}_level${level}`);
+        console.log(chalk.blue(`Level ${level} summaries indexed and saved.\n`));
 
-        newSummaries.push(...successfulSummaries);
-
-        console.log(chalk.yellow(`Finished processing ${successfulSummaries.length} summaries in parallel.\n`));
+        // Prepare for next iteration
+        // Concatenate all new summaries for the next level's input
+        const concatenatedNewSummaries = newSummaries.map(doc => doc.pageContent).join('\n\n');
+        const nextDocuments = await splitter.splitDocuments([new Document({ pageContent: concatenatedNewSummaries })]);
+        currentSummaries = nextDocuments;
+        level++;
+    } catch(error) {
+        console.log(chalk.red(`Error during Level ${level} summarization or FaissStore indexing: ${error.message}`));
+        break; // Exit loop on error
     }
-
-    // Save the summaries to a plain text file
-    await saveSummariesToFile(newSummaries, level, book);
-
-    // Optionally, index the new summaries into FaissStore (Uncomment if indexing is still needed)
-    console.log(chalk.blue(`Indexing Level ${level} summaries...\n`));
-    const vectorStoreLevel = await FaissStore.fromDocuments(newSummaries, embeddings);
-    await vectorStoreLevel.save(`novels/${book}_level${level}`);
-    console.log(chalk.blue(`Level ${level} summaries indexed and saved.\n`));
-
-    // Prepare for next iteration
-    // Concatenate all new summaries for the next level's input
-    const concatenatedNewSummaries = newSummaries.map(doc => doc.pageContent).join('\n\n');
-    const nextDocuments = await splitter.splitDocuments([new Document({ pageContent: concatenatedNewSummaries })]);
-    currentSummaries = nextDocuments;
-    level++;
-} catch(error) {
-    console.log(chalk.red(`Error during Level ${level} summarization or FaissStore indexing: ${error.message}`));
-    break; // Exit loop on error
-}
 }
