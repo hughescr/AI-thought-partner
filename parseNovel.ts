@@ -114,7 +114,7 @@ const throttledInvoke = throttle(({ long, short }) => contextChain.invoke({ long
 const limitedThrottledInvoke = ({ long, short }) => limit(() => throttledInvoke({ long, short }));
 
 // Initialize MultiBar
-const multiBar: cliProgress.MultiBar = new cliProgress.MultiBar(
+const multiBar = new cliProgress.MultiBar(
     {
         clearOnComplete: false,
         hideCursor: true,
@@ -125,7 +125,7 @@ const multiBar: cliProgress.MultiBar = new cliProgress.MultiBar(
 );
 const totalChapters: number = chapterChunks.length;
 // Create main progress bar for chapters
-const chapterBar: cliProgress.SingleBar = multiBar.create(totalChapters, 0, {
+const chapterBar = multiBar.create(totalChapters, 0, {
     name: 'Chapters',
 });
 
@@ -136,7 +136,7 @@ for(const chapter of chapterChunks) {
 
     const totalSmallerChunks = smallerChunks.length;
     // Create progress bar for smaller chunks
-    const chunkBar: cliProgress.SingleBar = multiBar.create(totalSmallerChunks, 0, {
+    const chunkBar = multiBar.create(totalSmallerChunks, 0, {
         name: 'Chunks',
     });
     if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
@@ -180,7 +180,7 @@ const splitChunks = _(splits)
     .flatten()
     .chunk(16)
     .value();
-const bar: cliProgress.SingleBar = multiBar.create(
+const bar = multiBar.create(
     _.flatten(splits).length,
     0,
     { name: 'Saving chunks' }
