@@ -207,7 +207,7 @@ async function calculateTotalTokens(docs: Document[]): Promise<number> {
 let currentSummaries: Document[] = splits;
 let level = 1;
 
-while (true) {
+while(true) {
     multiBar.log(chalk.blue(`\nStarting summarization Level ${level}...\n`));
 
     // Calculate total tokens of current summaries
@@ -215,7 +215,7 @@ while (true) {
     multiBar.log(chalk.blue(`Total tokens at Level ${level}: ${totalTokens}`));
 
     // Check if total tokens are within the ideal context size
-    if (totalTokens <= idealContextSize) {
+    if(totalTokens <= idealContextSize) {
         multiBar.log(chalk.green(`Desired context size achieved at Level ${level - 1}.`));
         break;
     }
@@ -224,9 +224,13 @@ while (true) {
         const newSummaries: Document[] = [];
         for(let i = 0; i < currentSummaries.length; i += 10) {
             const batch = currentSummaries.slice(i, i + 10);
-            const summary = await (level === 1 ? summaryGeneratorLevel1 : 
-                level === 2 ? summaryGeneratorLevel2 : 
-                summaryGeneratorLevel3).generateSummary(batch);
+            const summary = await (
+                level === 1 
+                ? summaryGeneratorLevel1 
+                : level === 2 
+                ? summaryGeneratorLevel2 
+                : summaryGeneratorLevel3
+            ).generateSummary(batch);
             newSummaries.push(summary);
             multiBar.log(chalk.green(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`));
         }
@@ -245,7 +249,6 @@ while (true) {
         break; // Exit loop on error
     }
 }
-
 
 let vectorStore: FaissStore | undefined;
 
