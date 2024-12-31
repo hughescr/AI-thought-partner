@@ -16,6 +16,7 @@ import _ from 'lodash';
 import chalk from 'chalk';
 import pThrottle from 'p-throttle';
 import pLimit from 'p-limit';
+import { getEncoding } from '@langchain/core/utils/tiktoken';
 
 _.mixin({
     awaitAll: function <T>(promiseArray: Promise<T>[]) {
