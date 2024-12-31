@@ -146,7 +146,6 @@ const totalChapters: number = chapterChunks.length;
 const chapterBar = multiBar.create(totalChapters, 0, {
     name: 'Chapters',
 });
-
 const splits: Document[] = [];
 for(const chapter of chapterChunks) {
     chapterBar.increment();
