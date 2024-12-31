@@ -3,7 +3,7 @@ import {
     cachedJinaV2SmallENEmbeddings as fastEmbeddings,
     novaLiteLLM as summarizerLLM
 } from './lib/LLMs';
-import { ChatPromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
+import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
