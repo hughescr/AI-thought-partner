@@ -12,6 +12,7 @@ import cliProgress from 'cli-progress';
 import { SemanticTextSplitter } from './lib/SemanticTextSplitter';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { Document } from '@langchain/core/documents';
+import { SummaryGenerator } from './lib/SummaryGenerator';
 import _ from 'lodash';
 import chalk from 'chalk';
 import pThrottle from 'p-throttle';
@@ -25,6 +26,7 @@ _.mixin({
 { chain: true } // Enable chaining for this mixin
 );
 
+const idealContextSize = 4096; // Desired total token limit for summaries
 const book = 'DMK_V9';
 // const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: true });
 const loader = new TextLoader(`novels/${book}.md`);
@@ -68,6 +70,23 @@ const chapterSplitter = new RecursiveCharacterTextSplitterSeparatorMod({
 });
 
 const chapterChunks = await chapterSplitter.splitDocuments(docs);
+
+const targetSummarySize = idealContextSize / 10; // 400 tokens if idealContextSize is 4000
+
+const summaryGeneratorLevel1 = new SummaryGenerator({
+    llm: summarizerLLM,
+    targetSummarySize: targetSummarySize, // 400 tokens
+});
+
+const summaryGeneratorLevel2 = new SummaryGenerator({
+    llm: summarizerLLM,
+    targetSummarySize: targetSummarySize, // 400 tokens
+});
+
+const summaryGeneratorLevel3 = new SummaryGenerator({
+    llm: summarizerLLM,
+    targetSummarySize: targetSummarySize, // 400 tokens
+});
 
 const splitter: SemanticTextSplitter = new SemanticTextSplitter({
     showProgress: false,
@@ -171,6 +190,61 @@ for(const chapter of chapterChunks) {
     chunkBar.stop();
     multiBar.remove(chunkBar);
 }
+
+// Save the main vector store for initial chunks
+if (vectorStore) {
+    await vectorStore.save(`novels/${book}`);
+}
+
+// Generate Final summaries (summarize every 10 Level 2 summaries)
+if (level2Summaries.length > 0) {
+    multiBar.log(chalk.blue('Generating Final summaries...\n'));
+    const finalSummaries: Document[] = [];
+    for (let i = 0; i < level2Summaries.length; i += 10) {
+        const batch = level2Summaries.slice(i, i + 10);
+        const summary = await summaryGeneratorLevel3.generateSummary(batch);
+        finalSummaries.push(summary);
+        multiBar.log(chalk.green(`Generated Final summary for Level 2 summaries ${i + 1} to ${i + 10}`));
+    }
+
+    // Index Final summaries into a separate FaissStore
+    multiBar.log(chalk.blue('Indexing Final summaries...\n'));
+    const vectorStoreFinal = await FaissStore.fromDocuments(finalSummaries, embeddings);
+    await vectorStoreFinal.save(`novels/${book}_final`);
+    multiBar.log(chalk.blue('Final summaries indexed and saved.\n'));
+}
+
+// Generate Level 2 summaries (summarize every 10 Level 1 summaries)
+multiBar.log(chalk.blue('Generating Level 2 summaries...\n'));
+const level2Summaries: Document[] = [];
+for (let i = 0; i < level1Summaries.length; i += 10) {
+    const batch = level1Summaries.slice(i, i + 10);
+    const summary = await summaryGeneratorLevel2.generateSummary(batch);
+    level2Summaries.push(summary);
+    multiBar.log(chalk.green(`Generated Level 2 summary for Level 1 summaries ${i + 1} to ${i + 10}`));
+}
+
+// Index Level 2 summaries into a separate FaissStore
+multiBar.log(chalk.blue('Indexing Level 2 summaries...\n'));
+const vectorStoreLevel2 = await FaissStore.fromDocuments(level2Summaries, embeddings);
+await vectorStoreLevel2.save(`novels/${book}_level2`);
+multiBar.log(chalk.blue('Level 2 summaries indexed and saved.\n'));
+
+// Generate Level 1 summaries (summarize every 10 initial chunks)
+multiBar.log(chalk.blue('Generating Level 1 summaries...\n'));
+const level1Summaries: Document[] = [];
+for (let i = 0; i < splits.length; i += 10) {
+    const batch = splits.slice(i, i + 10);
+    const summary = await summaryGeneratorLevel1.generateSummary(batch);
+    level1Summaries.push(summary);
+    multiBar.log(chalk.green(`Generated Level 1 summary for chunks ${i + 1} to ${i + 10}`));
+}
+
+// Index Level 1 summaries into a separate FaissStore
+multiBar.log(chalk.blue('Indexing Level 1 summaries...\n'));
+const vectorStoreLevel1 = await FaissStore.fromDocuments(level1Summaries, embeddings);
+await vectorStoreLevel1.save(`novels/${book}_level1`);
+multiBar.log(chalk.blue('Level 1 summaries indexed and saved.\n'));
 // Stop the chapter progress bar and MultiBar
 chapterBar.stop();
 
