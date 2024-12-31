@@ -192,7 +192,9 @@ for(const chapter of chapterChunks) {
     multiBar.remove(chunkBar);
 }
 
-const level2Summaries: Document[] = [];
+// Generate Level 1 summaries (summarize every 10 initial chunks)
+multiBar.log(chalk.blue('Generating Level 1 summaries...\n'));
+const level1Summaries: Document[] = [];
 
 // Save the main vector store for initial chunks
 if(vectorStore) {
