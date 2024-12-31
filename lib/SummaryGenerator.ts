@@ -4,8 +4,8 @@ import { LLM } from '@langchain/core/llm';
 import { Document } from '@langchain/core/documents';
 
 interface SummaryGeneratorOptions {
-    llm: LLM;
-    targetSummarySize: number; // Desired summary size in tokens
+    llm: LLM
+    targetSummarySize: number // Desired summary size in tokens
 }
 
 export class SummaryGenerator {
@@ -18,7 +18,7 @@ export class SummaryGenerator {
     }
 
     public async generateSummary(docs: Document[]): Promise<Document> {
-        const combinedText = docs.map(doc => doc.pageContent).join('\n\n');
+        const combinedText = _.map(docs, doc => doc.pageContent).join('\n\n');
 
         const summaryPrompt = ChatPromptTemplate.fromMessages([
             SystemMessagePromptTemplate.fromTemplate(`## Task

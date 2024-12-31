@@ -148,6 +148,7 @@ const chapterBar = multiBar.create(totalChapters, 0, {
     name: 'Chapters',
 });
 
+let vectorStore: FaissStore | undefined;
 const splits: Document[] = [];
 for(const chapter of chapterChunks) {
     chapterBar.increment();
@@ -191,16 +192,18 @@ for(const chapter of chapterChunks) {
     multiBar.remove(chunkBar);
 }
 
+const level2Summaries: Document[] = [];
+
 // Save the main vector store for initial chunks
-if (vectorStore) {
+if(vectorStore) {
     await vectorStore.save(`novels/${book}`);
 }
 
 // Generate Final summaries (summarize every 10 Level 2 summaries)
-if (level2Summaries.length > 0) {
+if(level2Summaries.length > 0) {
     multiBar.log(chalk.blue('Generating Final summaries...\n'));
     const finalSummaries: Document[] = [];
-    for (let i = 0; i < level2Summaries.length; i += 10) {
+    for(let i = 0; i < level2Summaries.length; i += 10) {
         const batch = level2Summaries.slice(i, i + 10);
         const summary = await summaryGeneratorLevel3.generateSummary(batch);
         finalSummaries.push(summary);
@@ -217,7 +220,7 @@ if (level2Summaries.length > 0) {
 // Generate Level 2 summaries (summarize every 10 Level 1 summaries)
 multiBar.log(chalk.blue('Generating Level 2 summaries...\n'));
 const level2Summaries: Document[] = [];
-for (let i = 0; i < level1Summaries.length; i += 10) {
+for(let i = 0; i < level1Summaries.length; i += 10) {
     const batch = level1Summaries.slice(i, i + 10);
     const summary = await summaryGeneratorLevel2.generateSummary(batch);
     level2Summaries.push(summary);
