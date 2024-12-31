@@ -27,7 +27,7 @@ import fs from 'fs/promises';
  */
 async function saveSummariesToFile(summaries: Document[], level: number, book: string): Promise<void> {
     const filePath = `novels/${book}_level${level}.txt`;
-    const content = summaries.map(summary => summary.pageContent).join('\n\n');
+    const content = _.map(summaries, summary => summary.pageContent).join('\n\n');
     await fs.writeFile(filePath, content, 'utf-8');
     logger.info(`Summaries for Level ${level} saved to ${filePath}\n`);
 }
@@ -134,20 +134,10 @@ const throttle = pThrottle({
 // We do about 4k tokens per request, and we are limited to 300,000 tokens per minute, so we can do about 75 requests per minute
 // We want to limit to a max of 32 simultaneous requests, but also throttle to 300 per minute, so combine limit and throttle:
 const throttledInvoke = throttle(({ long, short }) => contextChain.invoke({ 'long': long, 'short': short }));
-const limitedThrottledInvoke = ({ long, short }) => limit(() => throttledInvoke({ 'long': long, 'short': short }));
 const throttledSummaryGenerator = throttle(({ docs }) => summaryGenerator.generateSummary(docs));
 const limitedThrottledSummaryGenerator = ({ docs }) => limit(() => throttledSummaryGenerator({ docs }));
 
 // Initialize MultiBar
-const multiBar = new cliProgress.MultiBar(
-    {
-        clearOnComplete: false,
-        hideCursor: true,
-        format:
-            '{bar} {value}/{total} {name} | {percentage}% | Time: {duration_formatted} | ETA: {eta_formatted}',
-    },
-    cliProgress.Presets.shades_classic
-);
 // Create main progress bar for chapters
 // for(const chapter of chapterChunks) {
 //     chapterBar.increment();
@@ -241,7 +231,7 @@ while(true) {
 
     // Check if total tokens are within the ideal context size
     if(totalTokens <= idealContextSize) {
-        console.log(chalk.green(`Desired context size achieved at Level ${level - 1}.`));
+        logger.info(`Desired context size achieved at Level ${level - 1}.`);
         break;
     }
 
@@ -249,7 +239,7 @@ while(true) {
         const newSummaries: Document[] = [];
 
         // Concatenate all summaries into a single text
-        const concatenatedText = currentSummaries.map(doc => doc.pageContent).join('\n\n');
+        const concatenatedText = _.map(currentSummaries, doc => doc.pageContent).join('\n\n');
         const concatenatedDocument = new Document({ pageContent: concatenatedText });
         const concatenatedChunks = await splitter.splitDocuments([concatenatedDocument]);
 
@@ -271,7 +261,7 @@ while(true) {
             for(let i = 0; i < concatenatedChunks.length; i += batchSize) {
                 const batch = concatenatedChunks.slice(i, i + batchSize);
                 const promise = limitedThrottledSummaryGenerator({ docs: batch })
-                .then((summary) => {
+                .then((summary, levelCopy = level) => {
                     logger.info(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`);
                     return summary;
                 })
@@ -285,7 +275,7 @@ while(true) {
             const summaries = await Promise.all(batchPromises);
 
             // Filter out any null summaries due to errors
-            const successfulSummaries = summaries.filter(summary => summary !== null) as Document[];
+            const successfulSummaries = _.filter(summaries, summary => summary !== null) as Document[];
 
             newSummaries.push(...successfulSummaries);
 
@@ -303,7 +293,7 @@ while(true) {
 
         // Prepare for next iteration
         // Concatenate all new summaries for the next level's input
-        const concatenatedNewSummaries = newSummaries.map(doc => doc.pageContent).join('\n\n');
+        const concatenatedNewSummaries = _.map(newSummaries, doc => doc.pageContent).join('\n\n');
         const nextDocuments = await splitter.splitDocuments([new Document({ pageContent: concatenatedNewSummaries })]);
         currentSummaries = nextDocuments;
         level++;
