@@ -236,11 +236,39 @@ while(true) {
 
     try {
         const newSummaries: Document[] = [];
-        for(let i = 0; i < currentSummaries.length; i += 10) {
-            const batch = currentSummaries.slice(i, i + 10);
-            const summary = await summaryGenerator.generateSummary(batch);
-            newSummaries.push(summary);
-            multiBar.log(chalk.green(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`));
+
+        if (_.includes(summarizerLLM.lc_namespace, 'ollama')) {
+            // Serial Processing for Ollama
+            for(let i = 0; i < currentSummaries.length; i += 10) {
+                const batch = currentSummaries.slice(i, i + 10);
+                const summary = await summaryGenerator.generateSummary(batch);
+                newSummaries.push(summary);
+                multiBar.log(chalk.green(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`));
+            }
+        } else {
+            // Parallel Processing for Non-Ollama LLMs
+            multiBar.log(chalk.yellow(`Processing ${currentSummaries.length} summaries in parallel...\n`));
+
+            const batchSize = 10; // Define an appropriate batch size
+            const batchPromises: Promise<void>[] = [];
+
+            for(let i = 0; i < currentSummaries.length; i += batchSize) {
+                const batch = currentSummaries.slice(i, i + batchSize);
+                const promise = limitedThrottledInvoke({
+                    'long': batch.map(doc => doc.pageContent).join('\n'), // Assuming concatenation; adjust as needed
+                    'short': ' ' // Provide appropriate short passage if required
+                }).then(summary => {
+                    newSummaries.push(summary);
+                    multiBar.log(chalk.green(`Generated Level ${level} summary for batch ${i + 1} to ${i + batch.length}`));
+                }).catch(error => {
+                    multiBar.log(chalk.red(`Error generating summary for batch ${i + 1} to ${i + batch.length}: ${error.message}`));
+                });
+                batchPromises.push(promise);
+            }
+
+            await Promise.all(batchPromises);
+
+            multiBar.log(chalk.yellow(`Finished processing ${currentSummaries.length} summaries in parallel.\n`));
         }
 
         // Index the new summaries into FaissStore
