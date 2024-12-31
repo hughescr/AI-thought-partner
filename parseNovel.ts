@@ -7,7 +7,6 @@ import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemp
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
-// import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import cliProgress from 'cli-progress';
 import { SemanticTextSplitter } from './lib/SemanticTextSplitter';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
@@ -191,13 +190,17 @@ for (const chapter of chapterChunks) {
     multiBar.remove(chunkBar);
 }
 
-const level1Summaries: Document[] = [];
-for (let i = 0; i < splits.length; i += 10) {
-    const batch = splits.slice(i, i + 10);
-    if (batch.length === 0) continue; // Skip if no chunks
-    const summary = await summaryGeneratorLevel1.generateSummary(batch);
-    level1Summaries.push(summary);
-    multiBar.log(chalk.green(`Generated Level 1 summary for chunks ${i + 1} to ${i + batch.length}`));
+try {
+    const level1Summaries: Document[] = [];
+    for (let i = 0; i < splits.length; i += 10) {
+        const batch = splits.slice(i, i + 10);
+        if (batch.length === 0) continue; // Skip if no chunks
+        const summary = await summaryGeneratorLevel1.generateSummary(batch);
+        level1Summaries.push(summary);
+        multiBar.log(chalk.green(`Generated Level 1 summary for chunks ${i + 1} to ${i + batch.length}`));
+    }
+} catch (error) {
+    multiBar.log(chalk.red(`Error during Level 1 summarization: ${error.message}`));
 }
 
 // Index Level 1 summaries into a separate FaissStore
@@ -240,23 +243,6 @@ if (level2Summaries.length > 0) {
     multiBar.log(chalk.blue('Final summaries indexed and saved.\n'));
 }
 
-// Generate Level 1 summaries (summarize every 10 initial chunks)
-multiBar.log(chalk.blue('Generating Level 1 summaries...\n'));
-const level1Summaries: Document[] = [];
-for (let i = 0; i < splits.length; i += 10) {
-    const batch = splits.slice(i, i + 10);
-    const summary = await summaryGeneratorLevel1.generateSummary(batch);
-    level1Summaries.push(summary);
-    multiBar.log(chalk.green(`Generated Level 1 summary for chunks ${i + 1} to ${i + 10}`));
-}
-
-// Index Level 1 summaries into a separate FaissStore
-multiBar.log(chalk.blue('Indexing Level 1 summaries...\n'));
-const vectorStoreLevel1 = await FaissStore.fromDocuments(level1Summaries, embeddings);
-await vectorStoreLevel1.save(`novels/${book}_level1`);
-multiBar.log(chalk.blue('Level 1 summaries indexed and saved.\n'));
-// Stop the chapter progress bar and MultiBar
-chapterBar.stop();
 
 let vectorStore: FaissStore | undefined;
 
