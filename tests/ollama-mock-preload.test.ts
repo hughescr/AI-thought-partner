@@ -1,4 +1,3 @@
-// eslint-disable-next-line n/no-missing-import -- Bun doesn't actually have such a package; it's virtual
 import { mock, jest } from 'bun:test';
 
 mock.module('ollama/browser', () => {
