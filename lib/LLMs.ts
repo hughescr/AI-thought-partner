@@ -34,7 +34,7 @@ export const novaLiteLLM = new ChatBedrockConverse({
         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
     },
-    verbose: true,
+    // verbose: true,
 });
 export const novaProLLM = new ChatBedrockConverse({
     model: 'us.amazon.nova-pro-v1:0',
@@ -51,10 +51,10 @@ export const novaProLLM = new ChatBedrockConverse({
         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
     },
-    verbose: true,
+    // verbose: true,
 });
-export const llama31_70bLLM = new ChatBedrockConverse({
-    model: 'meta.llama3-1-70b-instruct-v1:0',
+export const llama33bedrock_70bLLM = new ChatBedrockConverse({
+    model: 'us.meta.llama3-3-70b-instruct-v1:0',
     temperature: 0,
     maxTokens: 2048,
     region: process.env.AWS_REGION,
@@ -62,7 +62,7 @@ export const llama31_70bLLM = new ChatBedrockConverse({
         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
     },
-    verbose: true,
+    // verbose: true,
 });
 
 // Apache License 2.0
@@ -72,6 +72,8 @@ export const jinaV2SmallENEmbeddings = new OllamaEmbeddings({ model: 'jina/jina-
 export const cachedJinaV2SmallENEmbeddings = makeCachedEmbeddings(jinaV2SmallENEmbeddings);
 export const jinaV2BaseENEmbeddings = new OllamaEmbeddings({ model: 'jina/jina-embeddings-v2-base-en', requestOptions: { numCtx: 8192 } });
 export const cachedJinaV2BaseENEmbeddings = makeCachedEmbeddings(jinaV2BaseENEmbeddings);
+export const snowflakeArctic2Embeddings = new OllamaEmbeddings({ model: 'snowflake-arctic-embed2:latest', requestOptions: { numCtx: 8192 } });
+export const cachedSnowflakeArctic2Embeddings = makeCachedEmbeddings(snowflakeArctic2Embeddings);
 
 // MIT License
 export const bgeM3Embeddings = new OllamaEmbeddings({ model: 'bge-m3', requestOptions: { numCtx: 8192 } });
@@ -81,7 +83,9 @@ export const cachedBgeM3Embeddings = makeCachedEmbeddings(bgeM3Embeddings);
 
 // Apache License 2.0
 export const qwen25_1_5bLLM = new ChatOllama({ model: 'qwen2.5:1.5b-instruct-q6_k_l', ...commonOptions32k });
+export const qwen25_3bLLM = new ChatOllama({ model: 'qwen2.5:3b-instruct-q6_k_l', ...commonOptions32k });
 export const qwen25_14bLLM = new ChatOllama({ model: 'qwen2.5:14b-instruct-q6_k_l', ...commonOptions32k });
+export const qwen25_32b_3bDLLM = new ChatOllama({ model: 'qwen2.5:32b-instruct-3b-draft-q6_k_l', ...commonOptions32k });
 export const qwen25_32bLLM = new ChatOllama({ model: 'qwen2.5:32b-instruct-q6_k_l', ...commonOptions32k });
 export const qwq_32bLLM = new ChatOllama({ model: 'qwq:32b-q6_k_l', ...commonOptions32k });
 export const nemo_12bLLM = new ChatOllama({ model: 'mistral-nemo:12b-instruct-2407-q6_k_l', ...commonOptions32k });
@@ -93,6 +97,7 @@ export const phi3_14bLLM = new ChatOllama({ model: 'phi3:14b-medium-128k-instruc
 // Llama Community License
 export const llama32_3bLLM = new ChatOllama({ model: 'llama3.2:3b-instruct-q6_k_l', ...commonOptions32k });
 export const llama31_8bLLM = new ChatOllama({ model: 'llama3.1:8b-instruct-q6_k_l', ...commonOptions64k });
+export const llama33_70b_32_3bDLLM = new ChatOllama({ model: 'llama3.3:70b-instruct-3.2-3b-draft-q6_k_l', ...commonOptions64k });
 export const llama33_70bLLM = new ChatOllama({ model: 'llama3.3:70b-instruct-q6_k_l', ...commonOptions64k });
 
 // CC-Attribution-Non-Commercial

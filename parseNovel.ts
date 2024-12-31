@@ -1,8 +1,8 @@
 import {
-    cachedJinaV2BaseENEmbeddings as embeddings,
+    cachedSnowflakeArctic2Embeddings as embeddings,
     cachedJinaV2SmallENEmbeddings as fastEmbeddings,
-    qwen25_14bLLM as summarizerLLM
-} from './lib/LLMs.ts';
+    novaLiteLLM as summarizerLLM
+} from './lib/LLMs';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
