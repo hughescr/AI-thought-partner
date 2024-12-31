@@ -194,7 +194,7 @@ async function calculateTotalTokens(docs: Document[]): Promise<number> {
 }
 
 // Initialize variables for iterative summarization
-let currentSummaries: Document[] = splits;
+let currentSummaries = await splitter.splitDocuments(docs);
 let level = 1;
 
 while(true) {
