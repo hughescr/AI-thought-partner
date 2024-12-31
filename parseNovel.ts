@@ -253,18 +253,23 @@ while(true) {
                 const batch = currentSummaries.slice(i, i + batchSize);
                 const promise = limitedThrottledSummaryGenerator({ docs: batch })
                     .then((summary) => {
-                        newSummaries.push(summary);
                         multiBar.log(chalk.green(`Generated Level ${level} summary for batch ${i + 1} to ${i + batch.length}`));
+                        return summary;
                     })
                     .catch((error) => {
                         multiBar.log(chalk.red(`Error generating summary for batch ${i + 1} to ${i + batch.length}: ${error.message}`));
+                        return null; // Handle error by returning null or appropriate placeholder
                     });
                 batchPromises.push(promise);
             }
 
-            await Promise.all(batchPromises);
+            const summaries = await Promise.all(batchPromises);
 
-            multiBar.log(chalk.yellow(`Finished processing ${currentSummaries.length} summaries in parallel.\n`));
+            // Filter out any null summaries due to errors
+            const successfulSummaries = summaries.filter(summary => summary !== null) as Document[];
+            newSummaries.push(...successfulSummaries);
+
+            multiBar.log(chalk.yellow(`Finished processing ${successfulSummaries.length} summaries in parallel.\n`));
         }
 
         // Index the new summaries into FaissStore
