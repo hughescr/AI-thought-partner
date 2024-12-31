@@ -1,7 +1,8 @@
-import { ChatPromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
+import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
-import { LLM } from '@langchain/core/llm';
+import { LLM } from '@langchain/core/language_models/llms';
 import { Document } from '@langchain/core/documents';
+import _ from 'lodash';
 
 interface SummaryGeneratorOptions {
     llm: LLM
@@ -18,7 +19,7 @@ export class SummaryGenerator {
     }
 
     public async generateSummary(docs: Document[]): Promise<Document> {
-        const combinedText = _.map(docs, doc => doc.pageContent).join('\n\n');
+        const combinedText = _(docs).map('pageContent').join('\n\n');
 
         const summaryPrompt = ChatPromptTemplate.fromMessages([
             SystemMessagePromptTemplate.fromTemplate(`## Task

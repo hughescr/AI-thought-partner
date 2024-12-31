@@ -225,11 +225,11 @@ while(true) {
         for(let i = 0; i < currentSummaries.length; i += 10) {
             const batch = currentSummaries.slice(i, i + 10);
             const summary = await (
-                level === 1 
-                ? summaryGeneratorLevel1 
-                : level === 2 
-                ? summaryGeneratorLevel2 
-                : summaryGeneratorLevel3
+                level === 1
+                    ? summaryGeneratorLevel1
+                    : level === 2
+                        ? summaryGeneratorLevel2
+                        : summaryGeneratorLevel3
             ).generateSummary(batch);
             newSummaries.push(summary);
             multiBar.log(chalk.green(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`));
