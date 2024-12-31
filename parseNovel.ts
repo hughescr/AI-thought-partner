@@ -203,44 +203,56 @@ try {
     multiBar.log(chalk.red(`Error during Level 1 summarization: ${error.message}`));
 }
 
-// Index Level 1 summaries into a separate FaissStore
-multiBar.log(chalk.blue('Indexing Level 1 summaries...\n'));
-const vectorStoreLevel1 = await FaissStore.fromDocuments(level1Summaries, embeddings);
-await vectorStoreLevel1.save(`novels/${book}_level1`);
-multiBar.log(chalk.blue('Level 1 summaries indexed and saved.\n'));
-
-// Generate Level 2 summaries (summarize every 10 Level 1 summaries)
-multiBar.log(chalk.blue('Generating Level 2 summaries...\n'));
-const level2Summaries: Document[] = [];
-for (let i = 0; i < level1Summaries.length; i += 10) {
-    const batch = level1Summaries.slice(i, i + 10);
-    const summary = await summaryGeneratorLevel2.generateSummary(batch);
-    level2Summaries.push(summary);
-    multiBar.log(chalk.green(`Generated Level 2 summary for Level 1 summaries ${i + 1} to ${i + 10}`));
+try {
+    // Index Level 1 summaries into a separate FaissStore
+    multiBar.log(chalk.blue('Indexing Level 1 summaries...\n'));
+    const vectorStoreLevel1 = await FaissStore.fromDocuments(level1Summaries, embeddings);
+    await vectorStoreLevel1.save(`novels/${book}_level1`);
+    multiBar.log(chalk.blue('Level 1 summaries indexed and saved.\n'));
+} catch (error) {
+    multiBar.log(chalk.red(`Error during Level 1 FaissStore indexing: ${error.message}`));
 }
 
-// Index Level 2 summaries into a separate FaissStore
-multiBar.log(chalk.blue('Indexing Level 2 summaries...\n'));
-const vectorStoreLevel2 = await FaissStore.fromDocuments(level2Summaries, embeddings);
-await vectorStoreLevel2.save(`novels/${book}_level2`);
-multiBar.log(chalk.blue('Level 2 summaries indexed and saved.\n'));
-
-// Generate Final summaries (summarize every 10 Level 2 summaries)
-if (level2Summaries.length > 0) {
-    multiBar.log(chalk.blue('Generating Final summaries...\n'));
-    const finalSummaries: Document[] = [];
-    for (let i = 0; i < level2Summaries.length; i += 10) {
-        const batch = level2Summaries.slice(i, i + 10);
-        const summary = await summaryGeneratorLevel3.generateSummary(batch);
-        finalSummaries.push(summary);
-        multiBar.log(chalk.green(`Generated Final summary for Level 2 summaries ${i + 1} to ${i + 10}`));
+try {
+    // Generate Level 2 summaries (summarize every 10 Level 1 summaries)
+    multiBar.log(chalk.blue('Generating Level 2 summaries...\n'));
+    const level2Summaries: Document[] = [];
+    for (let i = 0; i < level1Summaries.length; i += 10) {
+        const batch = level1Summaries.slice(i, i + 10);
+        const summary = await summaryGeneratorLevel2.generateSummary(batch);
+        level2Summaries.push(summary);
+        multiBar.log(chalk.green(`Generated Level 2 summary for Level 1 summaries ${i + 1} to ${i + 10}`));
     }
 
-    // Index Final summaries into a separate FaissStore
-    multiBar.log(chalk.blue('Indexing Final summaries...\n'));
-    const vectorStoreFinal = await FaissStore.fromDocuments(finalSummaries, embeddings);
-    await vectorStoreFinal.save(`novels/${book}_final`);
-    multiBar.log(chalk.blue('Final summaries indexed and saved.\n'));
+    // Index Level 2 summaries into a separate FaissStore
+    multiBar.log(chalk.blue('Indexing Level 2 summaries...\n'));
+    const vectorStoreLevel2 = await FaissStore.fromDocuments(level2Summaries, embeddings);
+    await vectorStoreLevel2.save(`novels/${book}_level2`);
+    multiBar.log(chalk.blue('Level 2 summaries indexed and saved.\n'));
+} catch (error) {
+    multiBar.log(chalk.red(`Error during Level 2 summarization or FaissStore indexing: ${error.message}`));
+}
+
+try {
+    // Generate Final summaries (summarize every 10 Level 2 summaries)
+    if (level2Summaries.length > 0) {
+        multiBar.log(chalk.blue('Generating Final summaries...\n'));
+        const finalSummaries: Document[] = [];
+        for (let i = 0; i < level2Summaries.length; i += 10) {
+            const batch = level2Summaries.slice(i, i + 10);
+            const summary = await summaryGeneratorLevel3.generateSummary(batch);
+            finalSummaries.push(summary);
+            multiBar.log(chalk.green(`Generated Final summary for Level 2 summaries ${i + 1} to ${i + 10}`));
+        }
+
+        // Index Final summaries into a separate FaissStore
+        multiBar.log(chalk.blue('Indexing Final summaries...\n'));
+        const vectorStoreFinal = await FaissStore.fromDocuments(finalSummaries, embeddings);
+        await vectorStoreFinal.save(`novels/${book}_final`);
+        multiBar.log(chalk.blue('Final summaries indexed and saved.\n'));
+    }
+} catch (error) {
+    multiBar.log(chalk.red(`Error during Final summarization or FaissStore indexing: ${error.message}`));
 }
 
 
