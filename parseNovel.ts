@@ -137,47 +137,70 @@ const chapterBar = multiBar.create(totalChapters, 0, {
     name: 'Chapters',
 });
 const splits: Document[] = [];
-for(const chapter of chapterChunks) {
-    chapterBar.increment();
-    const smallerChunks = await splitter.splitDocuments([chapter]);
+// for(const chapter of chapterChunks) {
+//     chapterBar.increment();
+//     const smallerChunks = await splitter.splitDocuments([chapter]);
 
-    const totalSmallerChunks = smallerChunks.length;
-    // Create progress bar for smaller chunks
-    const chunkBar = multiBar.create(totalSmallerChunks, 0, {
-        name: 'Chunks',
-    });
-    if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
-        for(const smallerChunk of smallerChunks) {
-            const context = await contextChain.invoke({
-                'long': chapter.pageContent,
-                'short': smallerChunk.pageContent,
-            });
-            multiBar.log(`Context: (${context.length}) ${context}\n`);
-            chunkBar.increment();
-            smallerChunk.metadata.context = context; // Save the context in the metadata
-            splits.push(smallerChunk);
-        }
-    } else {
-        // Do the same thing, but making the calls in parallel
-        multiBar.log(chalk.yellow(`Processing ${totalSmallerChunks} smaller chunks in parallel...\n`));
-        const contexts = await Promise.all(_.map(smallerChunks, async (smallerChunk) => {
-            const context = await limitedThrottledInvoke({
-                'long': chapter.pageContent,
-                'short': smallerChunk.pageContent,
-            });
-            multiBar.log(`Context: (${context.length}) ${context}\n`);
-            chunkBar.increment();
-            smallerChunk.metadata.context = context; // Save the context in the metadata
-            splits.push(smallerChunk);
-            return context;
-        }));
-        multiBar.log(chalk.yellow(`Finished processing ${contexts.length} smaller chunks in parallel.\n`));
-    }
+//     const totalSmallerChunks = smallerChunks.length;
+//     // Create progress bar for smaller chunks
+//     const chunkBar = multiBar.create(totalSmallerChunks, 0, {
+//         name: 'Chunks',
+//     });
+//     if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
+//         for(const smallerChunk of smallerChunks) {
+//             const context = await contextChain.invoke({
+//                 'long': chapter.pageContent,
+//                 'short': smallerChunk.pageContent,
+//             });
+//             multiBar.log(`Context: (${context.length}) ${context}\n`);
+//             chunkBar.increment();
+//             smallerChunk.metadata.context = context; // Save the context in the metadata
+//             splits.push(smallerChunk);
+//         }
+//     } else {
+//         // Do the same thing, but making the calls in parallel
+//         multiBar.log(chalk.yellow(`Processing ${totalSmallerChunks} smaller chunks in parallel...\n`));
+//         const contexts = await Promise.all(_.map(smallerChunks, async (smallerChunk) => {
+//             const context = await limitedThrottledInvoke({
+//                 'long': chapter.pageContent,
+//                 'short': smallerChunk.pageContent,
+//             });
+//             multiBar.log(`Context: (${context.length}) ${context}\n`);
+//             chunkBar.increment();
+//             smallerChunk.metadata.context = context; // Save the context in the metadata
+//             splits.push(smallerChunk);
+//             return context;
+//         }));
+//         multiBar.log(chalk.yellow(`Finished processing ${contexts.length} smaller chunks in parallel.\n`));
+//     }
 
-    // Stop the smaller chunks progress bar
-    chunkBar.stop();
-    multiBar.remove(chunkBar);
-}
+//     // Stop the smaller chunks progress bar
+//     chunkBar.stop();
+//     multiBar.remove(chunkBar);
+// }
+//
+// let vectorStore: FaissStore | undefined;
+
+// const splitChunks = _(splits)
+//     .flatten()
+//     .chunk(16)
+//     .value();
+// const bar = multiBar.create(
+//     _.flatten(splits).length,
+//     0,
+//     { name: 'Saving chunks' }
+// );
+// for(const chunk of splitChunks) {
+//     if(vectorStore) {
+//         await vectorStore.addDocuments(chunk);
+//     } else {
+//         vectorStore = await FaissStore.fromDocuments(chunk, embeddings); // Index with the slower, better embeddings
+//     }
+//     bar.increment(chunk.length);
+// }
+// if(vectorStore) {
+//     await vectorStore.save(`novels/${book}`);
+// }
 
 /**
  * Calculates the total number of tokens in the provided documents.
@@ -232,27 +255,4 @@ while(true) {
         multiBar.log(chalk.red(`Error during Level ${level} summarization or FaissStore indexing: ${error.message}`));
         break; // Exit loop on error
     }
-}
-
-let vectorStore: FaissStore | undefined;
-
-const splitChunks = _(splits)
-    .flatten()
-    .chunk(16)
-    .value();
-const bar = multiBar.create(
-    _.flatten(splits).length,
-    0,
-    { name: 'Saving chunks' }
-);
-for(const chunk of splitChunks) {
-    if(vectorStore) {
-        await vectorStore.addDocuments(chunk);
-    } else {
-        vectorStore = await FaissStore.fromDocuments(chunk, embeddings); // Index with the slower, better embeddings
-    }
-    bar.increment(chunk.length);
-}
-if(vectorStore) {
-    await vectorStore.save(`novels/${book}`);
 }
