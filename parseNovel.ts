@@ -17,6 +17,20 @@ import chalk from 'chalk';
 import pThrottle from 'p-throttle';
 import pLimit from 'p-limit';
 import { getEncoding } from '@langchain/core/utils/tiktoken';
+import fs from 'fs/promises';
+
+/**
+ * Saves an array of summaries to a plain text file.
+ * @param summaries - Array of Document objects containing summaries.
+ * @param level - The current summarization level.
+ * @param book - The name of the book being processed.
+ */
+async function saveSummariesToFile(summaries: Document[], level: number, book: string): Promise<void> {
+    const filePath = `novels/${book}_level${level}.txt`;
+    const content = summaries.map(summary => summary.pageContent).join('\n\n');
+    await fs.writeFile(filePath, content, 'utf-8');
+    console.log(chalk.green(`Summaries for Level ${level} saved to ${filePath}\n`));
+}
 
 _.mixin({
     awaitAll: function <T>(promiseArray: Promise<T>[]) {
@@ -231,44 +245,70 @@ while(true) {
         break;
     }
 
-    try {
-        const newSummaries: Document[] = [];
+try {
+    const newSummaries: Document[] = [];
 
-        if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
-            // Serial Processing for Ollama
-            for(let i = 0; i < currentSummaries.length; i += 10) {
-                const batch = currentSummaries.slice(i, i + 10);
-                const summary = await summaryGenerator.generateSummary(batch);
-                newSummaries.push(summary);
-                console.log(chalk.green(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`));
-            }
-        } else {
-            // Parallel Processing for Non-Ollama LLMs using limitedThrottledSummaryGenerator
-            console.log(chalk.yellow(`Processing ${currentSummaries.length} summaries in parallel...\n`));
+    // Concatenate all summaries into a single text
+    const concatenatedText = currentSummaries.map(doc => doc.pageContent).join('\n\n');
+    const concatenatedDocument = new Document({ pageContent: concatenatedText });
+    const concatenatedChunks = await splitter.splitDocuments([concatenatedDocument]);
 
-            const batchPromises: Promise<Document>[] = [];
-            for(let i = 0; i < currentSummaries.length; i += 10) {
-                const batch = currentSummaries.slice(i, i + 10);
-                batchPromises.push(limitedThrottledSummaryGenerator({ docs: batch }));
-            }
+    if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
+        // Serial Processing for Ollama
+        for(let i = 0; i < concatenatedChunks.length; i++) {
+            const chunk = concatenatedChunks[i];
+            const summary = await summaryGenerator.generateSummary([chunk]);
+            newSummaries.push(summary);
+            console.log(chalk.green(`Generated Level ${level} summary for chunk ${i + 1}`));
+        }
+    } else {
+        // Parallel Processing for Non-Ollama LLMs using limitedThrottledSummaryGenerator
+        console.log(chalk.yellow(`Processing ${concatenatedChunks.length} chunks in parallel...\n`));
 
-            const summaries = await Promise.all(batchPromises);
-            newSummaries.push(...summaries);
+        const batchSize = 10; // Define an appropriate batch size within each level
+        const batchPromises: Promise<Document | null>[] = [];
 
-            console.log(chalk.yellow(`Finished processing ${summaries.length} summaries in parallel.\n`));
+        for(let i = 0; i < concatenatedChunks.length; i += batchSize) {
+            const batch = concatenatedChunks.slice(i, i + batchSize);
+            const promise = limitedThrottledSummaryGenerator({ docs: batch })
+                .then(summary => {
+                    console.log(chalk.green(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`));
+                    return summary;
+                })
+                .catch(error => {
+                    console.log(chalk.red(`Error generating summary for batches ${i + 1} to ${i + batch.length}: ${error.message}`));
+                    return null; // Handle error by returning null or appropriate placeholder
+                });
+            batchPromises.push(promise);
         }
 
-        // Index the new summaries into FaissStore
-        console.log(chalk.blue(`Indexing Level ${level} summaries...\n`));
-        const vectorStoreLevel = await FaissStore.fromDocuments(newSummaries, embeddings);
-        await vectorStoreLevel.save(`novels/${book}_level${level}`);
-        console.log(chalk.blue(`Level ${level} summaries indexed and saved.\n`));
+        const summaries = await Promise.all(batchPromises);
 
-        // Prepare for next iteration
-        currentSummaries = newSummaries;
-        level++;
-    } catch(error) {
-        console.log(chalk.red(`Error during Level ${level} summarization or FaissStore indexing: ${error.message}`));
-        break; // Exit loop on error
+        // Filter out any null summaries due to errors
+        const successfulSummaries = summaries.filter(summary => summary !== null) as Document[];
+
+        newSummaries.push(...successfulSummaries);
+
+        console.log(chalk.yellow(`Finished processing ${successfulSummaries.length} summaries in parallel.\n`));
     }
+
+    // Save the summaries to a plain text file
+    await saveSummariesToFile(newSummaries, level, book);
+
+    // Optionally, index the new summaries into FaissStore (Uncomment if indexing is still needed)
+    console.log(chalk.blue(`Indexing Level ${level} summaries...\n`));
+    const vectorStoreLevel = await FaissStore.fromDocuments(newSummaries, embeddings);
+    await vectorStoreLevel.save(`novels/${book}_level${level}`);
+    console.log(chalk.blue(`Level ${level} summaries indexed and saved.\n`));
+
+    // Prepare for next iteration
+    // Concatenate all new summaries for the next level's input
+    const concatenatedNewSummaries = newSummaries.map(doc => doc.pageContent).join('\n\n');
+    const nextDocuments = await splitter.splitDocuments([new Document({ pageContent: concatenatedNewSummaries })]);
+    currentSummaries = nextDocuments;
+    level++;
+} catch(error) {
+    console.log(chalk.red(`Error during Level ${level} summarization or FaissStore indexing: ${error.message}`));
+    break; // Exit loop on error
+}
 }
