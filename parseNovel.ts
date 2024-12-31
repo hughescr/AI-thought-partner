@@ -13,7 +13,7 @@ import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { Document } from '@langchain/core/documents';
 import { SummaryGenerator } from './lib/SummaryGenerator';
 import _ from 'lodash';
-import chalk from 'chalk';
+import { logger } from '@hughescr/logger';
 import pThrottle from 'p-throttle';
 import pLimit from 'p-limit';
 import { getEncoding } from '@langchain/core/utils/tiktoken';
@@ -29,7 +29,7 @@ async function saveSummariesToFile(summaries: Document[], level: number, book: s
     const filePath = `novels/${book}_level${level}.txt`;
     const content = summaries.map(summary => summary.pageContent).join('\n\n');
     await fs.writeFile(filePath, content, 'utf-8');
-    console.log(chalk.green(`Summaries for Level ${level} saved to ${filePath}\n`));
+    logger.info(`Summaries for Level ${level} saved to ${filePath}\n`);
 }
 
 _.mixin({
@@ -233,11 +233,11 @@ let currentSummaries = await splitter.splitDocuments(docs);
 let level = 1;
 
 while(true) {
-    console.log(chalk.blue(`\nStarting summarization Level ${level}...\n`));
+    logger.info(`\nStarting summarization Level ${level}...\n`);
 
     // Calculate total tokens of current summaries
     const totalTokens = await calculateTotalTokens(currentSummaries);
-    console.log(chalk.blue(`Total tokens at Level ${level}: ${totalTokens}`));
+    logger.info(`Total tokens at Level ${level}: ${totalTokens}`);
 
     // Check if total tokens are within the ideal context size
     if(totalTokens <= idealContextSize) {
@@ -259,11 +259,11 @@ while(true) {
                 const chunk = concatenatedChunks[i];
                 const summary = await summaryGenerator.generateSummary([chunk]);
                 newSummaries.push(summary);
-                console.log(chalk.green(`Generated Level ${level} summary for chunk ${i + 1}`));
+                logger.info(`Generated Level ${level} summary for chunk ${i + 1}`);
             }
         } else {
         // Parallel Processing for Non-Ollama LLMs using limitedThrottledSummaryGenerator
-            console.log(chalk.yellow(`Processing ${concatenatedChunks.length} chunks in parallel...\n`));
+            logger.info(`Processing ${concatenatedChunks.length} chunks in parallel...\n`);
 
             const batchSize = 10; // Define an appropriate batch size within each level
             const batchPromises: Promise<Document | null>[] = [];
@@ -272,11 +272,11 @@ while(true) {
                 const batch = concatenatedChunks.slice(i, i + batchSize);
                 const promise = limitedThrottledSummaryGenerator({ docs: batch })
                 .then((summary) => {
-                    console.log(chalk.green(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`));
+                    logger.info(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`);
                     return summary;
                 })
                 .catch((error) => {
-                    console.log(chalk.red(`Error generating summary for batches ${i + 1} to ${i + batch.length}: ${error.message}`));
+                    logger.info(`Error generating summary for batches ${i + 1} to ${i + batch.length}: ${error.message}`);
                     return null; // Handle error by returning null or appropriate placeholder
                 });
                 batchPromises.push(promise);
@@ -289,17 +289,17 @@ while(true) {
 
             newSummaries.push(...successfulSummaries);
 
-            console.log(chalk.yellow(`Finished processing ${successfulSummaries.length} summaries in parallel.\n`));
+            logger.info(`Finished processing ${successfulSummaries.length} summaries in parallel.\n`);
         }
 
         // Save the summaries to a plain text file
         await saveSummariesToFile(newSummaries, level, book);
 
         // Optionally, index the new summaries into FaissStore (Uncomment if indexing is still needed)
-        console.log(chalk.blue(`Indexing Level ${level} summaries...\n`));
+        logger.info(`Indexing Level ${level} summaries...\n`);
         const vectorStoreLevel = await FaissStore.fromDocuments(newSummaries, embeddings);
         await vectorStoreLevel.save(`novels/${book}_level${level}`);
-        console.log(chalk.blue(`Level ${level} summaries indexed and saved.\n`));
+        logger.info(`Level ${level} summaries indexed and saved.\n`);
 
         // Prepare for next iteration
         // Concatenate all new summaries for the next level's input
@@ -308,7 +308,7 @@ while(true) {
         currentSummaries = nextDocuments;
         level++;
     } catch(error) {
-        console.log(chalk.red(`Error during Level ${level} summarization or FaissStore indexing: ${error.message}`));
+        logger.info(`Error during Level ${level} summarization or FaissStore indexing: ${error.message}`);
         break; // Exit loop on error
     }
 }
