@@ -9,7 +9,7 @@ import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 // import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import cliProgress from 'cli-progress';
-import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
+import { SemanticTextSplitter } from './lib/SemanticTextSplitter';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { Document } from '@langchain/core/documents';
 import _ from 'lodash';
