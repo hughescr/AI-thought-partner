@@ -13,6 +13,9 @@ import { SemanticTextSplitter } from './lib/SemanticTextSplitter.ts';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { Document } from '@langchain/core/documents';
 import _ from 'lodash';
+import chalk from 'chalk';
+import pThrottle from 'p-throttle';
+import pLimit from 'p-limit';
 
 _.mixin({
     awaitAll: function <T>(promiseArray: Promise<T>[]) {
@@ -100,6 +103,16 @@ const contextChain = contextSummaryPrompt
     .pipe(summarizerLLM)
     .pipe(new StringOutputParser());
 
+const limit = pLimit(32); // Limit to 32 concurrent request
+const throttle = pThrottle({
+    limit: 64,
+    interval: 60 * 1000,
+}); // Limit to 300 per minute
+// We do about 4k tokens per request, and we are limited to 300,000 tokens per minute, so we can do about 75 requests per minute
+// We want to limit to a max of 32 simultaneous requests, but also throttle to 300 per minute, so combine limit and throttle:
+const throttledInvoke = throttle(({ long, short }) => contextChain.invoke({ long, short }));
+const limitedThrottledInvoke = ({ long, short }) => limit(() => throttledInvoke({ long, short }));
+
 // Initialize MultiBar
 const multiBar: cliProgress.MultiBar = new cliProgress.MultiBar(
     {
@@ -126,16 +139,32 @@ for(const chapter of chapterChunks) {
     const chunkBar: cliProgress.SingleBar = multiBar.create(totalSmallerChunks, 0, {
         name: 'Chunks',
     });
-
-    for(const smallerChunk of smallerChunks) {
-        const context = await contextChain.invoke({
-            'long': chapter.pageContent,
-            'short': smallerChunk.pageContent,
-        });
-        multiBar.log(`Context: (${context.length}) ${context}\n`);
-        chunkBar.increment();
-        smallerChunk.metadata.context = context; // Save the context in the metadata
-        splits.push(smallerChunk);
+    if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
+        for(const smallerChunk of smallerChunks) {
+            const context = await contextChain.invoke({
+                'long': chapter.pageContent,
+                'short': smallerChunk.pageContent,
+            });
+            multiBar.log(`Context: (${context.length}) ${context}\n`);
+            chunkBar.increment();
+            smallerChunk.metadata.context = context; // Save the context in the metadata
+            splits.push(smallerChunk);
+        }
+    } else {
+        // Do the same thing, but making the calls in parallel
+        multiBar.log(chalk.yellow(`Processing ${totalSmallerChunks} smaller chunks in parallel...\n`));
+        const contexts = await Promise.all(_.map(smallerChunks, async (smallerChunk) => {
+            const context = await limitedThrottledInvoke({
+                'long': chapter.pageContent,
+                'short': smallerChunk.pageContent,
+            });
+            multiBar.log(`Context: (${context.length}) ${context}\n`);
+            chunkBar.increment();
+            smallerChunk.metadata.context = context; // Save the context in the metadata
+            splits.push(smallerChunk);
+            return context;
+        }));
+        multiBar.log(chalk.yellow(`Finished processing ${contexts.length} smaller chunks in parallel.\n`));
     }
 
     // Stop the smaller chunks progress bar
