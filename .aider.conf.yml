@@ -40,7 +40,7 @@
 #deepseek: false
 
 ## Use o1-mini model for the main chat
-#o1-mini: false
+o1-mini: true
 
 ## Use o1-preview model for the main chat
 #o1-preview: false
@@ -238,8 +238,8 @@ cache-prompts: true
 #lint-cmd: xxx
 ## Specify multiple values like this:
 lint-cmd:
-  - "typescript:yarn lint"
-  - "javascript:yarn lint"
+  - "typescript:bun lint"
+  - "javascript:bun lint"
 
 ## Enable/disable automatic linting after changes (default: True)
 #auto-lint: true
