@@ -234,7 +234,7 @@ while(true) {
     try {
         const newSummaries: Document[] = [];
 
-        if (_.includes(summarizerLLM.lc_namespace, 'ollama')) {
+        if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
             // Serial Processing for Ollama
             for(let i = 0; i < currentSummaries.length; i += 10) {
                 const batch = currentSummaries.slice(i, i + 10);
@@ -252,11 +252,11 @@ while(true) {
             for(let i = 0; i < currentSummaries.length; i += batchSize) {
                 const batch = currentSummaries.slice(i, i + batchSize);
                 const promise = limitedThrottledSummaryGenerator({ docs: batch })
-                    .then(summary => {
+                    .then((summary) => {
                         newSummaries.push(summary);
                         multiBar.log(chalk.green(`Generated Level ${level} summary for batch ${i + 1} to ${i + batch.length}`));
                     })
-                    .catch(error => {
+                    .catch((error) => {
                         multiBar.log(chalk.red(`Error generating summary for batch ${i + 1} to ${i + batch.length}: ${error.message}`));
                     });
                 batchPromises.push(promise);
