@@ -43,6 +43,8 @@
     "luxon": "^3.5.0",
     "neo4j-driver": "^5.27.0",
     "ollama": "link:ollama",
+    "p-limit": "^6.2.0",
+    "p-throttle": "^7.0.0",
     "pdf-parse": "^1.1.1",
     "tolerant-json-parser": "^1.0.1",
     "undici": "^7.2.0"
