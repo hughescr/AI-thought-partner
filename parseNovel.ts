@@ -119,8 +119,8 @@ const throttle = pThrottle({
 }); // Limit to 300 per minute
 // We do about 4k tokens per request, and we are limited to 300,000 tokens per minute, so we can do about 75 requests per minute
 // We want to limit to a max of 32 simultaneous requests, but also throttle to 300 per minute, so combine limit and throttle:
-const throttledInvoke = throttle(({ long, short }) => contextChain.invoke({ long, short }));
-const limitedThrottledInvoke = ({ long, short }) => limit(() => throttledInvoke({ long, short }));
+const throttledInvoke = throttle(({ long, short }) => contextChain.invoke({ 'long': long, 'short': short }));
+const limitedThrottledInvoke = ({ long, short }) => limit(() => throttledInvoke({ 'long': long, 'short': short }));
 
 // Initialize MultiBar
 const multiBar = new cliProgress.MultiBar(
@@ -247,18 +247,21 @@ while(true) {
             const batchSize = 10; // Define an appropriate batch size
             const batchPromises: Promise<void>[] = [];
 
-            for(let i = 0; i < currentSummaries.length; i += batchSize) {
-                const batch = currentSummaries.slice(i, i + batchSize);
-                const promise = limitedThrottledInvoke({
-                    long: _.map(batch, doc => doc.pageContent).join('\n'), // Assuming concatenation; adjust as needed
-                    short: ' ' // Provide appropriate short passage if required
+            const generateSummary = (batch, currentLevel) => {
+                return limitedThrottledInvoke({
+                    'long': _.map(batch, doc => doc.pageContent).join('\n'),
+                    'short': ' '
                 }).then((summary) => {
                     newSummaries.push(summary);
-                    multiBar.log(chalk.green(`Generated Level ${level} summary for batch ${i + 1} to ${i + batch.length}`));
-                    return summary; // Added return statement
+                    multiBar.log(chalk.green(`Generated Level ${currentLevel} summary for batch ${i + 1} to ${i + batch.length}`));
                 }).catch((error) => {
                     multiBar.log(chalk.red(`Error generating summary for batch ${i + 1} to ${i + batch.length}: ${error.message}`));
                 });
+            };
+
+            for(let i = 0; i < currentSummaries.length; i += batchSize) {
+                const batch = currentSummaries.slice(i, i + batchSize);
+                const promise = generateSummary(batch, level);
                 batchPromises.push(promise);
             }
 
