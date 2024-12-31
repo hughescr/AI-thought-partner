@@ -280,4 +280,3 @@ for(const chunk of splitChunks) {
 if(vectorStore) {
     await vectorStore.save(`novels/${book}`);
 }
-multiBar.stop();

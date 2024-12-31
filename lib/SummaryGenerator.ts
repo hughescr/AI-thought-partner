@@ -1,4 +1,4 @@
-import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
+import { ChatPromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { LLM } from '@langchain/core/llm';
 import { Document } from '@langchain/core/documents';
