@@ -1,5 +1,6 @@
 import { TextSplitter } from 'langchain/text_splitter';
 import { Document } from 'langchain/document';
+import _ from 'lodash';
 
 /**
  * Splits text based on Markdown chapter headers.
