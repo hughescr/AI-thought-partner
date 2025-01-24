@@ -85,10 +85,10 @@ architect: true
 #weak-model: xxx
 
 ## Specify the model to use for editor tasks (default depends on --model)
-editor-model: gpt-4o
+# editor-model: gpt-4o
 
 ## Specify the edit format for the editor model (default: depends on editor model)
-editor-edit-format: editor-diff
+# editor-edit-format: editor-diff
 
 ## Only work with models that have meta-data available (default: True)
 #show-model-warnings: true
