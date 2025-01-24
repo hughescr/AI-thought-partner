@@ -49,7 +49,6 @@ const docs = await loader.load();
 // Then, for each large chunk, break it into small chunks (maybe 256 tokens), and ask an LLM to describe the context of each small chunk (adding another 256 tokens)
 // Then, concat the context and the extract, calculate encodings, and store in a vector store
 
-
 const chapterSplitter = new MarkdownChapterTextSplitter();
 
 await chapterSplitter.splitDocuments(docs);
