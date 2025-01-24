@@ -27,7 +27,7 @@ import fs from 'fs/promises';
  */
 async function saveSummariesToFile(summaries: Document[], level: number, book: string): Promise<void> {
     const filePath = `novels/${book}_level${level}.txt`;
-    const content = _.map(summaries, summary => summary.pageContent).join('\n\n');
+    const content = _(summaries).map('pageContent').join('\n\n');
     await fs.writeFile(filePath, content, 'utf-8');
     logger.info(`Summaries for Level ${level} saved to ${filePath}\n`);
 }
@@ -132,8 +132,9 @@ const throttle = pThrottle({
     interval: 60 * 1000,
 }); // Limit to 64 per minute
 // We do about 4k tokens per request, and we are limited to 300,000 tokens per minute, so we can do about 75 requests per minute
-const throttledInvoke = throttle(({ long, short }) => contextChain.invoke({ 'long': long, 'short': short }));
 // We want to limit to a max of 32 simultaneous requests, but also throttle to 64 per minute, so combine limit and throttle:
+// const throttledInvoke = throttle(({ long, short }) => contextChain.invoke({ 'long': long, 'short': short }));
+// const limitedThrottledInvoke = ({ long, short }) => limit(() => throttledInvoke({ long, short }));
 const throttledSummaryGenerator = throttle(({ docs }) => summaryGenerator.generateSummary(docs));
 const limitedThrottledSummaryGenerator = ({ docs }) => limit(() => throttledSummaryGenerator({ docs }));
 
@@ -239,7 +240,7 @@ while(true) {
         const newSummaries: Document[] = [];
 
         // Concatenate all summaries into a single text
-        const concatenatedText = _.map(currentSummaries, doc => doc.pageContent).join('\n\n');
+        const concatenatedText = _(currentSummaries).map('pageContent').join('\n\n');
         const concatenatedDocument = new Document({ pageContent: concatenatedText });
         const concatenatedChunks = await splitter.splitDocuments([concatenatedDocument]);
 
@@ -293,7 +294,7 @@ while(true) {
 
         // Prepare for next iteration
         // Concatenate all new summaries for the next level's input
-        const concatenatedNewSummaries = _.map(newSummaries, doc => doc.pageContent).join('\n\n');
+        const concatenatedNewSummaries = _(newSummaries).map('pageContent').join('\n\n');
         const nextDocuments = await splitter.splitDocuments([new Document({ pageContent: concatenatedNewSummaries })]);
         currentSummaries = nextDocuments;
         level++;
