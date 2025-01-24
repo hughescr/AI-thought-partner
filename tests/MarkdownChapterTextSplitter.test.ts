@@ -153,7 +153,7 @@ Content for chapter 2.
         let text = '';
         const expectedChunks: string[] = [];
 
-        for (let i = 1; i <= numberOfChapters; i++) {
+        for(let i = 1; i <= numberOfChapters; i++) {
             text += `# Chapter ${i}\nContent for chapter ${i}.\n\n`;
             expectedChunks.push(`Content for chapter ${i}.`);
         }
