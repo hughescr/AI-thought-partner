@@ -31,7 +31,7 @@ export class MarkdownChapterTextSplitter extends TextSplitter {
 
         if(matches.length === 0) {
             const trimmed = _.trim(text);
-            if (trimmed.length > 0) {
+            if(trimmed.length > 0) {
                 splits.push(trimmed);
             }
             return splits;
