@@ -1,33 +1,27 @@
 import {
-    cachedSnowflakeArctic2Embeddings as embeddings,
-    cachedJinaV2SmallENEmbeddings as fastEmbeddings,
     novaLiteLLM as summarizerLLM
 } from './lib/LLMs';
-import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import cliProgress from 'cli-progress';
-import { SemanticTextSplitter } from './lib/SemanticTextSplitter';
 import { MarkdownChapterTextSplitter } from './lib/MarkdownChapterTextSplitter';
 import { Document } from '@langchain/core/documents';
-import { SummaryGenerator } from './lib/SummaryGenerator';
+import { ChapterSummaryGenerator } from './lib/ChapterSummaryGenerator';
 import _ from 'lodash';
 import { logger } from '@hughescr/logger';
 import pThrottle from 'p-throttle';
 import pLimit from 'p-limit';
-import { getEncoding } from '@langchain/core/utils/tiktoken';
 import fs from 'fs/promises';
 
 /**
  * Saves an array of summaries to a plain text file.
  * @param summaries - Array of Document objects containing summaries.
- * @param level - The current summarization level.
  * @param book - The name of the book being processed.
  */
-async function saveSummariesToFile(summaries: Document[], level: number, book: string): Promise<void> {
-    const filePath = `novels/${book}_level${level}.txt`;
+async function saveSummariesToFile(summaries: Document[], book: string): Promise<void> {
+    const filePath = `novels/${book}_chapter_summaries.txt`;
     const content = _(summaries).map('pageContent').join('\n\n');
     await fs.writeFile(filePath, content, 'utf-8');
-    logger.info(`Summaries for Level ${level} saved to ${filePath}\n`);
+    logger.info(`Summaries saved to ${filePath}\n`);
 }
 
 _.mixin({
@@ -51,21 +45,11 @@ const docs = await loader.load();
 
 const chapterSplitter = new MarkdownChapterTextSplitter();
 
-await chapterSplitter.splitDocuments(docs);
-
 const targetSummarySize = idealContextSize / 10;
 
-const summaryGenerator = new SummaryGenerator({
+const summaryGenerator = new ChapterSummaryGenerator({
     llm: summarizerLLM,
     targetSummarySize: targetSummarySize, // 400 tokens
-});
-
-const splitter: SemanticTextSplitter = new SemanticTextSplitter({
-    showProgress: true,
-    initialChunkSize: targetSummarySize / 4, // Tokens!
-    chunkSize: targetSummarySize, // Tokens!
-    embeddings: fastEmbeddings, // Use fast embeddings for decent semantic splits
-    embeddingBatchSize: 128,
 });
 
 const limit = pLimit(32); // Limit to 32 concurrent requests
@@ -74,114 +58,51 @@ const throttle = pThrottle({
     interval: 60 * 1000,
 }); // Limit to 64 per minute
 
-const throttledSummaryGenerator = throttle(({ docs }: { docs: Document[] }) => summaryGenerator.generateSummary(docs));
-const limitedThrottledSummaryGenerator = ({ docs }: { docs: Document[] }) => limit(() => throttledSummaryGenerator({ docs }));
-
-/**
- * Calculates the total number of tokens in the provided documents.
- * @param docs - Array of Document objects.
- * @returns Total token count.
- */
-async function calculateTotalTokens(docs: Document[]): Promise<number> {
-    let total = 0;
-    const tokenizerInstance = await getEncoding('gpt2'); // Adjust tokenizer if necessary
-    for(const doc of docs) {
-        total += tokenizerInstance.encode(doc.pageContent).length;
-    }
-    return total;
-}
+const throttledSummaryGenerator = throttle(({ doc }: { doc: Document }) => summaryGenerator.generateSummary(doc));
+const limitedThrottledSummaryGenerator = ({ doc }: { doc: Document }) => limit(() => throttledSummaryGenerator({ doc }));
 
 // Initialize variables for iterative summarization
-let currentSummaries = await splitter.splitDocuments(docs);
-let level = 1;
+const chapters = await chapterSplitter.splitDocuments(docs);
+const newSummaries: Document[] = [];
 
-while(true) {
-    logger.info(`\nStarting summarization Level ${level}...\n`);
+const bar = new cliProgress.SingleBar({
+    format: 'Processing [{bar}] {percentage}% | ETA: {eta}s | {value}/{total} chunks',
+    barCompleteChar: '\u2588',
+    barIncompleteChar: '\u2591',
+    hideCursor: false,
+});
+bar.start(chapters.length, 0);
 
-    // Calculate total tokens of current summaries
-    const totalTokens = await calculateTotalTokens(currentSummaries);
-    logger.info(`Total tokens at Level ${level}: ${totalTokens}`);
-
-    // Check if total tokens are within the ideal context size
-    if(totalTokens <= idealContextSize) {
-        logger.info(`Desired context size achieved at Level ${level - 1}.`);
-        break;
+if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
+    // Serial Processing for Ollama
+    for(const chapter of chapters) {
+        const summary = await summaryGenerator.generateSummary(chapter);
+        bar.increment();
+        newSummaries.push(summary);
     }
+} else {
+    // Parallel Processing for Non-Ollama LLMs using limitedThrottledSummaryGenerator
+    const batchPromises = _.map(chapters, chapter =>
+        limitedThrottledSummaryGenerator({ doc: chapter })
+                .then((summary) => {
+                    bar.increment();
+                    return summary;
+                })
+                .catch((error) => {
+                    logger.error(`Error generating summary for batch: ${error.message}`);
+                    bar.increment();
+                    return null;
+                })
+    );
 
-    try {
-        const newSummaries: Document[] = [];
+    const summaries = await Promise.all(batchPromises);
 
-        // Concatenate all summaries into a single text
-        const concatenatedText = _(currentSummaries).map('pageContent').join('\n\n');
-        const concatenatedDocument = new Document({ pageContent: concatenatedText });
-        const concatenatedChunks = await splitter.splitDocuments([concatenatedDocument]);
+    // Filter out any null summaries due to errors
+    const successfulSummaries = _.filter(summaries, summary => summary !== null) as Document[];
 
-        if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
-            // Serial Processing for Ollama
-            for(let i = 0; i < concatenatedChunks.length; i++) {
-                const chunk = concatenatedChunks[i];
-                const summary = await summaryGenerator.generateSummary([chunk]);
-                newSummaries.push(summary);
-                logger.info(`Generated Level ${level} summary for chunk ${i + 1}`);
-            }
-        } else {
-            // Parallel Processing for Non-Ollama LLMs using limitedThrottledSummaryGenerator
-            logger.info(`Processing ${concatenatedChunks.length} chunks in parallel...\n`);
-
-            const batchSize = 10; // Define an appropriate batch size within each level
-            const batchPromises: Promise<Document | null>[] = [];
-
-            const bar = new cliProgress.SingleBar({
-                format: 'Processing [{bar}] {percentage}% | ETA: {eta}s | {value}/{total} chunks',
-                barCompleteChar: '\u2588',
-                barIncompleteChar: '\u2591',
-                hideCursor: false,
-            });
-            bar.start(concatenatedChunks.length, 0);
-            for(let i = 0; i < concatenatedChunks.length; i += batchSize) {
-                const batch = concatenatedChunks.slice(i, i + batchSize);
-                const promise = limitedThrottledSummaryGenerator({ docs: batch })
-                    .then((summary) => {
-                        bar.increment(batch.length);
-                        return summary;
-                    })
-                    .catch((error) => {
-                        logger.error(`Error generating summary for batches ${i + 1} to ${i + batch.length}: ${error.message}`);
-                        bar.increment(batch.length);
-                        return null; // Handle error by returning null or appropriate placeholder
-                    });
-                batchPromises.push(promise);
-            }
-
-            const summaries = await Promise.all(batchPromises);
-            bar.stop();
-
-            // Filter out any null summaries due to errors
-            const successfulSummaries = _.filter(summaries, summary => summary !== null) as Document[];
-
-            newSummaries.push(...successfulSummaries);
-
-            logger.info(`Finished processing ${successfulSummaries.length} summaries in parallel.\n`);
-        }
-
-        // Save the summaries to a plain text file
-        await saveSummariesToFile(newSummaries, level, book);
-
-        // Optionally, index the new summaries into FaissStore (Uncomment if indexing is still needed)
-        logger.info(`Indexing Level ${level} summaries...\n`);
-        const vectorStoreLevel = await FaissStore.fromDocuments(newSummaries, embeddings);
-        await vectorStoreLevel.save(`novels/${book}_level${level}`);
-        logger.info(`Level ${level} summaries indexed and saved.\n`);
-
-        // Prepare for next iteration
-        // Concatenate all new summaries for the next level's input
-        const concatenatedNewSummaries = _(newSummaries).map('pageContent').join('\n\n');
-        const nextDocuments = await splitter.splitDocuments([new Document({ pageContent: concatenatedNewSummaries })]);
-        currentSummaries = nextDocuments;
-        level++;
-    } catch(error) {
-        const errorMessage = (error as Error).message || 'Unknown error';
-        logger.info(`Error during Level ${level} summarization or FaissStore indexing: ${errorMessage}`);
-        break; // Exit loop on error
-    }
+    newSummaries.push(...successfulSummaries);
 }
+bar.stop();
+
+// Save the summaries to a plain text file
+await saveSummariesToFile(newSummaries, book);
