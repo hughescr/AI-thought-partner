@@ -130,10 +130,10 @@ const limit = pLimit(32); // Limit to 32 concurrent request
 const throttle = pThrottle({
     limit: 64,
     interval: 60 * 1000,
-}); // Limit to 300 per minute
+}); // Limit to 64 per minute
 // We do about 4k tokens per request, and we are limited to 300,000 tokens per minute, so we can do about 75 requests per minute
-// We want to limit to a max of 32 simultaneous requests, but also throttle to 300 per minute, so combine limit and throttle:
 const throttledInvoke = throttle(({ long, short }) => contextChain.invoke({ 'long': long, 'short': short }));
+// We want to limit to a max of 32 simultaneous requests, but also throttle to 64 per minute, so combine limit and throttle:
 const throttledSummaryGenerator = throttle(({ docs }) => summaryGenerator.generateSummary(docs));
 const limitedThrottledSummaryGenerator = ({ docs }) => limit(() => throttledSummaryGenerator({ docs }));
 
