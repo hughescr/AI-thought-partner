@@ -15,9 +15,11 @@ Your task is to generate a concise summary of the provided passages. Ensure that
 
 ## Guidelines
 1. Read and understand all the passages carefully.
-2. Focus on the main points and logical flow.
+2. Focus on the main narrative points, characters, and the plot flow of the story.
 3. Ensure the summary is coherent and captures the essence of the content.
-4. Output only the generated summary without any additional formatting or metadata.`),
+4. Output only the generated summary without any additional formatting or metadata.
+5. Just provide the summary, do not lead in with "The passages say that..." or "In these passages..." or "The story is about...", etc. Just the raw summary.
+6. Make sure that the summary captures all the most important narrative elements from the passages.`),
     HumanMessagePromptTemplate.fromTemplate(`## Passages
 {combinedText}
 
