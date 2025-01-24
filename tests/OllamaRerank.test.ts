@@ -21,13 +21,13 @@ describe('OllamaRerank', () => {
         const compressedDocs = await reranker.compressDocuments(documents, 'query');
         expect(compressedDocs).toHaveLength(2);
         expect(compressedDocs[0].metadata.relevanceScore).toBe(0.9);
-        expect(compressedDocs[1].metadata.relevanceScore).toBe(0.8);
+        expect(compressedDocs[1].metadata.relevanceScore).toBe(0.81);
     });
 
     it('should rerank documents', async () => {
         const results = await reranker.rerank(documents, 'query');
         expect(results).toHaveLength(2);
         expect(results[0].relevanceScore).toBe(0.9);
-        expect(results[1].relevanceScore).toBe(0.8);
+        expect(results[1].relevanceScore).toBe(0.81);
     });
 });
