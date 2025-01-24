@@ -5,7 +5,7 @@ import { Embeddings } from '@langchain/core/embeddings';
 import _ from 'lodash';
 import { cosineSimilarity } from './utils.ts';
 import { getEncoding } from '@langchain/core/utils/tiktoken';
-import { TiktokenEncoding } from 'js-tiktoken/lite';
+import type { TiktokenEncoding } from 'js-tiktoken/lite';
 import cliProgress from 'cli-progress';
 
 interface SemanticTextSplitterOptions {

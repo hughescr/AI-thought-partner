@@ -3,7 +3,6 @@ import {
     cachedJinaV2SmallENEmbeddings as fastEmbeddings,
     novaLiteLLM as summarizerLLM
 } from './lib/LLMs';
-import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import cliProgress from 'cli-progress';
@@ -105,8 +104,8 @@ const throttle = pThrottle({
     interval: 60 * 1000,
 }); // Limit to 64 per minute
 
-const throttledSummaryGenerator = throttle(({ docs }) => summaryGenerator.generateSummary(docs));
-const limitedThrottledSummaryGenerator = ({ docs }) => limit(() => throttledSummaryGenerator({ docs }));
+const throttledSummaryGenerator = throttle(({ docs }: { docs: Document[] }) => summaryGenerator.generateSummary(docs));
+const limitedThrottledSummaryGenerator = ({ docs }: { docs: Document[] }) => limit(() => throttledSummaryGenerator({ docs }));
 
 /**
  * Calculates the total number of tokens in the provided documents.
@@ -211,7 +210,8 @@ while(true) {
         currentSummaries = nextDocuments;
         level++;
     } catch(error) {
-        logger.info(`Error during Level ${level} summarization or FaissStore indexing: ${error.message}`);
+        const errorMessage = (error as Error).message || 'Unknown error';
+        logger.info(`Error during Level ${level} summarization or FaissStore indexing: ${errorMessage}`);
         break; // Exit loop on error
     }
 }

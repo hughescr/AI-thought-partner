@@ -1,5 +1,6 @@
 import { SemanticTextSplitter } from '../lib/SemanticTextSplitter.ts';
-import { Embeddings, EmbeddingsParams } from '@langchain/core/embeddings';
+import { Embeddings } from '@langchain/core/embeddings';
+import type { EmbeddingsParams } from '@langchain/core/embeddings';
 import _ from 'lodash';
 
 class ConcreteEmbeddings extends Embeddings {

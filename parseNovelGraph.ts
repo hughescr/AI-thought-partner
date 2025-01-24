@@ -7,6 +7,7 @@ import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR.ts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
 import { ChatPromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
+import { Document } from '@langchain/core/documents';
 import neo4j from 'neo4j-driver';
 import { tool } from '@langchain/core/tools';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
@@ -92,14 +93,12 @@ interface NovelMetadata {
  * @param {GraphState} state - The current state of the agent, including the query.
  * @returns {Promise<GraphState>} - The updated state with the documents added.
  */
-async function setupMetadata(): Promise<{ novelMetadata: NovelMetadata }> {
+async function setupMetadata(): Promise<NovelMetadata> {
     return {
-        novelMetadata: {
-            title: 'Christmas Town',
-            author: 'Erica S. Hughes',
-            today: new Date().toISOString(),
-            genre: 'Literary Fiction/Young Adult',
-        },
+        title: 'Christmas Town',
+        author: 'Erica S. Hughes',
+        today: new Date().toISOString(),
+        genre: 'Literary Fiction/Young Adult',
     };
 }
 
@@ -621,17 +620,16 @@ async function saveRelationshipsToNeo4j(state: { relationships: Relationship[] }
 
 const ERExtractionAnnotation = Annotation.Root({
     novelMetadata: Annotation<NovelMetadata>,
-    novelChunk: Annotation<string>,
+    novelChunk: Annotation<Document>,
     entities: Annotation<Entity[]>,
     relationships: Annotation<Relationship[]>
 });
+type ERExtractionAnnotationType = typeof ERExtractionAnnotation.State;
 
 const workflow = new StateGraph(ERExtractionAnnotation)
-    .addNode('Setup Metadata', setupMetadata)
     .addNode('Extract Entities', extractEntities)
     .addNode('Refine Entities with Context', refineEntitiesWithContext) // Add this line
-    .addEdge(START, 'Setup Metadata')
-    .addEdge('Setup Metadata', 'Extract Entities')
+    .addEdge(START, 'Extract Entities')
     .addEdge('Extract Entities', 'Refine Entities with Context') // Add this line
     .addNode('Further Refine Entities', furtherRefineEntities) // Add this line
     .addEdge('Refine Entities with Context', 'Further Refine Entities') // Add this line
@@ -647,10 +645,14 @@ const app = workflow.compile();
 
 // // Now run:
 const totalProgress = bars.create(chapterChunks.length, 0);
+const novelMetadata = await setupMetadata();
 for(const novelChunk of chapterChunks) {
     totalProgress.update({ name: `${JSON.stringify(novelChunk.pageContent).substring(0, 48)}...(${novelChunk.pageContent.length})` });
-    const initialState = {
+    const initialState: ERExtractionAnnotationType = {
+        novelMetadata,
         novelChunk: novelChunk,
+        entities: [],
+        relationships: []
     };
 
     for await (const output of await app.stream(initialState, { streamMode: 'values', recursionLimit: 50 })) {

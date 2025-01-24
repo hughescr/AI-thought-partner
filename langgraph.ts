@@ -62,7 +62,7 @@ const qaRetriever = vectorStore.asRetriever({
     k: 75,
 });
 
-const sortDocsFormatAsJSON = (documents) => {
+const sortDocsFormatAsJSON = (documents: Document[]) => {
     return JSON.stringify(
         _(documents)
             .sortBy(['metadata.source', 'metadata.loc.pageNumber', 'metadata.loc.lines.from'])
@@ -86,14 +86,14 @@ const QuestionAnswerAnnotation = Annotation.Root({
     query: Annotation<string>,
     generation: Annotation<string>,
 });
-// type QuestionAnswerAnnotationType = typeof QuestionAnswerAnnotation.State;
+type QuestionAnswerAnnotationType = typeof QuestionAnswerAnnotation.State;
 
 /**
  * Call the retriever to find matching documents
  * @param {GraphState} state - The current state of the agent, including the query.
  * @returns {Promise<GraphState>} - The updated state with the documents added.
  */
-async function retrieve(state) {
+async function retrieve(state: QuestionAnswerAnnotationType) {
     logger.debug('---EXECUTE RETRIEVAL---');
 
     // We call the tool_executor and get back a response.
@@ -106,7 +106,7 @@ async function retrieve(state) {
     return { documents: mergedDocs, query: state.query || state.origQuery };
 }
 
-async function rerankDocuments(state) {
+async function rerankDocuments(state: QuestionAnswerAnnotationType) {
     const docsToRerank: string[] = _(state.documents)
                         .map(doc => ({ extract: doc.pageContent, context: doc.metadata.context }))
                         .map(JSON.stringify)
@@ -125,7 +125,9 @@ async function rerankDocuments(state) {
     // Now figure out which the original documents were
     const rerankedDocs = _.map(rerankedDocuments, (doc) => {
         const found = _.find(state.documents, { pageContent: JSON.parse(doc.doc).extract });
-        found.metadata.relevanceScore = doc.relevanceScore;
+        if(found) {
+            found.metadata.relevanceScore = doc.relevanceScore;
+        }
         return found;
     });
     // const ditchedDocs = _.difference(state.documents, rerankedDocs);
@@ -154,7 +156,7 @@ Previous reformulation attempts:
 Provide only the text of the improved query immediately:`),
 ]);
 const transformQueryChain = transformQueryPrompt.pipe(fastLLM).pipe(new StringOutputParser());
-async function transformQuery(state) {
+async function transformQuery(state: QuestionAnswerAnnotationType) {
     logger.debug(`---TRANSFORM QUERY: ${state.priorQueries.length} PREVIOUS QUERIES---`);
 
     // Prompt
@@ -184,7 +186,7 @@ async function transformQuery(state) {
  * @param {GraphState} state The current state of the graph.
  * @returns {"transformQuery" | "generate"} Next node to call
  */
-function decideToGenerate(state) {
+function decideToGenerate(state: QuestionAnswerAnnotationType) {
     logger.debug(`---DECIDE TO GENERATE: ${state.documents.length} RELEVANT DOCUMENTS---`);
     const documents = state.documents;
 
@@ -232,7 +234,7 @@ const ragChain = mainAgentPromptTemplate.pipe(slowLLM).pipe(new StringOutputPars
  * @param {RunnableConfig | undefined} config The configuration object for tracing.
  * @returns {Promise<GraphState>} The new state object.
  */
-async function generate(state) {
+async function generate(state: QuestionAnswerAnnotationType) {
     logger.debug(`---GENERATE FROM ${state.documents.length} DOCS---`);
     // Pull in the prompt
 

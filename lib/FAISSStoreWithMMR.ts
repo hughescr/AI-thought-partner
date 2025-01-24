@@ -1,6 +1,6 @@
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { maximalMarginalRelevance } from '@langchain/core/utils/math';
-import { MaxMarginalRelevanceSearchOptions } from '@langchain/core/vectorstores';
+import type { MaxMarginalRelevanceSearchOptions } from '@langchain/core/vectorstores';
 import _ from 'lodash';
 
 /**

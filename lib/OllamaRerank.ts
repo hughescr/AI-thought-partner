@@ -1,4 +1,4 @@
-import { DocumentInterface } from '@langchain/core/documents';
+import type { DocumentInterface } from '@langchain/core/documents';
 import { BaseDocumentCompressor } from '@langchain/core/retrievers/document_compressors';
 import { Ollama } from 'ollama/browser';
 import _ from 'lodash';
