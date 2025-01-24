@@ -11,7 +11,7 @@
   "scripts": {
     "test": "bun test",
     "coverage": "bun test && genhtml coverage/lcov.info --output-directory coverage --header-title 'Coverage report' --footer \"$(git id)\" --legend --sort --show-owners all --annotate-script /opt/homebrew/Cellar/lcov/2.2/share/lcov/support-scripts/gitblame.pm --version-script /opt/homebrew/Cellar/lcov/2.2/share/lcov/support-scripts/gitversion.pm --ignore-errors version --hierarchical --criteria-script /opt/homebrew/Cellar/lcov/2.2/share/lcov/support-scripts/criteria.pm --show-navigation --show-proportion --num-spaces 4 --function-coverage --branch-coverage && open coverage/index.html",
-    "lint": "eslint --fix .",
+    "lint": "eslint --fix",
     "postversion": "git commit -m \"Bump package version to $npm_package_version\" package.json; git flow release start $npm_package_version; git flow release finish -m $npm_package_version $npm_package_version; git checkout develop; git merge master"
   },
   "devDependencies": {
