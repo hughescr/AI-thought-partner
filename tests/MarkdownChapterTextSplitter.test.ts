@@ -20,9 +20,9 @@ This is the content of chapter two.
 This is the content of chapter three.
         `;
         const expectedChunks = [
-            'This is the content of chapter one.',
-            'This is the content of chapter two.',
-            'This is the content of chapter three.',
+            '# Chapter 1\nThis is the content of chapter one.',
+            '## Chapter 2\nThis is the content of chapter two.',
+            '### Chapter 3\nThis is the content of chapter three.',
         ];
 
         const result = await splitter.splitText(text);
@@ -44,10 +44,10 @@ Content for chapter 3.
 Content for chapter 4.
         `;
         const expectedChunks = [
-            'Content for chapter 1.',
-            'Content for chapter 2.',
-            'Content for chapter 3.',
-            'Content for chapter 4.',
+            '# Chapter 1\nContent for chapter 1.',
+            '## Chapter 2\nContent for chapter 2.',
+            '### Chapter 3\nContent for chapter 3.',
+            '#### Chapter 4\nContent for chapter 4.',
         ];
 
         const result = await splitter.splitText(text);
@@ -63,7 +63,7 @@ Content for chapter 1.
         `;
         const expectedChunks = [
             'Introduction text before any chapter header.',
-            'Content for chapter 1.',
+            '# Chapter 1\nContent for chapter 1.',
         ];
 
         const result = await splitter.splitText(text);
@@ -103,9 +103,9 @@ Content for chapter 2.
 Content for chapter 3.
         `;
         const expectedChunks = [
-            'Content for chapter 1.',
-            'Content for chapter 2.',
-            'Content for chapter 3.',
+            '# Chapter 1: The Beginning!\nContent for chapter 1.',
+            '## Chapter 2: What\'s Next?\nContent for chapter 2.',
+            '### Chapter 3: The Finale.\nContent for chapter 3.',
         ];
 
         const result = await splitter.splitText(text);
@@ -122,9 +122,9 @@ Content for chapter 3.
 Content for chapter 3.
         `;
         const expectedChunks = [
-            '',
-            '',
-            'Content for chapter 3.',
+            '# Chapter 1',
+            '## Chapter 2',
+            '### Chapter 3\nContent for chapter 3.',
         ];
 
         const result = await splitter.splitText(text);
@@ -140,8 +140,8 @@ Content for chapter 1.
 Content for chapter 2.
         `;
         const expectedChunks = [
-            'Content for chapter 1.',
-            'Content for chapter 2.',
+            '#    Chapter 1\nContent for chapter 1.',
+            '##\tChapter 2\nContent for chapter 2.',
         ];
 
         const result = await splitter.splitText(text);
@@ -155,7 +155,7 @@ Content for chapter 2.
 
         for(let i = 1; i <= numberOfChapters; i++) {
             text += `# Chapter ${i}\nContent for chapter ${i}.\n\n`;
-            expectedChunks.push(`Content for chapter ${i}.`);
+            expectedChunks.push(`# Chapter ${i}\nContent for chapter ${i}.`);
         }
 
         const result = await splitter.splitText(text);
@@ -181,10 +181,10 @@ Content of Doc2 Chapter 2.
         ];
 
         const expectedChunks: Document[] = [
-            new Document({ pageContent: 'Content of Doc1 Chapter 1.' }),
-            new Document({ pageContent: 'Content of Doc1 Chapter 2.' }),
-            new Document({ pageContent: 'Content of Doc2 Chapter 1.' }),
-            new Document({ pageContent: 'Content of Doc2 Chapter 2.' }),
+            new Document({ pageContent: '# Doc1 Chapter 1\nContent of Doc1 Chapter 1.' }),
+            new Document({ pageContent: '# Doc1 Chapter 2\nContent of Doc1 Chapter 2.' }),
+            new Document({ pageContent: '# Doc2 Chapter 1\nContent of Doc2 Chapter 1.' }),
+            new Document({ pageContent: '# Doc2 Chapter 2\nContent of Doc2 Chapter 2.' }),
         ];
 
         const result = await splitter.splitDocuments(docs);
