@@ -23,26 +23,38 @@ export class MarkdownChapterTextSplitter extends TextSplitter {
      */
     async splitText(text: string): Promise<string[]> {
         const splits: string[] = [];
-        let lastIndex = 0;
+        const matches = [];
         let match: RegExpExecArray | null;
-
-        // Iterate over all header matches
-        while((match = this.splitterRegex.exec(text)) !== null) {
-            const matchIndex = match.index;
-            if(matchIndex > lastIndex) {
-                const chunk = _.trim(text.slice(lastIndex, matchIndex));
-                if(chunk) {
-                    splits.push(chunk);
-                }
-            }
-            // Advance lastIndex to the start of the matched header
-            lastIndex = matchIndex;
+        while ((match = this.splitterRegex.exec(text)) !== null) {
+            matches.push(match);
         }
 
-        // Add any remaining text after the last header
-        if(lastIndex < text.length) {
-            const chunk = _.trim(text.slice(lastIndex));
-            if(chunk) {
+        if (matches.length === 0) {
+            splits.push(_.trim(text));
+            return splits;
+        }
+
+        const firstMatch = matches[0];
+        if (firstMatch.index > 0) {
+            const beforeHeader = _.trim(text.slice(0, firstMatch.index));
+            if (beforeHeader) {
+                splits.push(beforeHeader);
+            }
+        }
+
+        for (let i = 0; i < matches.length; i++) {
+            const currentMatch = matches[i];
+            const start = currentMatch.index;
+            let end: number;
+
+            if (i < matches.length - 1) {
+                end = matches[i + 1].index;
+            } else {
+                end = text.length;
+            }
+
+            const chunk = _.trim(text.slice(start, end));
+            if (chunk) {
                 splits.push(chunk);
             }
         }
