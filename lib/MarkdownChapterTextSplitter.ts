@@ -26,11 +26,11 @@ export class MarkdownChapterTextSplitter extends TextSplitter {
         let match: RegExpExecArray | null;
 
         // Iterate over all header matches
-        while ((match = this.splitterRegex.exec(text)) !== null) {
+        while((match = this.splitterRegex.exec(text)) !== null) {
             const matchIndex = match.index;
-            if (matchIndex > lastIndex) {
+            if(matchIndex > lastIndex) {
                 const chunk = _.trim(text.slice(lastIndex, matchIndex));
-                if (chunk) {
+                if(chunk) {
                     splits.push(chunk);
                 }
             }
@@ -39,9 +39,9 @@ export class MarkdownChapterTextSplitter extends TextSplitter {
         }
 
         // Add any remaining text after the last header
-        if (lastIndex < text.length) {
+        if(lastIndex < text.length) {
             const chunk = _.trim(text.slice(lastIndex));
-            if (chunk) {
+            if(chunk) {
                 splits.push(chunk);
             }
         }
@@ -56,9 +56,9 @@ export class MarkdownChapterTextSplitter extends TextSplitter {
      */
     async splitDocuments(documents: Document[]): Promise<Document[]> {
         const newDocs: Document[] = [];
-        for (const doc of documents) {
+        for(const doc of documents) {
             const chunks = await this.splitText(doc.pageContent);
-            for (const chunk of chunks) {
+            for(const chunk of chunks) {
                 newDocs.push(new Document({ pageContent: chunk }));
             }
         }

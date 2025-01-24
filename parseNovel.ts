@@ -58,8 +58,8 @@ class RecursiveCharacterTextSplitterSeparatorMod extends RecursiveCharacterTextS
     // The former is clearly dumber than shit and will confuse the LLM with its weird leading periods and no end to the sentence, etc.
     splitOnSeparator(text: string, separator: string): string[] {
         let splits: string[] = [];
-        if (separator) {
-            if (this.keepSeparator) {
+        if(separator) {
+            if(this.keepSeparator) {
                 const regexEscapedSeparator: string = _.replace(
                     separator,
                     /[/\-\\^$*+?.()|[\]{}]/g,
@@ -141,7 +141,7 @@ const limitedThrottledSummaryGenerator = ({ docs }) => limit(() => throttledSumm
 async function calculateTotalTokens(docs: Document[]): Promise<number> {
     let total = 0;
     const tokenizerInstance = await getEncoding('gpt2'); // Adjust tokenizer if necessary
-    for (const doc of docs) {
+    for(const doc of docs) {
         total += tokenizerInstance.encode(doc.pageContent).length;
     }
     return total;
@@ -151,7 +151,7 @@ async function calculateTotalTokens(docs: Document[]): Promise<number> {
 let currentSummaries = await splitter.splitDocuments(docs);
 let level = 1;
 
-while (true) {
+while(true) {
     logger.info(`\nStarting summarization Level ${level}...\n`);
 
     // Calculate total tokens of current summaries
@@ -159,7 +159,7 @@ while (true) {
     logger.info(`Total tokens at Level ${level}: ${totalTokens}`);
 
     // Check if total tokens are within the ideal context size
-    if (totalTokens <= idealContextSize) {
+    if(totalTokens <= idealContextSize) {
         logger.info(`Desired context size achieved at Level ${level - 1}.`);
         break;
     }
@@ -172,9 +172,9 @@ while (true) {
         const concatenatedDocument = new Document({ pageContent: concatenatedText });
         const concatenatedChunks = await splitter.splitDocuments([concatenatedDocument]);
 
-        if (_.includes(summarizerLLM.lc_namespace, 'ollama')) {
+        if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
             // Serial Processing for Ollama
-            for (let i = 0; i < concatenatedChunks.length; i++) {
+            for(let i = 0; i < concatenatedChunks.length; i++) {
                 const chunk = concatenatedChunks[i];
                 const summary = await summaryGenerator.generateSummary([chunk]);
                 newSummaries.push(summary);
@@ -194,7 +194,7 @@ while (true) {
                 hideCursor: false,
             });
             bar.start(concatenatedChunks.length, 0);
-            for (let i = 0; i < concatenatedChunks.length; i += batchSize) {
+            for(let i = 0; i < concatenatedChunks.length; i += batchSize) {
                 const batch = concatenatedChunks.slice(i, i + batchSize);
                 const promise = limitedThrottledSummaryGenerator({ docs: batch })
                     .then((summary) => {
@@ -235,7 +235,7 @@ while (true) {
         const nextDocuments = await splitter.splitDocuments([new Document({ pageContent: concatenatedNewSummaries })]);
         currentSummaries = nextDocuments;
         level++;
-    } catch (error) {
+    } catch(error) {
         logger.info(`Error during Level ${level} summarization or FaissStore indexing: ${error.message}`);
         break; // Exit loop on error
     }
