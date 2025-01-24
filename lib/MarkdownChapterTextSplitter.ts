@@ -25,36 +25,36 @@ export class MarkdownChapterTextSplitter extends TextSplitter {
         const splits: string[] = [];
         const matches = [];
         let match: RegExpExecArray | null;
-        while ((match = this.splitterRegex.exec(text)) !== null) {
+        while((match = this.splitterRegex.exec(text)) !== null) {
             matches.push(match);
         }
 
-        if (matches.length === 0) {
+        if(matches.length === 0) {
             splits.push(_.trim(text));
             return splits;
         }
 
         const firstMatch = matches[0];
-        if (firstMatch.index > 0) {
+        if(firstMatch.index > 0) {
             const beforeHeader = _.trim(text.slice(0, firstMatch.index));
-            if (beforeHeader) {
+            if(beforeHeader) {
                 splits.push(beforeHeader);
             }
         }
 
-        for (let i = 0; i < matches.length; i++) {
+        for(let i = 0; i < matches.length; i++) {
             const currentMatch = matches[i];
             const start = currentMatch.index;
             let end: number;
 
-            if (i < matches.length - 1) {
+            if(i < matches.length - 1) {
                 end = matches[i + 1].index;
             } else {
                 end = text.length;
             }
 
             const chunk = _.trim(text.slice(start, end));
-            if (chunk) {
+            if(chunk) {
                 splits.push(chunk);
             }
         }
