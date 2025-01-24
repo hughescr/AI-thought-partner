@@ -4,7 +4,6 @@ import {
     novaLiteLLM as summarizerLLM
 } from './lib/LLMs';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
-import { StringOutputParser } from '@langchain/core/output_parsers';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import cliProgress from 'cli-progress';
@@ -40,7 +39,7 @@ _.mixin({
 { chain: true } // Enable chaining for this mixin
 );
 
-const idealContextSize = 8192; // Desired total token limit for summaries
+const idealContextSize = 8192; // Desired total token limit for collection of 10 summaries (from future retrieval)
 const book = 'Christmas Town query version';
 // const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: true });
 const loader = new TextLoader(`novels/${book}.md`);
@@ -85,7 +84,7 @@ const chapterSplitter = new RecursiveCharacterTextSplitterSeparatorMod({
 
 await chapterSplitter.splitDocuments(docs);
 
-const targetSummarySize = idealContextSize / 10; // 3276.8 tokens if idealContextSize is 32768
+const targetSummarySize = idealContextSize / 10;
 
 const summaryGenerator = new SummaryGenerator({
     llm: summarizerLLM,
@@ -99,30 +98,6 @@ const splitter: SemanticTextSplitter = new SemanticTextSplitter({
     embeddings: fastEmbeddings, // Use fast embeddings for decent semantic splits
     embeddingBatchSize: 128,
 });
-
-// Now go through each chapter, split it into smaller chunks, and then calculate context for each chunk.
-const contextSummaryPrompt: ChatPromptTemplate = ChatPromptTemplate.fromMessages([
-    SystemMessagePromptTemplate.fromTemplate(
-        `## Task
-Your task is to generate a very minimal, short explanatory context that grounds the given short passage within the context of the provided long passage. The generated context should clarify any ambiguous pronouns in the short passage by providing relevant information from the long passage. Additionally, include meta-information such as the chapter number or section where these passages are from.
-
-## Guidelines
-1. Read and understand both the long passage and the short passage carefully.
-2. Identify any pronouns or ambiguous references in the short passage that require clarification from the long passage.
-3. Extract the minimal necessary information from the long passage to provide context for the short passage and resolve any ambiguities.
-4. Include meta-information like the chapter number or section where these passages are from.
-5. Output only the generated context, without any JSON markup, quotation marks, or additional lead-in text.`
-    ),
-    HumanMessagePromptTemplate.fromTemplate(`## Long Passage
-{long}
-
-## Short Passage
-{short}
-
-Please provide the generated minimal explanatory context immediately:`),
-]);
-
-// Removed 'contextChain' as it was unused.
 
 const limit = pLimit(32); // Limit to 32 concurrent requests
 const throttle = pThrottle({
