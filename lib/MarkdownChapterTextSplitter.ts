@@ -12,7 +12,7 @@ export class MarkdownChapterTextSplitter extends TextSplitter {
     constructor() {
         super();
         // Matches any markdown header like '# Chapter 1', '## Prologue', etc.
-        this.splitterRegex = /^#+\s+.+$/gm;
+        this.splitterRegex = /^#+\s+\S.*$/gm;
     }
 
     /**
@@ -29,7 +29,7 @@ export class MarkdownChapterTextSplitter extends TextSplitter {
         while ((match = this.splitterRegex.exec(text)) !== null) {
             const matchIndex = match.index;
             if (matchIndex > lastIndex) {
-                const chunk = text.slice(lastIndex, matchIndex).trim();
+                const chunk = _.trim(text.slice(lastIndex, matchIndex));
                 if (chunk) {
                     splits.push(chunk);
                 }
@@ -40,7 +40,7 @@ export class MarkdownChapterTextSplitter extends TextSplitter {
 
         // Add any remaining text after the last header
         if (lastIndex < text.length) {
-            const chunk = text.slice(lastIndex).trim();
+            const chunk = _.trim(text.slice(lastIndex));
             if (chunk) {
                 splits.push(chunk);
             }

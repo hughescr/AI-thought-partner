@@ -58,8 +58,8 @@ class RecursiveCharacterTextSplitterSeparatorMod extends RecursiveCharacterTextS
     // The former is clearly dumber than shit and will confuse the LLM with its weird leading periods and no end to the sentence, etc.
     splitOnSeparator(text: string, separator: string): string[] {
         let splits: string[] = [];
-        if(separator) {
-            if(this.keepSeparator) {
+        if (separator) {
+            if (this.keepSeparator) {
                 const regexEscapedSeparator: string = _.replace(
                     separator,
                     /[/\-\\^$*+?.()|[\]{}]/g,
@@ -122,88 +122,16 @@ Your task is to generate a very minimal, short explanatory context that grounds 
 Please provide the generated minimal explanatory context immediately:`),
 ]);
 
-const contextChain = contextSummaryPrompt
-    .pipe(summarizerLLM)
-    .pipe(new StringOutputParser());
+// Removed 'contextChain' as it was unused.
 
-const limit = pLimit(32); // Limit to 32 concurrent request
+const limit = pLimit(32); // Limit to 32 concurrent requests
 const throttle = pThrottle({
     limit: 64,
     interval: 60 * 1000,
 }); // Limit to 64 per minute
-// We do about 4k tokens per request, and we are limited to 300,000 tokens per minute, so we can do about 75 requests per minute
-// We want to limit to a max of 32 simultaneous requests, but also throttle to 64 per minute, so combine limit and throttle:
-// const throttledInvoke = throttle(({ long, short }) => contextChain.invoke({ 'long': long, 'short': short }));
-// const limitedThrottledInvoke = ({ long, short }) => limit(() => throttledInvoke({ long, short }));
+
 const throttledSummaryGenerator = throttle(({ docs }) => summaryGenerator.generateSummary(docs));
 const limitedThrottledSummaryGenerator = ({ docs }) => limit(() => throttledSummaryGenerator({ docs }));
-
-// Initialize MultiBar
-// Create main progress bar for chapters
-// for(const chapter of chapterChunks) {
-//     chapterBar.increment();
-//     const smallerChunks = await splitter.splitDocuments([chapter]);
-
-//     const totalSmallerChunks = smallerChunks.length;
-//     // Create progress bar for smaller chunks
-//     const chunkBar = multiBar.create(totalSmallerChunks, 0, {
-//         name: 'Chunks',
-//     });
-//     if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
-//         for(const smallerChunk of smallerChunks) {
-//             const context = await contextChain.invoke({
-//                 'long': chapter.pageContent,
-//                 'short': smallerChunk.pageContent,
-//             });
-//             multiBar.log(`Context: (${context.length}) ${context}\n`);
-//             chunkBar.increment();
-//             smallerChunk.metadata.context = context; // Save the context in the metadata
-//             splits.push(smallerChunk);
-//         }
-//     } else {
-//         // Do the same thing, but making the calls in parallel
-//         multiBar.log(chalk.yellow(`Processing ${totalSmallerChunks} smaller chunks in parallel...\n`));
-//         const contexts = await Promise.all(_.map(smallerChunks, async (smallerChunk) => {
-//             const context = await limitedThrottledInvoke({
-//                 'long': chapter.pageContent,
-//                 'short': smallerChunk.pageContent,
-//             });
-//             multiBar.log(`Context: (${context.length}) ${context}\n`);
-//             chunkBar.increment();
-//             smallerChunk.metadata.context = context; // Save the context in the metadata
-//             splits.push(smallerChunk);
-//             return context;
-//         }));
-//         multiBar.log(chalk.yellow(`Finished processing ${contexts.length} smaller chunks in parallel.\n`));
-//     }
-
-//     // Stop the smaller chunks progress bar
-//     chunkBar.stop();
-//     multiBar.remove(chunkBar);
-// }
-//
-// let vectorStore: FaissStore | undefined;
-
-// const splitChunks = _(splits)
-//     .flatten()
-//     .chunk(16)
-//     .value();
-// const bar = multiBar.create(
-//     _.flatten(splits).length,
-//     0,
-//     { name: 'Saving chunks' }
-// );
-// for(const chunk of splitChunks) {
-//     if(vectorStore) {
-//         await vectorStore.addDocuments(chunk);
-//     } else {
-//         vectorStore = await FaissStore.fromDocuments(chunk, embeddings); // Index with the slower, better embeddings
-//     }
-//     bar.increment(chunk.length);
-// }
-// if(vectorStore) {
-//     await vectorStore.save(`novels/${book}`);
-// }
 
 /**
  * Calculates the total number of tokens in the provided documents.
@@ -213,7 +141,7 @@ const limitedThrottledSummaryGenerator = ({ docs }) => limit(() => throttledSumm
 async function calculateTotalTokens(docs: Document[]): Promise<number> {
     let total = 0;
     const tokenizerInstance = await getEncoding('gpt2'); // Adjust tokenizer if necessary
-    for(const doc of docs) {
+    for (const doc of docs) {
         total += tokenizerInstance.encode(doc.pageContent).length;
     }
     return total;
@@ -223,7 +151,7 @@ async function calculateTotalTokens(docs: Document[]): Promise<number> {
 let currentSummaries = await splitter.splitDocuments(docs);
 let level = 1;
 
-while(true) {
+while (true) {
     logger.info(`\nStarting summarization Level ${level}...\n`);
 
     // Calculate total tokens of current summaries
@@ -231,7 +159,7 @@ while(true) {
     logger.info(`Total tokens at Level ${level}: ${totalTokens}`);
 
     // Check if total tokens are within the ideal context size
-    if(totalTokens <= idealContextSize) {
+    if (totalTokens <= idealContextSize) {
         logger.info(`Desired context size achieved at Level ${level - 1}.`);
         break;
     }
@@ -244,16 +172,16 @@ while(true) {
         const concatenatedDocument = new Document({ pageContent: concatenatedText });
         const concatenatedChunks = await splitter.splitDocuments([concatenatedDocument]);
 
-        if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
-        // Serial Processing for Ollama
-            for(let i = 0; i < concatenatedChunks.length; i++) {
+        if (_.includes(summarizerLLM.lc_namespace, 'ollama')) {
+            // Serial Processing for Ollama
+            for (let i = 0; i < concatenatedChunks.length; i++) {
                 const chunk = concatenatedChunks[i];
                 const summary = await summaryGenerator.generateSummary([chunk]);
                 newSummaries.push(summary);
                 logger.info(`Generated Level ${level} summary for chunk ${i + 1}`);
             }
         } else {
-        // Parallel Processing for Non-Ollama LLMs using limitedThrottledSummaryGenerator
+            // Parallel Processing for Non-Ollama LLMs using limitedThrottledSummaryGenerator
             logger.info(`Processing ${concatenatedChunks.length} chunks in parallel...\n`);
 
             const batchSize = 10; // Define an appropriate batch size within each level
@@ -266,19 +194,18 @@ while(true) {
                 hideCursor: false,
             });
             bar.start(concatenatedChunks.length, 0);
-            for(let i = 0; i < concatenatedChunks.length; i += batchSize) {
+            for (let i = 0; i < concatenatedChunks.length; i += batchSize) {
                 const batch = concatenatedChunks.slice(i, i + batchSize);
                 const promise = limitedThrottledSummaryGenerator({ docs: batch })
-                .then((summary) => {
-                    // logger.info(`Generated summary for batches ${i + 1} to ${i + batch.length}`);
-                    bar.increment(batch.length);
-                    return summary;
-                })
-                .catch((error) => {
-                    logger.error(`Error generating summary for batches ${i + 1} to ${i + batch.length}: ${error.message}`);
-                    bar.increment(batch.length);
-                    return null; // Handle error by returning null or appropriate placeholder
-                });
+                    .then((summary) => {
+                        bar.increment(batch.length);
+                        return summary;
+                    })
+                    .catch((error) => {
+                        logger.error(`Error generating summary for batches ${i + 1} to ${i + batch.length}: ${error.message}`);
+                        bar.increment(batch.length);
+                        return null; // Handle error by returning null or appropriate placeholder
+                    });
                 batchPromises.push(promise);
             }
 
@@ -308,7 +235,7 @@ while(true) {
         const nextDocuments = await splitter.splitDocuments([new Document({ pageContent: concatenatedNewSummaries })]);
         currentSummaries = nextDocuments;
         level++;
-    } catch(error) {
+    } catch (error) {
         logger.info(`Error during Level ${level} summarization or FaissStore indexing: ${error.message}`);
         break; // Exit loop on error
     }
