@@ -7,7 +7,7 @@ import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import cliProgress from 'cli-progress';
 import { SemanticTextSplitter } from './lib/SemanticTextSplitter';
-import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+import { MarkdownChapterTextSplitter } from './lib/MarkdownChapterTextSplitter';
 import { Document } from '@langchain/core/documents';
 import { SummaryGenerator } from './lib/SummaryGenerator';
 import _ from 'lodash';
@@ -49,37 +49,8 @@ const docs = await loader.load();
 // Then, for each large chunk, break it into small chunks (maybe 256 tokens), and ask an LLM to describe the context of each small chunk (adding another 256 tokens)
 // Then, concat the context and the extract, calculate encodings, and store in a vector store
 
-class RecursiveCharacterTextSplitterSeparatorMod extends RecursiveCharacterTextSplitter {
-    // Override the splitOnSeparator method to allow for keeping the separator attached to the earlier chunk not the later chunk
-    // Without this, punctuation ends up on the wrong chunk... for example
-    // Sentence 1. Sentence 2. ==> ['Sentence 1', '. Sentence 2', '.'] instead of ['Sentence 1.', 'Sentence 2.' ]
-    // The former is clearly dumber than shit and will confuse the LLM with its weird leading periods and no end to the sentence, etc.
-    splitOnSeparator(text: string, separator: string): string[] {
-        let splits: string[] = [];
-        if(separator) {
-            if(this.keepSeparator) {
-                const regexEscapedSeparator: string = _.replace(
-                    separator,
-                    /[/\-\\^$*+?.()|[\]{}]/g,
-                    '\\$&'
-                );
-                splits = _.split(text, new RegExp(`(?<=${regexEscapedSeparator})`));
-            } else {
-                splits = _.split(text, separator);
-            }
-        } else {
-            splits = _.split(text, '');
-        }
-        return _.filter(splits, s => s !== '');
-    }
-};
 
-const chapterSplitter = new RecursiveCharacterTextSplitterSeparatorMod({
-    separators: ['\n#', '\n\n', '.', '!', '?'], // Chapters, paragraphs, sentences
-    chunkSize: 20 * 1024,
-    keepSeparator: true,
-    chunkOverlap: 0,
-});
+const chapterSplitter = new MarkdownChapterTextSplitter();
 
 await chapterSplitter.splitDocuments(docs);
 
