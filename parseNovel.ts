@@ -259,21 +259,31 @@ while(true) {
             const batchSize = 10; // Define an appropriate batch size within each level
             const batchPromises: Promise<Document | null>[] = [];
 
+            const bar = new cliProgress.SingleBar({
+                format: 'Processing [{bar}] {percentage}% | ETA: {eta}s | {value}/{total} chunks',
+                barCompleteChar: '\u2588',
+                barIncompleteChar: '\u2591',
+                hideCursor: false,
+            });
+            bar.start(concatenatedChunks.length, 0);
             for(let i = 0; i < concatenatedChunks.length; i += batchSize) {
                 const batch = concatenatedChunks.slice(i, i + batchSize);
                 const promise = limitedThrottledSummaryGenerator({ docs: batch })
-                .then((summary, levelCopy = level) => {
-                    logger.info(`Generated Level ${level} summary for batches ${i + 1} to ${i + batch.length}`);
+                .then((summary) => {
+                    // logger.info(`Generated summary for batches ${i + 1} to ${i + batch.length}`);
+                    bar.increment(batch.length);
                     return summary;
                 })
                 .catch((error) => {
-                    logger.info(`Error generating summary for batches ${i + 1} to ${i + batch.length}: ${error.message}`);
+                    logger.error(`Error generating summary for batches ${i + 1} to ${i + batch.length}: ${error.message}`);
+                    bar.increment(batch.length);
                     return null; // Handle error by returning null or appropriate placeholder
                 });
                 batchPromises.push(promise);
             }
 
             const summaries = await Promise.all(batchPromises);
+            bar.stop();
 
             // Filter out any null summaries due to errors
             const successfulSummaries = _.filter(summaries, summary => summary !== null) as Document[];
