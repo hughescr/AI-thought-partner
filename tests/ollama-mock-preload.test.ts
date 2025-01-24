@@ -9,8 +9,8 @@ mock.module('ollama/browser', () => {
                 }
                 return Promise.resolve({
                     results: [
-                        { document: 0, relevance_score: 0.9 },
-                        { document: 1, relevance_score: 0.8 },
+                        { document: 'Document 1', relevance_score: 0.9 },
+                        { document: 'Document 2', relevance_score: 0.8 },
                     ],
                 });
             });
