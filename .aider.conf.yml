@@ -245,7 +245,7 @@ lint-cmd:
 #auto-lint: true
 
 ## Specify command to run tests
-#test-cmd: xxx
+test-cmd: bun test
 
 ## Enable/disable automatic testing after changes (default: False)
 #auto-test: false
