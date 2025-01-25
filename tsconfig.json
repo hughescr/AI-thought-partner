@@ -19,12 +19,11 @@
         ],
         "types": [
             "node",
-            "jest",
-            "bun"
+            "bun",
+            "jest"
         ],
     },
     "exclude": [
-        "node_modules",
-        "test"
+        "node_modules"
     ]
 }
