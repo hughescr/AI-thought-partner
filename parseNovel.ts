@@ -115,7 +115,7 @@ bar.stop();
 bar.stop();
 
 // For each chapter, create embeddings and prepare for FAISS indexing
-for (let i = 0; i < chapters.length; i++) {
+for(let i = 0; i < chapters.length; i++) {
     const chapter = chapters[i];
     const summary = newSummaries[i]; // Ensure summaries correspond to chapters
 
