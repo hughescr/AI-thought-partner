@@ -3,6 +3,10 @@ import {
 } from './lib/LLMs';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import cliProgress from 'cli-progress';
+import { FaissStore } from '@langchain/vectorstores/faiss';
+import { cachedSnowflakeArctic2Embeddings } from './lib/LLMs';
+import { SemanticTextSplitter } from './lib/SemanticTextSplitter';
+import { InMemoryDocstore } from 'langchain/docstore';
 import { MarkdownChapterTextSplitter } from './lib/MarkdownChapterTextSplitter';
 import { Document } from '@langchain/core/documents';
 import { ChapterSummaryGenerator } from './lib/ChapterSummaryGenerator';
@@ -65,6 +69,10 @@ const limitedThrottledSummaryGenerator = ({ doc }: { doc: Document }) => limit((
 const chapters = await chapterSplitter.splitDocuments(docs);
 const newSummaries: Document[] = [];
 
+// Arrays to collect embeddings and corresponding documents
+const embeddingsArray: number[][] = [];
+const documentsArray: Document[] = [];
+
 const bar = new cliProgress.SingleBar({
     format: 'Processing [{bar}] {percentage}% | ETA: {eta}s | {value}/{total} chunks',
     barCompleteChar: '\u2588',
@@ -104,5 +112,43 @@ if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
 }
 bar.stop();
 
-// Save the summaries to a plain text file
+bar.stop();
+
+// For each chapter, create embeddings and prepare for FAISS indexing
+for (let i = 0; i < chapters.length; i++) {
+    const chapter = chapters[i];
+    const summary = newSummaries[i]; // Ensure summaries correspond to chapters
+
+    // Calculate the embedding of the chapter summary
+    const summaryEmbedding = await cachedSnowflakeArctic2Embeddings.embedQuery(summary.pageContent);
+    embeddingsArray.push(summaryEmbedding);
+    documentsArray.push(chapter);
+
+    // Semantically split the chapter
+    const contextLength = 8192; // Context length of the embedding model
+    const chunkSize = Math.floor((3 / 4) * contextLength); // 6144 tokens
+
+    const semanticSplitter = new SemanticTextSplitter({
+        embeddings: cachedSnowflakeArctic2Embeddings,
+        chunkSize: chunkSize,
+        embeddingBatchSize: 16, // Adjust as needed
+        showProgress: false,    // Set to true to display progress
+    });
+
+    const chunks = await semanticSplitter.splitText(chapter.pageContent);
+
+    // Calculate embeddings for each semantic chunk
+    const chunkEmbeddings = await cachedSnowflakeArctic2Embeddings.embedDocuments(chunks);
+
+    // Associate each chunk embedding with the original chapter document
+    embeddingsArray.push(...chunkEmbeddings);
+    documentsArray.push(...Array(chunkEmbeddings.length).fill(chapter));
+}
+
+// Create the FAISS store with the collected embeddings and documents
+const vectorStore = await FaissStore.fromVectors(embeddingsArray, documentsArray, cachedSnowflakeArctic2Embeddings);
+
+// Save the FAISS store to disk
+const faissDirectory = `novels/${book}_faiss_index`;
+await vectorStore.save(faissDirectory);
 await saveSummariesToFile(newSummaries, book);
