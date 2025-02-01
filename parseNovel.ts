@@ -1,12 +1,11 @@
 import {
-    novaLiteLLM as summarizerLLM
+    novaLiteLLM as summarizerLLM,
+    cachedSnowflakeArctic2Embeddings
 } from './lib/LLMs';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import cliProgress from 'cli-progress';
-import { FaissStore } from '@langchain/vectorstores/faiss';
-import { cachedSnowflakeArctic2Embeddings } from './lib/LLMs';
+import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { SemanticTextSplitter } from './lib/SemanticTextSplitter';
-import { InMemoryDocstore } from 'langchain/docstore';
 import { MarkdownChapterTextSplitter } from './lib/MarkdownChapterTextSplitter';
 import { Document } from '@langchain/core/documents';
 import { ChapterSummaryGenerator } from './lib/ChapterSummaryGenerator';
@@ -21,9 +20,9 @@ import fs from 'fs/promises';
  * @param summaries - Array of Document objects containing summaries.
  * @param book - The name of the book being processed.
  */
-async function saveSummariesToFile(summaries: Document[], book: string): Promise<void> {
+async function saveSummariesToFile(chapters: Document[], book: string): Promise<void> {
     const filePath = `novels/${book}_chapter_summaries.txt`;
-    const content = _(summaries).map('pageContent').join('\n\n');
+    const content = _(chapters).map('metadata.summary').join('\n\n');
     await fs.writeFile(filePath, content, 'utf-8');
     logger.info(`Summaries saved to ${filePath}\n`);
 }
@@ -67,13 +66,8 @@ const limitedThrottledSummaryGenerator = ({ doc }: { doc: Document }) => limit((
 
 // Initialize variables for iterative summarization
 const chapters = await chapterSplitter.splitDocuments(docs);
-const newSummaries: Document[] = [];
 
-// Arrays to collect embeddings and corresponding documents
-const embeddingsArray: number[][] = [];
-const documentsArray: Document[] = [];
-
-const bar = new cliProgress.SingleBar({
+let bar = new cliProgress.SingleBar({
     format: 'Processing [{bar}] {percentage}% | ETA: {eta}s | {value}/{total} chunks',
     barCompleteChar: '\u2588',
     barIncompleteChar: '\u2591',
@@ -84,9 +78,11 @@ bar.start(chapters.length, 0);
 if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
     // Serial Processing for Ollama
     for(const chapter of chapters) {
-        const summary = await summaryGenerator.generateSummary(chapter);
+        if(!chapter.metadata) {
+            chapter.metadata = {};
+        }
+        chapter.metadata.summary = (await summaryGenerator.generateSummary(chapter)).pageContent;
         bar.increment();
-        newSummaries.push(summary);
     }
 } else {
     // Parallel Processing for Non-Ollama LLMs using limitedThrottledSummaryGenerator
@@ -104,51 +100,59 @@ if(_.includes(summarizerLLM.lc_namespace, 'ollama')) {
     );
 
     const summaries = await Promise.all(batchPromises);
-
-    // Filter out any null summaries due to errors
-    const successfulSummaries = _.filter(summaries, summary => summary !== null) as Document[];
-
-    newSummaries.push(...successfulSummaries);
+    _.forEach(chapters, (chapter, i) => {
+        if(!chapter.metadata) {
+            chapter.metadata = {};
+        }
+        chapter.metadata.summary = summaries[i]?.pageContent;
+    });
 }
 bar.stop();
 
-bar.stop();
-
+const embeddingsArray = [];
 // For each chapter, create embeddings and prepare for FAISS indexing
-for(let i = 0; i < chapters.length; i++) {
-    const chapter = chapters[i];
-    const summary = newSummaries[i]; // Ensure summaries correspond to chapters
-
-    // Calculate the embedding of the chapter summary
-    const summaryEmbedding = await cachedSnowflakeArctic2Embeddings.embedQuery(summary.pageContent);
+for(const chapter of chapters) {
+    const summaryEmbedding = await cachedSnowflakeArctic2Embeddings.embedQuery(chapter.metadata.summary);
     embeddingsArray.push(summaryEmbedding);
-    documentsArray.push(chapter);
+}
 
+const store = new FaissStore(cachedSnowflakeArctic2Embeddings, {});
+const docIDs = await store.addVectors(embeddingsArray, chapters);
+
+const contextLength = 8192; // Context length of the embedding model
+const chunkSize = Math.floor((3 / 4) * contextLength); // 6144 tokens
+
+const semanticSplitter = new SemanticTextSplitter({
+    embeddings: cachedSnowflakeArctic2Embeddings,
+    chunkSize: chunkSize,
+    embeddingBatchSize: 16, // Adjust as needed
+    showProgress: false,    // Set to true to display progress
+});
+
+bar = new cliProgress.SingleBar({
+    format: 'Splitting [{bar}] {percentage}% | ETA: {eta}s | {value}/{total} chapters',
+    barCompleteChar: '\u2588',
+    barIncompleteChar: '\u2591',
+    hideCursor: false,
+});
+bar.start(chapters.length, 0);
+_.forEach(chapters, async (chapter, i) => {
     // Semantically split the chapter
-    const contextLength = 8192; // Context length of the embedding model
-    const chunkSize = Math.floor((3 / 4) * contextLength); // 6144 tokens
-
-    const semanticSplitter = new SemanticTextSplitter({
-        embeddings: cachedSnowflakeArctic2Embeddings,
-        chunkSize: chunkSize,
-        embeddingBatchSize: 16, // Adjust as needed
-        showProgress: false,    // Set to true to display progress
-    });
-
     const chunks = await semanticSplitter.splitText(chapter.pageContent);
 
     // Calculate embeddings for each semantic chunk
     const chunkEmbeddings = await cachedSnowflakeArctic2Embeddings.embedDocuments(chunks);
 
-    // Associate each chunk embedding with the original chapter document
-    embeddingsArray.push(...chunkEmbeddings);
-    documentsArray.push(...Array(chunkEmbeddings.length).fill(chapter));
-}
+    const repeatChapter = _.times(chunks.length, () => chapter);
+    const repeatChapterIDs = _.times(chunks.length, () => docIDs[i]);
 
-// Create the FAISS store with the collected embeddings and documents
-const vectorStore = await FaissStore.fromVectors(embeddingsArray, documentsArray, cachedSnowflakeArctic2Embeddings);
+    // Now add these to the store
+    await store.addVectors(chunkEmbeddings, repeatChapter, { ids: repeatChapterIDs });
+    bar.increment();
+});
+bar.stop();
 
 // Save the FAISS store to disk
-const faissDirectory = `novels/${book}_faiss_index`;
-await vectorStore.save(faissDirectory);
-await saveSummariesToFile(newSummaries, book);
+const faissDirectory = `novels/${book}_faiss`;
+await store.save(faissDirectory);
+await saveSummariesToFile(chapters, book);
