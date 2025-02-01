@@ -10,7 +10,7 @@
 ### DO NOT INCLUDE API KEYS HERE THIS FILE WILL BE IN GIT
 
 ## Specify the model to use for the main chat
-#model: xxx
+model: openrouter/deepseek/deepseek-r1:free
 
 ## Use claude-3-opus-20240229 model for the main chat
 #opus: false
@@ -40,7 +40,7 @@
 #deepseek: false
 
 ## Use o1-mini model for the main chat
-o1-mini: true
+# o1-mini: true
 
 ## Use o1-preview model for the main chat
 #o1-preview: false
@@ -82,10 +82,11 @@ o1-mini: true
 architect: true
 
 ## Specify the model to use for commit messages and chat history summarization (default depends on --model)
-#weak-model: xxx
+weak-model: gpt-4o-mini
 
 ## Specify the model to use for editor tasks (default depends on --model)
-# editor-model: gpt-4o
+editor-model: o3-mini
+reasoning-effort: medium
 
 ## Specify the edit format for the editor model (default: depends on editor model)
 # editor-edit-format: editor-diff
