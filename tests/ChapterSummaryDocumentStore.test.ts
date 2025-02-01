@@ -1,6 +1,6 @@
 import { ChapterSummaryDocument, ChapterSummaryDocumentStore } from '../lib/ChapterSummaryDocumentStore';
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { removeSync } from 'fs-extra';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { unlink } from 'node:fs/promises';
 
 const TEST_DB_PATH = './test-summaries.db';
 
@@ -17,50 +17,57 @@ describe('ChapterSummaryDocument', () => {
 });
 
 describe('ChapterSummaryDocumentStore', () => {
-    beforeEach(() => {
-        removeSync(TEST_DB_PATH); // Clean up before each test
+    beforeEach(async () => {
+        try {
+            await unlink(TEST_DB_PATH);
+        } catch{
+            // Ignore error if file does not exist
+        }
     });
 
-    afterEach(() => {
-        removeSync(TEST_DB_PATH); // Clean up after each test
+    afterEach(async () => {
+        try {
+            await unlink(TEST_DB_PATH);
+        } catch{
+            // Ignore error if file does not exist
+        }
     });
 
-    it('stores and retrieves chapter summaries', () => {
+    it('stores and retrieves chapter summaries', async () => {
         const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
         const doc = new ChapterSummaryDocument({
             pageContent: 'Chapter 1 summary',
             metadata: { chapter: 1 }
         });
 
-        store.addChapterSummary(doc);
-        const retrieved = store.getChapterSummary(1);
+        await store.addChapterSummary(doc);
+        const retrieved = await store.getChapterSummary(1);
 
         expect(retrieved?.pageContent).toBe('Chapter 1 summary');
         expect(retrieved?.metadata.chapter).toBe(1);
+        await store.close();
     });
 
-    it('returns undefined for non-existent chapters', () => {
+    it('returns undefined for non-existent chapters', async () => {
         const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
-        expect(store.getChapterSummary(999)).toBeUndefined();
+        const result = await store.getChapterSummary(999);
+        expect(result).toBeUndefined();
+        await store.close();
     });
 
-    it('overwrites existing chapter entries', () => {
+    it('overwrites existing chapter entries', async () => {
         const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
-        const initialDoc = new ChapterSummaryDocument({
+        const doc = new ChapterSummaryDocument({
             pageContent: 'Old summary',
             metadata: { chapter: 2 }
         });
 
-        const updatedDoc = new ChapterSummaryDocument({
-            pageContent: 'New summary',
-            metadata: { chapter: 2 }
-        });
+        await store.addChapterSummary(doc);
+        doc.pageContent = 'New summary';
 
-        store.addChapterSummary(initialDoc);
-        store.addChapterSummary(updatedDoc);
-
-        const result = store.getChapterSummary(2);
+        const result = await store.getChapterSummary(2);
         expect(result?.pageContent).toBe('New summary');
+        await store.close();
     });
 
     it('persists data between instances', async () => {
@@ -70,29 +77,54 @@ describe('ChapterSummaryDocumentStore', () => {
             metadata: { chapter: 3 }
         });
 
-        firstStore.addChapterSummary(doc);
+        await firstStore.addChapterSummary(doc);
+        await firstStore.close();
 
         // Create new store instance to verify persistence
         const secondStore = new ChapterSummaryDocumentStore(TEST_DB_PATH);
-        const persistedDoc = secondStore.getChapterSummary(3);
+        const persistedDoc = await secondStore.getChapterSummary(3);
 
         expect(persistedDoc?.pageContent).toBe('Lasting content');
+        await secondStore.close();
     });
 
-    it('handles invalid chapter numbers', () => {
+    it('handles invalid chapter numbers', async () => {
         const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
-        expect(store.getChapterSummary(0)).toBeUndefined();
-        expect(store.getChapterSummary(-1)).toBeUndefined();
-        expect(store.getChapterSummary(NaN)).toBeUndefined();
+        expect(await store.getChapterSummary(0)).toBeUndefined();
+        expect(await store.getChapterSummary(-1)).toBeUndefined();
+        expect(await store.getChapterSummary(NaN)).toBeUndefined();
+        await store.close();
     });
 
-    it('throws error when adding document without chapter metadata', () => {
+    it('throws error when adding document without chapter metadata', async () => {
         const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
-        expect(() => {
-            // @ts-expect-error: Testing invalid input
-            store.addChapterSummary(new ChapterSummaryDocument({
-                pageContent: 'Invalid doc'
-            }));
-        }).toThrow();
+        // @ts-expect-error: Testing invalid input
+        await expect(store.addChapterSummary(new ChapterSummaryDocument({
+            pageContent: 'Invalid doc'
+        }))).rejects.toThrow();
+        await store.close();
+    });
+
+    it('auto-saves changes when modifying pageContent on retrieved document', async () => {
+        const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
+        const doc = new ChapterSummaryDocument({
+            pageContent: 'Initial content',
+            metadata: { chapter: 4 }
+        });
+        await store.addChapterSummary(doc);
+
+        // Retrieve the document and confirm initial content
+        let retrieved = await store.getChapterSummary(4);
+        expect(retrieved?.pageContent).toBe('Initial content');
+
+        // Modify the pageContent property on the retrieved document
+        if(retrieved) {
+            retrieved.pageContent = 'Updated content';
+        }
+
+        // Retrieve again to verify the change has been auto-saved
+        retrieved = await store.getChapterSummary(4);
+        expect(retrieved?.pageContent).toBe('Updated content');
+        await store.close();
     });
 });

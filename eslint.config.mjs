@@ -15,6 +15,7 @@ export default
     {
         rules: {
             '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+            '@stylistic/operator-linebreak': 'off',
             'n/no-missing-import': 'off',
         },
     },
