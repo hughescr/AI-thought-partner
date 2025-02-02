@@ -18,11 +18,11 @@ describe('ChapterDocument', () => {
 
 describe('ChapterDocumentStore', () => {
     beforeEach(async () => {
-        try { await unlink(TEST_DB_PATH); } catch {}
+        try { await unlink(TEST_DB_PATH); } catch{}
     });
 
     afterEach(async () => {
-        try { await unlink(TEST_DB_PATH); } catch {}
+        try { await unlink(TEST_DB_PATH); } catch{}
     });
 
     it('stores and retrieves chapters', async () => {
@@ -49,7 +49,7 @@ describe('ChapterDocumentStore', () => {
 
         await store.addChapter(doc);
         doc.pageContent = 'Revised content';
-        
+
         const updated = await store.getChapter(5);
         expect(updated?.pageContent).toBe('Revised content');
         await store.close();
@@ -67,19 +67,19 @@ describe('ChapterDocumentStore', () => {
 
         const secondStore = new ChapterDocumentStore(TEST_DB_PATH);
         const persisted = await secondStore.getChapter(99);
-        
+
         expect(persisted?.pageContent).toContain('lived');
         await secondStore.close();
     });
 
     it('rejects documents without chapter metadata', async () => {
         const store = new ChapterDocumentStore(TEST_DB_PATH);
-        
+
         // @ts-expect-error: Testing invalid input
         await expect(store.addChapter(new ChapterDocument({
             pageContent: 'Invalid content'
         }))).rejects.toThrow('chapter metadata is required');
-        
+
         await store.close();
     });
 
