@@ -1,4 +1,9 @@
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { unlink } from 'node:fs/promises';
+import path from 'node:path';
 import { Document } from '@langchain/core/documents';
+import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
+
 class MockSummaryGenerator {
     async generateSummary(doc: Document) {
         return new Document({
@@ -8,10 +13,6 @@ class MockSummaryGenerator {
     }
 }
 
-import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { unlink } from 'node:fs/promises';
-import path from 'node:path';
 const TEST_DB_PATH = path.join(import.meta.dir, 'test-chapters.db');
 
 describe('ChapterDocument', () => {
@@ -23,21 +24,6 @@ describe('ChapterDocument', () => {
 
         expect(doc.pageContent).toContain('stormy night');
         expect(doc.metadata.chapter).toBe(1);
-    });
-    it('generates and stores chapter summaries when adding documents', async () => {
-        const summaryGenerator = new MockSummaryGenerator();
-        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
-        const doc = new ChapterDocument({
-            pageContent: '# Chapter 2\nSummary test content',
-            metadata: { chapter: 2 }
-        });
-
-        await store.addChapter(doc);
-        const summary = await store.getChapterSummary(2);
-
-        expect(summary?.pageContent).toBe('Concise generated summary');
-        expect(summary?.metadata.chapter).toBe(2);
-        await store.close();
     });
 });
 

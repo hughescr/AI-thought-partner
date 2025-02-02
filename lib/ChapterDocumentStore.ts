@@ -82,6 +82,10 @@ export class ChapterDocumentStore {
         return result ? this.attachAutoUpdate(result) as ChapterDocument : undefined;
     }
 
+    async getChapterSummary(chapter: number): Promise<Document | undefined> {
+        return this.summaryStore.getChapterSummary(chapter);
+    }
+
     async close(): Promise<void> {
         await this.loadPromise;
         await promisify(this.db.saveDatabase.bind(this.db))();
