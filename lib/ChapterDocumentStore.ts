@@ -15,10 +15,11 @@ export class ChapterDocumentStore {
     private db!: Loki;
     private collection!: Loki.Collection;
     private summaryStore!: ChapterSummaryDocumentStore;
-    private summaryGenerator!: ChapterSummaryGenerator;
+    private summaryGenerator: ChapterSummaryGenerator;
     private loadPromise: Promise<void>;
 
     constructor(filePath: string, summaryGenerator: ChapterSummaryGenerator) {
+        this.summaryGenerator = summaryGenerator;
         this.loadPromise = new Promise((resolve) => {
             this.db = new Loki(filePath, {
                 adapter: new Loki.LokiFsAdapter(),
@@ -30,8 +31,8 @@ export class ChapterDocumentStore {
                             unique: ['metadata.chapter'],
                             indices: ['metadata.chapter']
                         });
-                    this.summaryStore = new ChapterSummaryDocumentStore(this.db);
-                    this.summaryGenerator = summaryGenerator;
+                    // Initialize summary store with file path instead of Loki instance
+                    this.summaryStore = new ChapterSummaryDocumentStore(filePath);
                     resolve();
                 },
                 autosave: true,
