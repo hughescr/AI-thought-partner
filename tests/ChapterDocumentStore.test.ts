@@ -11,8 +11,8 @@ class MockSummaryGenerator {
 import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { unlink } from 'node:fs/promises';
-
-const TEST_DB_PATH = './test-chapters.db';
+import path from 'node:path';
+const TEST_DB_PATH = path.join(import.meta.dir, 'test-chapters.db');
 
 describe('ChapterDocument', () => {
     it('creates document with chapter content and metadata', () => {
@@ -35,14 +35,16 @@ describe('ChapterDocument', () => {
         await store.addChapter(doc);
         const summary = await store.getChapterSummary(2);
 
-        expect(summary?.pageContent).toContain('concisely');
+        expect(summary?.pageContent).toBe('Concise generated summary');
         expect(summary?.metadata.chapter).toBe(2);
         await store.close();
     });
 });
 
 describe('ChapterDocumentStore', () => {
+    let mockSummaryGenerator: MockSummaryGenerator;
     beforeEach(async () => {
+        mockSummaryGenerator = new MockSummaryGenerator();
         try {
             await unlink(TEST_DB_PATH);
         } catch{ /* ignore error */ }
