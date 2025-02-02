@@ -10,29 +10,17 @@ export class ChapterSummaryDocument extends Document<{ chapter: number }> {
 }
 
 export class ChapterSummaryDocumentStore {
-    private db!: Loki;
-    private collection!: Loki.Collection;
-    private loadPromise: Promise<void>;
+    private db: Loki;
+    private collection: Loki.Collection;
 
-    constructor(filePath: string) {
-        // Wrap database creation and loading in a promise to ensure autoload completes
-        this.loadPromise = new Promise((resolve) => {
-            this.db = new Loki(filePath, {
-                adapter: new Loki.LokiFsAdapter(),
-                autoload: true,
-                autoloadCallback: () => {
-                    this.collection =
-                        this.db.getCollection('summaries') ||
-                        this.db.addCollection('summaries', {
-                            unique: ['metadata.chapter'],
-                            indices: ['metadata.chapter']
-                        });
-                    resolve();
-                },
-                autosave: true,
-                autosaveInterval: 5000
+    constructor(db: Loki) {
+        this.db = db;
+        this.collection =
+            this.db.getCollection('summaries') ||
+            this.db.addCollection('summaries', {
+                unique: ['metadata.chapter'],
+                indices: ['metadata.chapter']
             });
-        });
     }
 
     // Helper function: attaches an auto-update hook to the pageContent property.
@@ -53,7 +41,6 @@ export class ChapterSummaryDocumentStore {
     }
 
     async addChapterSummary(doc: ChapterSummaryDocument): Promise<void> {
-        await this.loadPromise; // Ensure DB is loaded
         if(!doc.metadata || !_.isNumber(doc.metadata.chapter)) {
             throw new Error('chapter metadata is required');
         }
@@ -64,7 +51,6 @@ export class ChapterSummaryDocumentStore {
     }
 
     async getChapterSummary(chapter: number): Promise<ChapterSummaryDocument | undefined> {
-        await this.loadPromise; // Ensure DB is loaded
         const result = this.collection.findOne({ 'metadata.chapter': chapter });
         if(result) {
             // Attach auto-update hook on the persisted document and return it directly.
@@ -75,8 +61,7 @@ export class ChapterSummaryDocumentStore {
 
     // New close method to properly shut down the database connection
     async close(): Promise<void> {
-        await this.loadPromise; // Ensure DB is loaded
         await promisify(this.db.saveDatabase.bind(this.db))();
-        this.db.close();
+        // Do not close the Loki instance here because it's shared.
     }
 }

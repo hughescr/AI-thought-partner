@@ -1,19 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { unlink } from 'node:fs/promises';
 import path from 'node:path';
-import { Document } from '@langchain/core/documents';
 import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import { RunnableLambda } from '@langchain/core/runnables';
-
-class MockSummaryGenerator extends ChapterSummaryGenerator {
-    public async generateSummary(chapter: Document) {
-        return new Document({
-            pageContent: 'Concise generated summary',
-            metadata: { chapter: chapter.metadata.chapter }
-        });
-    }
-}
+import _ from 'lodash';
 
 const TEST_DB_PATH = path.join(import.meta.dir, 'test-chapters.db');
 
@@ -30,9 +21,13 @@ describe('ChapterDocument', () => {
 });
 
 describe('ChapterDocumentStore', () => {
-    let mockSummaryGenerator: MockSummaryGenerator;
+    let summaryGenerator: ChapterSummaryGenerator;
     beforeEach(async () => {
-        mockSummaryGenerator = new MockSummaryGenerator({ llm: RunnableLambda.from((input: { text: string }) => input.text), targetSummarySize: 100 });
+        // For most tests, use a lambda that returns a constant summary as an object.
+        summaryGenerator = new ChapterSummaryGenerator({
+            llm: RunnableLambda.from(_.constant('Concise generated summary')),
+            targetSummarySize: 100
+        });
         try {
             await unlink(TEST_DB_PATH);
         } catch{ /* ignore error */ }
@@ -45,7 +40,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('stores and retrieves chapters', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Prologue\n\nOnce upon a time...',
             metadata: { chapter: 0 }
@@ -60,22 +55,22 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('overwrites existing chapters', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
         const doc = new ChapterDocument({
-            pageContent: 'Original content',
+            pageContent: '# Chapter 5\nOriginal content',
             metadata: { chapter: 5 }
         });
 
         await store.addChapter(doc);
-        doc.pageContent = 'Revised content';
+        doc.pageContent = '# Chapter 5\nRevised content';
 
         const updated = await store.getChapter(5);
-        expect(updated?.pageContent).toBe('Revised content');
+        expect(updated?.pageContent).toBe('# Chapter 5\nRevised content');
         await store.close();
     });
 
     it('persists chapters across instances', async () => {
-        const firstStore = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const firstStore = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Epilogue\n\nAnd they lived...',
             metadata: { chapter: 99 }
@@ -84,7 +79,7 @@ describe('ChapterDocumentStore', () => {
         await firstStore.addChapter(doc);
         await firstStore.close();
 
-        const secondStore = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const secondStore = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
         const persisted = await secondStore.getChapter(99);
 
         expect(persisted?.pageContent).toContain('lived');
@@ -92,7 +87,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('rejects documents without chapter metadata', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
 
         // @ts-expect-error: Testing invalid input
         await expect(store.addChapter(new ChapterDocument({
@@ -103,22 +98,22 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('auto-updates document changes', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
         const doc = new ChapterDocument({
-            pageContent: 'Initial version',
+            pageContent: '# Chapter 10\nInitial version',
             metadata: { chapter: 10 }
         });
 
         await store.addChapter(doc);
-        doc.pageContent = 'Updated version';
+        doc.pageContent = '# Chapter 10\nUpdated version';
 
         const result = await store.getChapter(10);
-        expect(result?.pageContent).toBe('Updated version');
+        expect(result?.pageContent).toBe('# Chapter 10\nUpdated version');
         await store.close();
     });
 
     it('returns undefined for a non-existent chapter', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
         const nonExistent = await store.getChapter(12345);
         expect(nonExistent).toBeUndefined();
         await store.close();
@@ -126,9 +121,9 @@ describe('ChapterDocumentStore', () => {
 
     // Replace the "updates summary when re-adding the same chapter" test
     it('throws error when re-adding an already added document', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
         const doc = new ChapterDocument({
-            pageContent: 'Initial content',
+            pageContent: '# Chapter 7\nInitial content',
             metadata: { chapter: 7 }
         });
         await store.addChapter(doc);
@@ -138,15 +133,42 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('generates and retrieves chapter summary', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
         const doc = new ChapterDocument({
-            pageContent: 'Content for summary test',
+            pageContent: '# Chapter 15\nContent for summary test',
             metadata: { chapter: 15 }
         });
         await store.addChapter(doc);
         const summary = await store.getChapterSummary(15);
         expect(summary).toBeDefined();
-        expect(summary?.pageContent).toBe('Concise generated summary');
+        expect(summary?.pageContent).toBe('# Chapter 15\nConcise generated summary');
+        await store.close();
+    });
+
+    // For the dynamic summary test, instantiate a local generator that reflects the chapter content.
+    it('updates chapter summary when chapter content changes', async () => {
+        let summary = 'Initial chapter content';
+        const dynamicGenerator = new ChapterSummaryGenerator({
+            llm: RunnableLambda.from(() => ({ content: [{ text: `Summary: ${summary}`, type: 'text' }] })),
+            targetSummarySize: 100
+        });
+        const store = new ChapterDocumentStore(TEST_DB_PATH, dynamicGenerator);
+        const doc = new ChapterDocument({
+            pageContent: '# Chapter 21\nInitial chapter content',
+            metadata: { chapter: 21 }
+        });
+        await store.addChapter(doc);
+
+        const summary1 = await store.getChapterSummary(21);
+        expect(summary1?.pageContent).toBe('# Chapter 21\nSummary: Initial chapter content');
+
+        // Update chapter content
+        summary = 'Updated chapter content';
+        doc.pageContent = '# Chapter 21\nUpdated chapter content';
+        // Wait for async update
+        await new Promise(resolve => setTimeout(resolve, 150));
+        const summary2 = await store.getChapterSummary(21);
+        expect(summary2?.pageContent).toBe('# Chapter 21\nSummary: Updated chapter content');
         await store.close();
     });
 });

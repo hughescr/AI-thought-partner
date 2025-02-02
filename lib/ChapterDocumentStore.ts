@@ -31,8 +31,8 @@ export class ChapterDocumentStore {
                             unique: ['metadata.chapter'],
                             indices: ['metadata.chapter']
                         });
-                    // Initialize summary store with file path instead of Loki instance
-                    this.summaryStore = new ChapterSummaryDocumentStore(filePath);
+                    // Pass the same Loki instance to the summary store.
+                    this.summaryStore = new ChapterSummaryDocumentStore(this.db);
                     resolve();
                 },
                 autosave: true,
@@ -49,6 +49,23 @@ export class ChapterDocumentStore {
                 currentContent = newVal;
                 this.collection.update(doc);
                 promisify(this.db.saveDatabase.bind(this.db))();
+                // Async update of chapter summary
+                (async () => {
+                    // Regenerate the summary using updated pageContent
+                    const summaryResult = await this.summaryGenerator.generateSummary(
+                        new Document({ pageContent: newVal, metadata: doc.metadata })
+                    );
+                    // Retrieve existing summary
+                    const existingSummary = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
+                    if(existingSummary) {
+                        // Update existing summary
+                        existingSummary.pageContent = summaryResult.pageContent;
+                    } else {
+                        // Add new summary if not present
+                        summaryResult.metadata.chapter = doc.metadata.chapter;
+                        await this.summaryStore.addChapterSummary(summaryResult as ChapterSummaryDocument);
+                    }
+                })();
             },
             configurable: true
         });
@@ -56,14 +73,9 @@ export class ChapterDocumentStore {
     }
 
     private async generateAndStoreSummary(doc: ChapterDocument): Promise<void> {
-        const summaryContent = await this.summaryGenerator.generateSummary(
-            new Document({ pageContent: doc.pageContent, metadata: doc.metadata })
-        );
-        const summaryDoc = new ChapterSummaryDocument({
-            pageContent: summaryContent.pageContent,
-            metadata: { chapter: doc.metadata.chapter }
-        });
-        await this.summaryStore.addChapterSummary(summaryDoc);
+        const summaryDoc = await this.summaryGenerator.generateSummary(doc);
+        summaryDoc.metadata.chapter = doc.metadata.chapter;
+        await this.summaryStore.addChapterSummary(summaryDoc as ChapterSummaryDocument);
     }
 
     async addChapter(doc: ChapterDocument): Promise<void> {

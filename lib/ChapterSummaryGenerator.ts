@@ -37,18 +37,22 @@ export class ChapterSummaryGenerator {
 
     public async generateSummary(chapter: Document): Promise<Document> {
         const chapterHeader = _.split(chapter.pageContent, '\n')[0];
-        const chapterText = _.replace(chapter.pageContent, chapterHeader, '');
-        let summaryText = chapterText;
-        if(_.startsWith(chapterHeader, '#')) {
-            summaryText = await this.summaryChain.invoke({
-                targetSummarySize: this.targetSummarySize,
-                chapterText: chapterText,
-            });
+        if(!_.startsWith(chapterHeader, '#')) {
+            throw new Error('Chapter must start with a chapter heading beginning with "#" eg "# Chapter 1: The Beginning"');
         }
 
+        // Leave the chapter header out of the content to summarize
+        const chapterText = _.replace(chapter.pageContent, chapterHeader, '');
+
+        const summaryText = await this.summaryChain.invoke({
+            targetSummarySize: this.targetSummarySize,
+            chapterText: chapterText,
+        });
+
         return new Document({
+            // Prepend the chapter header back on the summary after generation
             pageContent: _.join([chapterHeader, summaryText], '\n'),
-            metadata: { summary: true },
+            metadata: { summary: true, ...chapter.metadata },
         });
     }
 }

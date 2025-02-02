@@ -1,6 +1,7 @@
 import { ChapterSummaryDocument, ChapterSummaryDocumentStore } from '../lib/ChapterSummaryDocumentStore';
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { unlink } from 'node:fs/promises';
+import Loki from 'lokijs';
 
 const TEST_DB_PATH = './test-summaries.db';
 
@@ -17,24 +18,30 @@ describe('ChapterSummaryDocument', () => {
 });
 
 describe('ChapterSummaryDocumentStore', () => {
+    let db: Loki;
+    let store: ChapterSummaryDocumentStore;
+
     beforeEach(async () => {
         try {
             await unlink(TEST_DB_PATH);
-        } catch{
-            // Ignore error if file does not exist
-        }
+        } catch{ /* ignore */ }
+        db = new Loki(TEST_DB_PATH, {
+            adapter: new Loki.LokiFsAdapter(),
+            autosave: true,
+            autosaveInterval: 5000,
+            autoload: true,
+            autoloadCallback: () => ({}),
+        });
+        store = new ChapterSummaryDocumentStore(db);
     });
 
     afterEach(async () => {
         try {
             await unlink(TEST_DB_PATH);
-        } catch{
-            // Ignore error if file does not exist
-        }
+        } catch{ /* ignore */ }
     });
 
     it('stores and retrieves chapter summaries', async () => {
-        const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
         const doc = new ChapterSummaryDocument({
             pageContent: 'Chapter 1 summary',
             metadata: { chapter: 1 }
@@ -49,14 +56,12 @@ describe('ChapterSummaryDocumentStore', () => {
     });
 
     it('returns undefined for non-existent chapters', async () => {
-        const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
         const result = await store.getChapterSummary(999);
         expect(result).toBeUndefined();
         await store.close();
     });
 
     it('overwrites existing chapter entries', async () => {
-        const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
         const doc = new ChapterSummaryDocument({
             pageContent: 'Old summary',
             metadata: { chapter: 2 }
@@ -71,7 +76,7 @@ describe('ChapterSummaryDocumentStore', () => {
     });
 
     it('persists data between instances', async () => {
-        const firstStore = new ChapterSummaryDocumentStore(TEST_DB_PATH);
+        const firstStore = new ChapterSummaryDocumentStore(db);
         const doc = new ChapterSummaryDocument({
             pageContent: 'Lasting content',
             metadata: { chapter: 3 }
@@ -81,7 +86,7 @@ describe('ChapterSummaryDocumentStore', () => {
         await firstStore.close();
 
         // Create new store instance to verify persistence
-        const secondStore = new ChapterSummaryDocumentStore(TEST_DB_PATH);
+        const secondStore = new ChapterSummaryDocumentStore(db);
         const persistedDoc = await secondStore.getChapterSummary(3);
 
         expect(persistedDoc?.pageContent).toBe('Lasting content');
@@ -89,7 +94,6 @@ describe('ChapterSummaryDocumentStore', () => {
     });
 
     it('handles invalid chapter numbers', async () => {
-        const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
         expect(await store.getChapterSummary(0)).toBeUndefined();
         expect(await store.getChapterSummary(-1)).toBeUndefined();
         expect(await store.getChapterSummary(NaN)).toBeUndefined();
@@ -97,7 +101,6 @@ describe('ChapterSummaryDocumentStore', () => {
     });
 
     it('throws error when adding document without chapter metadata', async () => {
-        const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
         // @ts-expect-error: Testing invalid input
         await expect(store.addChapterSummary(new ChapterSummaryDocument({
             pageContent: 'Invalid doc'
@@ -106,7 +109,6 @@ describe('ChapterSummaryDocumentStore', () => {
     });
 
     it('auto-saves changes when modifying pageContent on retrieved document', async () => {
-        const store = new ChapterSummaryDocumentStore(TEST_DB_PATH);
         const doc = new ChapterSummaryDocument({
             pageContent: 'Initial content',
             metadata: { chapter: 4 }
