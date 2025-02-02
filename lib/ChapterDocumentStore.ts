@@ -31,6 +31,8 @@ export class ChapterDocumentStore {
                             unique: ['metadata.chapter'],
                             indices: ['metadata.chapter']
                         });
+                    this.summaryStore = new ChapterSummaryDocumentStore(this.db);
+                    this.summaryGenerator = summaryGenerator;
                     resolve();
                 },
                 autosave: true,
@@ -71,6 +73,7 @@ export class ChapterDocumentStore {
         }
         this.collection.insert(doc);
         await promisify(this.db.saveDatabase.bind(this.db))();
+        await this.generateAndStoreSummary(doc);
         this.attachAutoUpdate(doc);
     }
 
