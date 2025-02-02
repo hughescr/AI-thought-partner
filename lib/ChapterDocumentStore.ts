@@ -9,6 +9,7 @@ export class ChapterDocument extends Document<{ chapter: number }> {
     constructor(fields: { pageContent: string, metadata: { chapter: number } }) {
         super(fields);
     }
+
     async getChapterSummary(chapter: number): Promise<Document | undefined> {
         return this.summaryStore.getChapterSummary(chapter);
     }
