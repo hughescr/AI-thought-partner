@@ -55,4 +55,12 @@ describe('SemanticTextSplitter', () => {
         const chunks = await splitter.splitText(text);
         expect(chunks.length).toBeLessThan(3);
     });
+
+    test('returns whole text as one chunk if splitting is not necessary', async () => {
+        const splitter = new SemanticTextSplitter({ chunkSize: 100, embeddings: new ConcreteEmbeddings({}) });
+        const text = 'Short text.';
+        const chunks = await splitter.splitText(text);
+        expect(chunks.length).toBe(1);
+        expect(chunks[0]).toEqual(text);
+    });
 });

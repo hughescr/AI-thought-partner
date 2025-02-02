@@ -3,12 +3,14 @@ import { unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { Document } from '@langchain/core/documents';
 import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
+import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
+import { RunnableLambda } from '@langchain/core/runnables';
 
-class MockSummaryGenerator {
-    async generateSummary(doc: Document) {
+class MockSummaryGenerator extends ChapterSummaryGenerator {
+    public async generateSummary(chapter: Document) {
         return new Document({
             pageContent: 'Concise generated summary',
-            metadata: { chapter: doc.metadata.chapter }
+            metadata: { chapter: chapter.metadata.chapter }
         });
     }
 }
@@ -30,7 +32,7 @@ describe('ChapterDocument', () => {
 describe('ChapterDocumentStore', () => {
     let mockSummaryGenerator: MockSummaryGenerator;
     beforeEach(async () => {
-        mockSummaryGenerator = new MockSummaryGenerator();
+        mockSummaryGenerator = new MockSummaryGenerator({ llm: RunnableLambda.from((input: { text: string }) => input.text), targetSummarySize: 100 });
         try {
             await unlink(TEST_DB_PATH);
         } catch{ /* ignore error */ }
@@ -112,6 +114,39 @@ describe('ChapterDocumentStore', () => {
 
         const result = await store.getChapter(10);
         expect(result?.pageContent).toBe('Updated version');
+        await store.close();
+    });
+
+    it('returns undefined for a non-existent chapter', async () => {
+        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const nonExistent = await store.getChapter(12345);
+        expect(nonExistent).toBeUndefined();
+        await store.close();
+    });
+
+    // Replace the "updates summary when re-adding the same chapter" test
+    it('throws error when re-adding an already added document', async () => {
+        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const doc = new ChapterDocument({
+            pageContent: 'Initial content',
+            metadata: { chapter: 7 }
+        });
+        await store.addChapter(doc);
+        // Attempt to re-add should throw an error.
+        await expect(store.addChapter(doc)).rejects.toThrow('Document is already in collection, please use update()');
+        await store.close();
+    });
+
+    it('generates and retrieves chapter summary', async () => {
+        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
+        const doc = new ChapterDocument({
+            pageContent: 'Content for summary test',
+            metadata: { chapter: 15 }
+        });
+        await store.addChapter(doc);
+        const summary = await store.getChapterSummary(15);
+        expect(summary).toBeDefined();
+        expect(summary?.pageContent).toBe('Concise generated summary');
         await store.close();
     });
 });

@@ -4,7 +4,7 @@ import { Runnable } from '@langchain/core/runnables';
 import { Document } from '@langchain/core/documents';
 import _ from 'lodash';
 
-interface SummaryGeneratorOptions {
+export interface SummaryGeneratorOptions {
     llm: Runnable
     targetSummarySize: number // Desired summary size in tokens
 }
