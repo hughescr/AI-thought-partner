@@ -2,10 +2,15 @@ import { Document } from '@langchain/core/documents';
 import Loki from 'lokijs';
 import _ from 'lodash';
 import { promisify } from 'node:util';
+import { ChapterSummaryDocumentStore, ChapterSummaryDocument } from './ChapterSummaryDocumentStore';
+import { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
 
 export class ChapterDocument extends Document<{ chapter: number }> {
     constructor(fields: { pageContent: string, metadata: { chapter: number } }) {
         super(fields);
+    }
+    async getChapterSummary(chapter: number): Promise<Document | undefined> {
+        return this.summaryStore.getChapterSummary(chapter);
     }
 }
 
@@ -14,7 +19,7 @@ export class ChapterDocumentStore {
     private collection!: Loki.Collection;
     private loadPromise: Promise<void>;
 
-    constructor(filePath: string) {
+    constructor(filePath: string, summaryGenerator: ChapterSummaryGenerator) {
         this.loadPromise = new Promise((resolve) => {
             this.db = new Loki(filePath, {
                 adapter: new Loki.LokiFsAdapter(),
@@ -46,6 +51,17 @@ export class ChapterDocumentStore {
             configurable: true
         });
         return doc;
+    }
+
+    private async generateAndStoreSummary(doc: ChapterDocument): Promise<void> {
+        const summaryContent = await this.summaryGenerator.generateSummary(
+            new Document({ pageContent: doc.pageContent, metadata: doc.metadata })
+        );
+        const summaryDoc = new ChapterSummaryDocument({
+            pageContent: summaryContent.pageContent,
+            metadata: { chapter: doc.metadata.chapter }
+        });
+        await this.summaryStore.addChapterSummary(summaryDoc);
     }
 
     async addChapter(doc: ChapterDocument): Promise<void> {

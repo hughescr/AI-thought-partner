@@ -14,6 +14,21 @@ describe('ChapterDocument', () => {
         expect(doc.pageContent).toContain('stormy night');
         expect(doc.metadata.chapter).toBe(1);
     });
+    it('generates and stores chapter summaries when adding documents', async () => {
+        const summaryGenerator = new MockSummaryGenerator();
+        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
+        const doc = new ChapterDocument({
+            pageContent: '# Chapter 2\nSummary test content',
+            metadata: { chapter: 2 }
+        });
+
+        await store.addChapter(doc);
+        const summary = await store.getChapterSummary(2);
+
+        expect(summary?.pageContent).toContain('concisely');
+        expect(summary?.metadata.chapter).toBe(2);
+        await store.close();
+    });
 });
 
 describe('ChapterDocumentStore', () => {
