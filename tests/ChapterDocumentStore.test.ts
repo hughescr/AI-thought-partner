@@ -20,13 +20,13 @@ describe('ChapterDocumentStore', () => {
     beforeEach(async () => {
         try {
             await unlink(TEST_DB_PATH);
-        } catch (e) {}
+        } catch(e) {}
     });
 
     afterEach(async () => {
         try {
             await unlink(TEST_DB_PATH);
-        } catch (e) {}
+        } catch(e) {}
     });
 
     it('stores and retrieves chapters', async () => {
