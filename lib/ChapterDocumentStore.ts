@@ -18,6 +18,8 @@ export class ChapterDocument extends Document<{ chapter: number }> {
 export class ChapterDocumentStore {
     private db!: Loki;
     private collection!: Loki.Collection;
+    private summaryStore!: ChapterSummaryDocumentStore;
+    private summaryGenerator!: ChapterSummaryGenerator;
     private loadPromise: Promise<void>;
 
     constructor(filePath: string, summaryGenerator: ChapterSummaryGenerator) {

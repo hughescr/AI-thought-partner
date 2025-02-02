@@ -1,3 +1,13 @@
+import { Document } from '@langchain/core/documents';
+class MockSummaryGenerator {
+    async generateSummary(doc: Document) {
+        return new Document({
+            pageContent: 'Concise generated summary',
+            metadata: { chapter: doc.metadata.chapter }
+        });
+    }
+}
+
 import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { unlink } from 'node:fs/promises';
@@ -45,7 +55,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('stores and retrieves chapters', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH);
+        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Prologue\n\nOnce upon a time...',
             metadata: { chapter: 0 }
@@ -60,7 +70,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('overwrites existing chapters', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH);
+        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
         const doc = new ChapterDocument({
             pageContent: 'Original content',
             metadata: { chapter: 5 }
@@ -75,7 +85,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('persists chapters across instances', async () => {
-        const firstStore = new ChapterDocumentStore(TEST_DB_PATH);
+        const firstStore = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Epilogue\n\nAnd they lived...',
             metadata: { chapter: 99 }
@@ -84,7 +94,7 @@ describe('ChapterDocumentStore', () => {
         await firstStore.addChapter(doc);
         await firstStore.close();
 
-        const secondStore = new ChapterDocumentStore(TEST_DB_PATH);
+        const secondStore = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
         const persisted = await secondStore.getChapter(99);
 
         expect(persisted?.pageContent).toContain('lived');
@@ -92,7 +102,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('rejects documents without chapter metadata', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH);
+        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
 
         // @ts-expect-error: Testing invalid input
         await expect(store.addChapter(new ChapterDocument({
@@ -103,7 +113,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('auto-updates document changes', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH);
+        const store = new ChapterDocumentStore(TEST_DB_PATH, mockSummaryGenerator);
         const doc = new ChapterDocument({
             pageContent: 'Initial version',
             metadata: { chapter: 10 }
