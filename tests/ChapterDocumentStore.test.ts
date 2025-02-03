@@ -62,7 +62,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('overwrites existing chapters', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
+        const store = new ChapterDocumentStore(db, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Chapter 5\nOriginal content',
             metadata: { novelID: 'test', chapter: 5 }
@@ -77,7 +77,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('persists chapters across instances', async () => {
-        const firstStore = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
+        const firstStore = new ChapterDocumentStore(db, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Epilogue\n\nAnd they lived...',
             metadata: { novelID: 'test', chapter: 99 }
@@ -86,7 +86,7 @@ describe('ChapterDocumentStore', () => {
         await firstStore.addChapter(doc);
         await firstStore.close();
 
-        const secondStore = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
+        const secondStore = new ChapterDocumentStore(db, summaryGenerator);
         const persisted = await secondStore.getChapter(99);
 
         expect(persisted?.pageContent).toContain('lived');
@@ -94,7 +94,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('rejects documents without chapter metadata', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
+        const store = new ChapterDocumentStore(db, summaryGenerator);
 
         // @ts-expect-error: Testing invalid input
         await expect(store.addChapter(new ChapterDocument({
@@ -105,10 +105,10 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('auto-updates document changes', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
+        const store = new ChapterDocumentStore(db, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Chapter 10\nInitial version',
-            metadata: { chapter: 10 }
+            metadata: { novelID: 'test', chapter: 10 }
         });
 
         await store.addChapter(doc);
@@ -120,7 +120,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('returns undefined for a non-existent chapter', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
+        const store = new ChapterDocumentStore(db, summaryGenerator);
         const nonExistent = await store.getChapter(12345);
         expect(nonExistent).toBeUndefined();
         await store.close();
@@ -128,7 +128,7 @@ describe('ChapterDocumentStore', () => {
 
     // Replace the "updates summary when re-adding the same chapter" test
     it('throws error when re-adding an already added document', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
+        const store = new ChapterDocumentStore(db, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Chapter 7\nInitial content',
             metadata: { novelID: 'test', chapter: 7 }
@@ -140,10 +140,10 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('generates and retrieves chapter summary', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
+        const store = new ChapterDocumentStore(db, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Chapter 15\nContent for summary test',
-            metadata: { chapter: 15 }
+            metadata: { novelID: 'test', chapter: 15 }
         });
         await store.addChapter(doc);
         const summary = await store.getChapterSummary(15);
@@ -159,7 +159,7 @@ describe('ChapterDocumentStore', () => {
             llm: RunnableLambda.from(() => ({ content: [{ text: `Summary: ${summary}`, type: 'text' }] })),
             targetSummarySize: 100
         });
-        const store = new ChapterDocumentStore(TEST_DB_PATH, dynamicGenerator);
+        const store = new ChapterDocumentStore(db, dynamicGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Chapter 21\nInitial chapter content',
             metadata: { novelID: 'test', chapter: 21 }

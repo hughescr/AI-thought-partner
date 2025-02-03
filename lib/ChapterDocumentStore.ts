@@ -21,6 +21,7 @@ export class ChapterDocumentStore {
     constructor(db: Loki, summaryGenerator: ChapterSummaryGenerator) {
         this.summaryGenerator = summaryGenerator;
         this.db = db;
+        this.loadPromise = Promise.resolve();
         // Create (or get) the chapters collection with unique compound index on novelID and chapter.
         this.collection =
             this.db.getCollection('chapters') ||
