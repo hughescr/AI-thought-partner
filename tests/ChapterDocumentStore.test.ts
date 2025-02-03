@@ -180,4 +180,18 @@ describe('ChapterDocumentStore', () => {
         expect(summary2?.pageContent).toBe('# Chapter 21\nSummary: Updated chapter content');
         await store.close();
     });
+    
+    it('attaches auto-update hook to document after adding chapter', async () => {
+        const store = new ChapterDocumentStore(db, summaryGenerator);
+        const doc = new ChapterDocument({
+            pageContent: '# Test Chapter\nTest content',
+            metadata: { novelID: 'test', chapter: 42 }
+        });
+        await store.addChapter(doc);
+        
+        // Verify that the doc now has an own property descriptor for pageContent with a setter
+        const descriptor = Object.getOwnPropertyDescriptor(doc, 'pageContent');
+        expect(descriptor).toBeDefined();
+        expect(typeof descriptor.set).toBe('function');
+    });
 });
