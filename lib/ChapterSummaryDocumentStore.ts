@@ -64,7 +64,7 @@ export class ChapterSummaryDocumentStore {
     // New close method to properly shut down the database connection
     async close(): Promise<void> {
         await promisify(this.db.saveDatabase.bind(this.db))();
-        console.log("ChapterSummaryDocumentStore closed: Database saved");
+        console.log('ChapterSummaryDocumentStore closed: Database saved');
         // Do not close the Loki instance here because it's shared.
     }
 }

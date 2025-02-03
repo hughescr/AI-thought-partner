@@ -103,7 +103,7 @@ export class ChapterDocumentStore {
     async close(): Promise<void> {
         await this.loadPromise;
         await promisify(this.db.saveDatabase.bind(this.db))();
-        console.log("Database closed for ChapterDocumentStore");
+        console.log('Database closed for ChapterDocumentStore');
         this.db.close();
     }
 }
