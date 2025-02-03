@@ -41,36 +41,42 @@ export class ChapterDocumentStore {
                 currentContent = newVal;
                 this.collection.update(doc);
                 promisify(this.db.saveDatabase.bind(this.db))();
-                console.log(`Chapter auto-update: pageContent updated for chapter ${doc.metadata.chapter}`);
-                // Async update of chapter summary
+                console.log(`[AUTO-UPDATE SETTER] Chapter ${doc.metadata.chapter}: pageContent changed.`);
                 (async () => {
-                    const startTimestamp = new Date().toISOString();
-                    console.log(`Regenerating summary for chapter ${doc.metadata.chapter} at ${startTimestamp}`);
-                    const genStart = Date.now();
-                    // Regenerate the summary using updated pageContent
-                    const summaryResult = await this.summaryGenerator.generateSummary(
-                        new Document({ pageContent: newVal, metadata: doc.metadata })
-                    );
-                    const genEnd = Date.now();
-                    console.log(`Summary generation completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${genEnd - genStart}ms)`);
-                    // Retrieve existing summary
-                    const existingSummary = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
-                    if(existingSummary) {
-                        console.log(`Updating existing summary for chapter ${doc.metadata.chapter} at ${new Date().toISOString()}`);
-                        // Update existing summary
-                        existingSummary.pageContent = summaryResult.pageContent;
-                        const saveStart = Date.now();
-                        await promisify(this.db.saveDatabase.bind(this.db))();
-                        const saveEnd = Date.now();
-                        console.log(`Database save completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${saveEnd - saveStart}ms)`);
-                    } else {
-                        console.log(`Adding new summary for chapter ${doc.metadata.chapter} at ${new Date().toISOString()}`);
-                        // Add new summary if not present
-                        summaryResult.metadata.chapter = doc.metadata.chapter;
-                        const addStart = Date.now();
-                        await this.summaryStore.addChapterSummary(summaryResult as ChapterSummaryDocument);
-                        const addEnd = Date.now();
-                        console.log(`Summary addition completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${addEnd - addStart}ms)`);
+                    try {
+                        console.log(`[AUTO-UPDATE] Starting async summary update for chapter ${doc.metadata.chapter} at ${new Date().toISOString()}`);
+                        const startTimestamp = new Date().toISOString();
+                        console.log(`[AUTO-UPDATE] Regenerating summary for chapter ${doc.metadata.chapter} at ${startTimestamp}`);
+                        const genStart = Date.now();
+                        console.log(`[AUTO-UPDATE] Calling summaryGenerator.generateSummary with new pageContent (length: ${newVal.length})`);
+                        const summaryResult = await this.summaryGenerator.generateSummary(
+                            new Document({ pageContent: newVal, metadata: doc.metadata })
+                        );
+                        const genEnd = Date.now();
+                        console.log(`[AUTO-UPDATE] Summary generation completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${genEnd - genStart}ms)`);
+                        
+                        console.log(`[AUTO-UPDATE] Retrieving existing summary for chapter ${doc.metadata.chapter}`);
+                        const existingSummary = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
+                        
+                        if (existingSummary) {
+                            console.log(`[AUTO-UPDATE] Found existing summary for chapter ${doc.metadata.chapter}. Updating it.`);
+                            existingSummary.pageContent = summaryResult.pageContent;
+                            const saveStart = Date.now();
+                            console.log(`[AUTO-UPDATE] Initiating database save for updated summary.`);
+                            await promisify(this.db.saveDatabase.bind(this.db))();
+                            const saveEnd = Date.now();
+                            console.log(`[AUTO-UPDATE] Database save completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${saveEnd - saveStart}ms)`);
+                        } else {
+                            console.log(`[AUTO-UPDATE] No existing summary for chapter ${doc.metadata.chapter}. Adding new summary.`);
+                            summaryResult.metadata.chapter = doc.metadata.chapter;
+                            const addStart = Date.now();
+                            await this.summaryStore.addChapterSummary(summaryResult as ChapterSummaryDocument);
+                            const addEnd = Date.now();
+                            console.log(`[AUTO-UPDATE] Summary addition completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${addEnd - addStart}ms)`);
+                        }
+                        console.log(`[AUTO-UPDATE] Async summary update COMPLETE for chapter ${doc.metadata.chapter}`);
+                    } catch (error) {
+                        console.error(`[AUTO-UPDATE] Error during async summary update for chapter ${doc.metadata.chapter}:`, error);
                     }
                 })();
             },
