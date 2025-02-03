@@ -24,7 +24,7 @@ export class NovelDocument extends Document<{
 // Helper to compute novelID reproducibly from author and title.
 export function computeNovelID(author: string, title: string): string {
     // Simple reproducible ID, e.g. lowercased with spaces replaced by underscores.
-    return `${_.trim(author).toLowerCase().replace(/\s+/g, '_')}_${_.trim(title).toLowerCase().replace(/\s+/g, '_')}`;
+    return `${_.chain(author).trim().toLower().replace(/\s+/g, '_').value()}_${_.chain(title).trim().toLower().replace(/\s+/g, '_').value()}`;
 }
 
 // NovelDocumentStore: stores novels and auto-splits them into chapters.
