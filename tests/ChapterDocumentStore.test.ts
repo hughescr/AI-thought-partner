@@ -194,4 +194,26 @@ describe('ChapterDocumentStore', () => {
         expect(descriptor).toBeDefined();
         expect(typeof descriptor?.set).toBe('function');
     });
+
+    it('handles concurrent chapter updates safely', async () => {
+        const store = new ChapterDocumentStore(db, summaryGenerator);
+        const doc = new ChapterDocument({
+            pageContent: '# Chapter 30\nInitial content',
+            metadata: { novelID: 'test', chapter: 30 }
+        });
+        await store.addChapter(doc);
+        
+        // Perform multiple updates in rapid succession
+        doc.pageContent = '# Chapter 30\nUpdate 1';
+        doc.pageContent = '# Chapter 30\nUpdate 2';
+        doc.pageContent = '# Chapter 30\nFinal update';
+        
+        // Wait long enough for all async update chains to finish.
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Retrieve the summary; it should reflect the final update.
+        const finalSummary = await store.getChapterSummary(30);
+        expect(finalSummary?.pageContent).toBe('# Chapter 30\nConcise generated summary');
+        await store.close();
+    });
 });

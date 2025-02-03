@@ -32,7 +32,16 @@ export class ChapterDocumentStore {
         // Pass the same db instance to the summary store.
         this.summaryStore = new ChapterSummaryDocumentStore(this.db);
     }
+    
+    private savingPromise: Promise<void> = Promise.resolve();
 
+    private async safeSaveDatabase(): Promise<void> {
+        // Wait for any previous save to finish before starting a new one.
+        await this.savingPromise;
+        this.savingPromise = promisify(this.db.saveDatabase.bind(this.db))();
+        return this.savingPromise;
+    }
+    
     private attachAutoUpdate(doc: ChapterDocument): ChapterDocument {
         let currentContent = doc.pageContent;
         Object.defineProperty(doc, 'pageContent', {
