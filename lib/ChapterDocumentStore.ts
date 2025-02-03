@@ -49,7 +49,7 @@ export class ChapterDocumentStore {
                     );
                     // Retrieve existing summary
                     const existingSummary = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
-                    if (existingSummary) {
+                    if(existingSummary) {
                         // Update existing summary
                         existingSummary.pageContent = summaryResult.pageContent;
                         this.summaryStore.collection.update(existingSummary);
@@ -73,7 +73,7 @@ export class ChapterDocumentStore {
     }
 
     async addChapter(doc: ChapterDocument): Promise<void> {
-        if (!doc.metadata || !_.isNumber(doc.metadata.chapter) || !doc.metadata.novelID) {
+        if(!doc.metadata || !_.isNumber(doc.metadata.chapter) || !doc.metadata.novelID) {
             throw new Error('chapter metadata is required');
         }
         if(this.collection.findOne({ 'metadata.novelID': doc.metadata.novelID, 'metadata.chapter': doc.metadata.chapter })) {
