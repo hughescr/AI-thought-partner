@@ -4,10 +4,10 @@ import { promisify } from 'node:util';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import _ from 'lodash';
 
-export class ChapterChunkDocument extends Document<{ chapter: number; sequence: number }> {
-    constructor(fields: { 
-        pageContent: string; 
-        metadata: { chapter: number; sequence: number } 
+export class ChapterChunkDocument extends Document<{ chapter: number, sequence: number }> {
+    constructor(fields: {
+        pageContent: string
+        metadata: { chapter: number, sequence: number }
     }) {
         super(fields);
     }
@@ -24,11 +24,10 @@ export class ChapterChunkDocumentStore {
 
     constructor(db: Loki) {
         this.db = db;
-        this.collection = this.db.getCollection('chapter_chunks') || 
-            this.db.addCollection('chapter_chunks', {
-                unique: ['metadata.chapter', 'metadata.sequence'],
-                indices: ['metadata.chapter', 'metadata.sequence']
-            });
+        this.collection = this.db.getCollection('chapter_chunks') || this.db.addCollection('chapter_chunks', {
+            unique: ['metadata.chapter', 'metadata.sequence'],
+            indices: ['metadata.chapter', 'metadata.sequence']
+        });
     }
 
     async deleteChapterChapters(chapter: number): Promise<void> {
@@ -38,8 +37,8 @@ export class ChapterChunkDocumentStore {
 
     async addChunksForChapter(chapter: number, content: string): Promise<void> {
         const chunks = await this.textSplitter.splitText(content);
-        
-        chunks.forEach((chunkContent, sequence) => {
+
+        _.forEach(chunks, (chunkContent, sequence) => {
             this.collection.insert(new ChapterChunkDocument({
                 pageContent: chunkContent,
                 metadata: {
@@ -48,11 +47,12 @@ export class ChapterChunkDocumentStore {
                 }
             }));
         });
-        
+
         await promisify(this.db.saveDatabase.bind(this.db))();
     }
 
     async getChapterChunks(chapter: number): Promise<ChapterChunkDocument[]> {
+        // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
         return this.collection
             .chain()
             .find({ 'metadata.chapter': chapter })

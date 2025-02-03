@@ -10,7 +10,7 @@ describe('ChapterChunkDocumentStore', () => {
     let store: ChapterChunkDocumentStore;
 
     beforeEach(async () => {
-        try { await unlink(TEST_DB_PATH) } catch {}
+        try { await unlink(TEST_DB_PATH); } catch{}
         db = new Loki(TEST_DB_PATH, {
             adapter: new Loki.LokiFsAdapter(),
             autosave: true,
@@ -20,7 +20,7 @@ describe('ChapterChunkDocumentStore', () => {
     });
 
     afterEach(async () => {
-        try { await unlink(TEST_DB_PATH) } catch {}
+        try { await unlink(TEST_DB_PATH); } catch{}
         await store.close();
     });
 
@@ -28,7 +28,7 @@ describe('ChapterChunkDocumentStore', () => {
         const content = '# Chapter 1\n\n' + 'text '.repeat(1000);
         await store.addChunksForChapter(1, content);
         const chunks = await store.getChapterChunks(1);
-        
+
         expect(chunks.length).toBeGreaterThan(1);
         expect(chunks[0].metadata.sequence).toBe(1);
         expect(chunks[0].pageContent).toContain('Chapter 1');
