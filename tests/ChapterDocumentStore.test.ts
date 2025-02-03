@@ -47,7 +47,7 @@ describe('ChapterDocumentStore', () => {
     });
 
     it('stores and retrieves chapters', async () => {
-        const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
+        const store = new ChapterDocumentStore(db, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Prologue\n\nOnce upon a time...',
             metadata: { chapter: 0 }
