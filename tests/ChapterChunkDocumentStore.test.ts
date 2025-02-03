@@ -13,7 +13,7 @@ describe('ChapterChunkDocumentStore', () => {
     beforeEach(async () => {
         try {
             await unlink(TEST_DB_PATH);
-        } catch {
+        } catch{
             // Ignore
         }
         db = new Loki(TEST_DB_PATH, {
@@ -27,7 +27,7 @@ describe('ChapterChunkDocumentStore', () => {
     afterEach(async () => {
         try {
             await unlink(TEST_DB_PATH);
-        } catch {
+        } catch{
             // Ignore
         }
         await store.close();
