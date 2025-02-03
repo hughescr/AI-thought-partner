@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { NovelDocumentStore, NovelDocument, computeNovelID } from '../lib/NovelDocumentStore';
-import { ChapterDocument } from '../lib/ChapterDocumentStore';
-import Loki from 'lokijs';
+import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
 import fs from 'fs/promises';
 import path from 'path';
 import _ from 'lodash';
 
 // Fake ChapterDocumentStore to collect chapters added.
-class FakeChapterDocumentStore {
+class FakeChapterDocumentStore extends ChapterDocumentStore {
     public chapters: ChapterDocument[] = [];
     async addChapter(chapterDoc: ChapterDocument): Promise<void> {
         this.chapters.push(chapterDoc);
@@ -26,7 +25,7 @@ describe('NovelDocumentStore', () => {
         } catch{ /* ignore error */ }
         fakeChapterStore = new FakeChapterDocumentStore();
         // Construct novelStore with a given file path and the fake chapter store.
-        novelStore = new NovelDocumentStore(TEST_DB_PATH, fakeChapterStore as unknown as ChapterDocumentStore);
+        novelStore = new NovelDocumentStore(TEST_DB_PATH, fakeChapterStore);
     });
 
     afterEach(async () => {
