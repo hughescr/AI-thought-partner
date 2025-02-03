@@ -32,7 +32,7 @@ export class ChapterDocumentStore {
         // Pass the same db instance to the summary store.
         this.summaryStore = new ChapterSummaryDocumentStore(this.db);
     }
-    
+
     private savingPromise: Promise<void> = Promise.resolve();
 
     private async safeSaveDatabase(): Promise<void> {
@@ -41,7 +41,7 @@ export class ChapterDocumentStore {
         this.savingPromise = promisify(this.db.saveDatabase.bind(this.db))();
         return this.savingPromise;
     }
-    
+
     private attachAutoUpdate(doc: ChapterDocument): ChapterDocument {
         let currentContent = doc.pageContent;
         Object.defineProperty(doc, 'pageContent', {
@@ -77,7 +77,7 @@ export class ChapterDocumentStore {
                             console.log(`[AUTO-UPDATE] Summary addition completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()}`);
                         }
                         console.log(`[AUTO-UPDATE] Async summary update COMPLETE for chapter ${doc.metadata.chapter}`);
-                    } catch (error) {
+                    } catch(error) {
                         console.error(`[AUTO-UPDATE] Error during async summary update for chapter ${doc.metadata.chapter}:`, error);
                     }
                 })();
