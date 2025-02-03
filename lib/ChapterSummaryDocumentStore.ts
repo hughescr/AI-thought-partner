@@ -18,8 +18,8 @@ export class ChapterSummaryDocumentStore {
         this.collection =
             this.db.getCollection('summaries') ||
             this.db.addCollection('summaries', {
-                unique: ['metadata.chapter'],
-                indices: ['metadata.chapter']
+                unique: ['metadata.novelID', 'metadata.chapter'],
+                indices: ['metadata.novelID', 'metadata.chapter']
             });
     }
 

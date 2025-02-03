@@ -11,7 +11,8 @@
 
 ## Specify the model to use for the main chat
 #model: openrouter/deepseek/deepseek-r1:free
-model: deepseek/deepseek-reasoner
+#model: deepseek/deepseek-reasoner
+model: o3-mini
 
 ## Use claude-3-opus-20240229 model for the main chat
 #opus: false

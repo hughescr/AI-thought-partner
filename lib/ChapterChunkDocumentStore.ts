@@ -25,8 +25,8 @@ export class ChapterChunkDocumentStore {
     constructor(db: Loki) {
         this.db = db;
         this.collection = this.db.getCollection('chapter_chunks') || this.db.addCollection('chapter_chunks', {
-            unique: ['metadata.chapter', 'metadata.sequence'],
-            indices: ['metadata.chapter', 'metadata.sequence']
+            unique: ['metadata.novelID', 'metadata.chapter', 'metadata.sequence'],
+            indices: ['metadata.novelID', 'metadata.chapter', 'metadata.sequence']
         });
     }
 
