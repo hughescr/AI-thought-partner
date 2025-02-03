@@ -26,7 +26,7 @@ describe('ChapterSummaryDocumentStore', () => {
         try {
             await fs.access(TEST_DB_PATH);
             throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
-        } catch { /* file does not exist; continue */ }
+        } catch{ /* file does not exist; continue */ }
         db = new Loki(TEST_DB_PATH, {
             adapter: new Loki.LokiFsAdapter(),
             autosave: true,

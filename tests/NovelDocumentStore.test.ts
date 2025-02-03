@@ -20,7 +20,7 @@ describe('NovelDocumentStore', () => {
         try {
             await fs.access(TEST_DB_PATH);
             throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
-        } catch { /* file does not exist; continue */ }
+        } catch{ /* file does not exist; continue */ }
         const summaryGenerator = new ChapterSummaryGenerator({
             llm: RunnableLambda.from(_.constant('Concise generated summary')),
             targetSummarySize: 100,
