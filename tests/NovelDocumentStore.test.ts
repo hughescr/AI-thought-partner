@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { NovelDocumentStore, NovelDocument, computeNovelID } from '../lib/NovelDocumentStore';
-/* import { ChapterDocumentStore } from '../lib/ChapterDocumentStore'; */
+import { ChapterDocumentStore } from '../lib/ChapterDocumentStore';
 import fs from 'fs/promises';
 import path from 'path';
 import _ from 'lodash';
@@ -13,6 +13,7 @@ const TEST_DB_PATH = path.join(import.meta.dir, 'test-novels.db');
 
 describe('NovelDocumentStore', () => {
     let novelStore: NovelDocumentStore;
+    let chapterStore: ChapterDocumentStore;
 
     beforeEach(async () => {
         try {
@@ -22,8 +23,9 @@ describe('NovelDocumentStore', () => {
             llm: RunnableLambda.from(_.constant('Concise generated summary')),
             targetSummarySize: 100,
         });
-        // Construct novelStore with a given file path and a summary generator.
+        // Construct novelStore with a given file path and the real chapter store.
         novelStore = new NovelDocumentStore(TEST_DB_PATH, summaryGenerator);
+        chapterStore = (novelStore as unknown as { chapterStore: ChapterDocumentStore }).chapterStore;
     });
 
     afterEach(async () => {
