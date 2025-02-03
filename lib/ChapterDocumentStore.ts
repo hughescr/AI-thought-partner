@@ -49,9 +49,11 @@ export class ChapterDocumentStore {
                     );
                     // Retrieve existing summary
                     const existingSummary = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
-                    if(existingSummary) {
+                    if (existingSummary) {
                         // Update existing summary
                         existingSummary.pageContent = summaryResult.pageContent;
+                        this.summaryStore.collection.update(existingSummary);
+                        await promisify(this.db.saveDatabase.bind(this.db))();
                     } else {
                         // Add new summary if not present
                         summaryResult.metadata.chapter = doc.metadata.chapter;
@@ -71,8 +73,8 @@ export class ChapterDocumentStore {
     }
 
     async addChapter(doc: ChapterDocument): Promise<void> {
-        if(!doc.metadata || !_.isNumber(doc.metadata.chapter) || !doc.metadata.novelID) {
-            throw new Error('chapter metadata with novelID is required');
+        if (!doc.metadata || !_.isNumber(doc.metadata.chapter) || !doc.metadata.novelID) {
+            throw new Error('chapter metadata is required');
         }
         if(this.collection.findOne({ 'metadata.novelID': doc.metadata.novelID, 'metadata.chapter': doc.metadata.chapter })) {
             throw new Error('Document is already in collection, please use update()');
