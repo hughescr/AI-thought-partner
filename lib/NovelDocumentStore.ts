@@ -34,7 +34,7 @@ export class NovelDocumentStore {
     private chapterStore: ChapterDocumentStore;
     private chapterSplitter: MarkdownChapterTextSplitter;
 
-    constructor(filePath: string, chapterStore: ChapterDocumentStore) {
+    constructor(filePath: string, summaryGenerator: ChapterSummaryGenerator) {
         this.db = new Loki(filePath, {
             adapter: new Loki.LokiFsAdapter(),
             autoload: true,
@@ -47,8 +47,8 @@ export class NovelDocumentStore {
                 unique: ['metadata.novelID'],
                 indices: ['metadata.novelID'],
             });
-        // Use the provided ChapterDocumentStore (which is created with the same Loki db)
-        this.chapterStore = chapterStore;
+        // Create our own ChapterDocumentStore using the same Loki instance.
+        this.chapterStore = new ChapterDocumentStore(this.db, summaryGenerator);
         this.chapterSplitter = new MarkdownChapterTextSplitter();
     }
 
