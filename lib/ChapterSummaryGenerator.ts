@@ -43,12 +43,14 @@ export class ChapterSummaryGenerator {
 
         // Leave the chapter header out of the content to summarize
         const chapterText = _.replace(chapter.pageContent, chapterHeader, '');
-
+        const startTime = Date.now();
+        console.log(`Summary generation started for chapter ${chapter.metadata.chapter} at ${new Date().toISOString()}`);
         const summaryText = await this.summaryChain.invoke({
             targetSummarySize: this.targetSummarySize,
             chapterText: chapterText,
         });
-        console.log(`Summary generated for chapter ${chapter.metadata.chapter}: ${summaryText.substring(0, 50)}...`);
+        const endTime = Date.now();
+        console.log(`Summary generated for chapter ${chapter.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${endTime - startTime}ms): ${summaryText.substring(0, 50)}...`);
 
         return new Document({
             // Prepend the chapter header back on the summary after generation

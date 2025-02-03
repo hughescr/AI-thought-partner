@@ -44,23 +44,33 @@ export class ChapterDocumentStore {
                 console.log(`Chapter auto-update: pageContent updated for chapter ${doc.metadata.chapter}`);
                 // Async update of chapter summary
                 (async () => {
-                    console.log(`Regenerating summary for chapter ${doc.metadata.chapter}`);
+                    const startTimestamp = new Date().toISOString();
+                    console.log(`Regenerating summary for chapter ${doc.metadata.chapter} at ${startTimestamp}`);
+                    const genStart = Date.now();
                     // Regenerate the summary using updated pageContent
                     const summaryResult = await this.summaryGenerator.generateSummary(
                         new Document({ pageContent: newVal, metadata: doc.metadata })
                     );
+                    const genEnd = Date.now();
+                    console.log(`Summary generation completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${genEnd - genStart}ms)`);
                     // Retrieve existing summary
                     const existingSummary = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
                     if(existingSummary) {
-                        console.log(`Updating existing summary for chapter ${doc.metadata.chapter}`);
+                        console.log(`Updating existing summary for chapter ${doc.metadata.chapter} at ${new Date().toISOString()}`);
                         // Update existing summary
                         existingSummary.pageContent = summaryResult.pageContent;
+                        const saveStart = Date.now();
                         await promisify(this.db.saveDatabase.bind(this.db))();
+                        const saveEnd = Date.now();
+                        console.log(`Database save completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${saveEnd - saveStart}ms)`);
                     } else {
-                        console.log(`Adding new summary for chapter ${doc.metadata.chapter}`);
+                        console.log(`Adding new summary for chapter ${doc.metadata.chapter} at ${new Date().toISOString()}`);
                         // Add new summary if not present
                         summaryResult.metadata.chapter = doc.metadata.chapter;
+                        const addStart = Date.now();
                         await this.summaryStore.addChapterSummary(summaryResult as ChapterSummaryDocument);
+                        const addEnd = Date.now();
+                        console.log(`Summary addition completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${addEnd - addStart}ms)`);
                     }
                 })();
             },
