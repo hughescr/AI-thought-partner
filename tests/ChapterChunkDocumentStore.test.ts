@@ -4,7 +4,8 @@ import { ChapterChunkDocumentStore } from '../lib/ChapterChunkDocumentStore';
 import { unlink } from 'node:fs/promises';
 import _ from 'lodash';
 
-const TEST_DB_PATH = './test-chunks.db';
+import os from 'node:os';
+const TEST_DB_PATH = path.join(os.tmpdir(), `test-chunks-${Date.now()}-${Math.floor(Math.random() * 1000)}.db`);
 
 describe('ChapterChunkDocumentStore', () => {
     let db: Loki;
@@ -12,10 +13,9 @@ describe('ChapterChunkDocumentStore', () => {
 
     beforeEach(async () => {
         try {
-            await unlink(TEST_DB_PATH);
-        } catch{
-            // Ignore
-        }
+            await fs.access(TEST_DB_PATH);
+            throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
+        } catch { /* file does not exist; continue */ }
         db = new Loki(TEST_DB_PATH, {
             adapter: new Loki.LokiFsAdapter(),
             autosave: true,

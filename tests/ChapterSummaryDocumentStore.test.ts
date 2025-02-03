@@ -3,7 +3,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { unlink } from 'node:fs/promises';
 import Loki from 'lokijs';
 
-const TEST_DB_PATH = './test-summaries.db';
+import os from 'node:os';
+const TEST_DB_PATH = path.join(os.tmpdir(), `test-summaries-${Date.now()}-${Math.floor(Math.random() * 1000)}.db`);
 
 describe('ChapterSummaryDocument', () => {
     it('creates document with chapter metadata', () => {
@@ -23,8 +24,9 @@ describe('ChapterSummaryDocumentStore', () => {
 
     beforeEach(async () => {
         try {
-            await unlink(TEST_DB_PATH);
-        } catch{ /* ignore */ }
+            await fs.access(TEST_DB_PATH);
+            throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
+        } catch { /* file does not exist; continue */ }
         db = new Loki(TEST_DB_PATH, {
             adapter: new Loki.LokiFsAdapter(),
             autosave: true,

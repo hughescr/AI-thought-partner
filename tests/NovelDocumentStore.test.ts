@@ -9,7 +9,8 @@ import { RunnableLambda } from '@langchain/core/runnables';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import Loki from 'lokijs';
 
-const TEST_DB_PATH = path.join(import.meta.dir, 'test-novels.db');
+import os from 'node:os';
+const TEST_DB_PATH = path.join(os.tmpdir(), `test-novels-${Date.now()}-${Math.floor(Math.random() * 1000)}.db`);
 
 describe('NovelDocumentStore', () => {
     let novelStore: NovelDocumentStore;
@@ -17,8 +18,9 @@ describe('NovelDocumentStore', () => {
 
     beforeEach(async () => {
         try {
-            await fs.unlink(TEST_DB_PATH);
-        } catch{ /* ignore error */ }
+            await fs.access(TEST_DB_PATH);
+            throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
+        } catch { /* file does not exist; continue */ }
         const summaryGenerator = new ChapterSummaryGenerator({
             llm: RunnableLambda.from(_.constant('Concise generated summary')),
             targetSummarySize: 100,
