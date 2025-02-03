@@ -22,7 +22,7 @@ describe('ChapterDocument', () => {
 });
 
 describe('ChapterDocumentStore', () => {
-    let summaryGenerator: ChapterDocumentStore;
+    let summaryGenerator: ChapterSummaryGenerator;
     let db: Loki;
     beforeEach(async () => {
         summaryGenerator = new ChapterSummaryGenerator({
