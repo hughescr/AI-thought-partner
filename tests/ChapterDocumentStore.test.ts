@@ -13,7 +13,7 @@ describe('ChapterDocument', () => {
     it('creates document with chapter content and metadata', () => {
         const doc = new ChapterDocument({
             pageContent: '# Chapter 1\n\nIt was a dark and stormy night...',
-            metadata: { chapter: 1 }
+            metadata: { novelID: 'test', chapter: 1 }
         });
 
         expect(doc.pageContent).toContain('stormy night');
