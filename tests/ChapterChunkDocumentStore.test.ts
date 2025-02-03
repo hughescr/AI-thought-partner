@@ -52,8 +52,7 @@ describe('ChapterChunkDocumentStore', () => {
 
     it('maintains unique chapter+sequence combinations', async () => {
         await store.addChunksForChapter(3, 'Content');
-        await expect(async () => {
-            await store.addChunksForChapter(3, 'New content');
-        }).rejects.toThrow('Duplicate key for properties metadata.chapter, metadata.sequence');
+        await expect(store.addChunksForChapter(3, 'New content'))
+            .rejects.toThrow('Duplicate key for properties metadata.chapter, metadata.sequence');
     });
 });
