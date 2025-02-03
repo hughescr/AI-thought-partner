@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import Loki from 'lokijs';
 import { ChapterChunkDocumentStore } from '../lib/ChapterChunkDocumentStore';
 import { unlink } from 'node:fs/promises';
+import _ from 'lodash';
 
 const TEST_DB_PATH = './test-chunks.db';
 
@@ -10,7 +11,11 @@ describe('ChapterChunkDocumentStore', () => {
     let store: ChapterChunkDocumentStore;
 
     beforeEach(async () => {
-        try { await unlink(TEST_DB_PATH); } catch{}
+        try {
+            await unlink(TEST_DB_PATH);
+        } catch {
+            // Ignore
+        }
         db = new Loki(TEST_DB_PATH, {
             adapter: new Loki.LokiFsAdapter(),
             autosave: true,
@@ -20,12 +25,16 @@ describe('ChapterChunkDocumentStore', () => {
     });
 
     afterEach(async () => {
-        try { await unlink(TEST_DB_PATH); } catch{}
+        try {
+            await unlink(TEST_DB_PATH);
+        } catch {
+            // Ignore
+        }
         await store.close();
     });
 
     it('stores and retrieves chapter chunks', async () => {
-        const content = '# Chapter 1\n\n' + 'text '.repeat(1000);
+        const content = '# Chapter 1\n\n' + _.repeat('text ', 1000);
         await store.addChunksForChapter(1, content);
         const chunks = await store.getChapterChunks(1);
 
