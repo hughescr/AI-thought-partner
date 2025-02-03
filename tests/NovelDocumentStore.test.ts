@@ -9,8 +9,6 @@ import { RunnableLambda } from '@langchain/core/runnables';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import Loki from 'lokijs';
 
-let chapterStore: ChapterDocumentStore;
-
 const TEST_DB_PATH = path.join(import.meta.dir, 'test-novels.db');
 
 describe('NovelDocumentStore', () => {
@@ -20,17 +18,10 @@ describe('NovelDocumentStore', () => {
         try {
             await fs.unlink(TEST_DB_PATH);
         } catch{ /* ignore error */ }
-        const chaptersDb = new Loki('chapters_test.db', {
-            adapter: new Loki.LokiFsAdapter(),
-            autoload: true,
-            autosave: true,
-            autosaveInterval: 5000,
-        });
         const summaryGenerator = new ChapterSummaryGenerator({
             llm: RunnableLambda.from(_.constant('Concise generated summary')),
             targetSummarySize: 100,
         });
-        chapterStore = new ChapterDocumentStore(chaptersDb, summaryGenerator);
         // Construct novelStore with a given file path and the real chapter store.
         novelStore = new NovelDocumentStore(TEST_DB_PATH, chapterStore);
     });
@@ -88,14 +79,6 @@ Chapter one content.
         expect(chapter.metadata.chapter).toBe(1);
         expect(chapter.metadata.novelID).toBe(providedID);
     });
-});
-afterAll(async () => {
-    try {
-        await fs.unlink('chapters_test.db');
-    } catch{ /* ignore error */ }
-    try {
-        await fs.unlink('test-chunks.db');
-    } catch{ /* ignore error */ }
 });
 
 describe('computeNovelID', () => {

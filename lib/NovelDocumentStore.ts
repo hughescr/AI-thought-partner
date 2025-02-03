@@ -42,11 +42,11 @@ export class NovelDocumentStore {
             autosaveInterval: 5000,
         });
         this.novelsCollection =
-      this.db.getCollection('novels') ||
-      this.db.addCollection('novels', {
-          unique: ['metadata.novelID'],
-          indices: ['metadata.novelID'],
-      });
+            this.db.getCollection('novels') ||
+            this.db.addCollection('novels', {
+                unique: ['metadata.novelID'],
+                indices: ['metadata.novelID'],
+            });
         // Use the provided ChapterDocumentStore (which is created with the same Loki db)
         this.chapterStore = chapterStore;
         this.chapterSplitter = new MarkdownChapterTextSplitter();
