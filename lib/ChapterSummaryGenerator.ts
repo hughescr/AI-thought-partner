@@ -38,13 +38,13 @@ export class ChapterSummaryGenerator {
     public async generateSummary(chapter: Document): Promise<Document> {
         const chapterHeader = _.split(chapter.pageContent, '\n')[0];
         console.log(`[SUMMARY GENERATOR] Chapter ${chapter.metadata.chapter}: Found header: "${chapterHeader}"`);
-        if (!_.startsWith(chapterHeader, '#')) {
+        if(!_.startsWith(chapterHeader, '#')) {
             throw new Error('Chapter must start with a chapter heading beginning with "#" eg "# Chapter 1: The Beginning"');
         }
         // Remove the header from the text
         const chapterText = _.replace(chapter.pageContent, chapterHeader, '');
         console.log(`[SUMMARY GENERATOR] Chapter ${chapter.metadata.chapter}: Processed chapterText length: ${chapterText.length}`);
-        
+
         const startTime = Date.now();
         console.log(`[SUMMARY GENERATOR] Summary generation started for chapter ${chapter.metadata.chapter} at ${new Date().toISOString()}`);
         const summaryText = await this.summaryChain.invoke({
@@ -52,8 +52,8 @@ export class ChapterSummaryGenerator {
             chapterText: chapterText,
         });
         const endTime = Date.now();
-        console.log(`[SUMMARY GENERATOR] Summary generated for chapter ${chapter.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${endTime - startTime}ms): ${summaryText.substring(0,50)}...`);
-        
+        console.log(`[SUMMARY GENERATOR] Summary generated for chapter ${chapter.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${endTime - startTime}ms): ${summaryText.substring(0, 50)}...`);
+
         return new Document({
             // Prepend the chapter header back onto the summary after generation.
             pageContent: _.join([chapterHeader, summaryText], '\n'),
