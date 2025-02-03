@@ -70,8 +70,11 @@ export class ChapterDocumentStore {
     }
 
     async addChapter(doc: ChapterDocument): Promise<void> {
-        if(!doc.metadata || !_.isNumber(doc.metadata.chapter) || !doc.metadata.novelID) {
+        if (!doc.metadata || !_.isNumber(doc.metadata.chapter) || !doc.metadata.novelID) {
             throw new Error('chapter metadata with novelID is required');
+        }
+        if (this.collection.findOne({ 'metadata.novelID': doc.metadata.novelID, 'metadata.chapter': doc.metadata.chapter })) {
+            throw new Error("Document is already in collection, please use update()");
         }
         this.collection.insert(doc);
         await promisify(this.db.saveDatabase.bind(this.db))();

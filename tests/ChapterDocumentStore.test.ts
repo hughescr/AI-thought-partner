@@ -50,7 +50,7 @@ describe('ChapterDocumentStore', () => {
         const store = new ChapterDocumentStore(db, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Prologue\n\nOnce upon a time...',
-            metadata: { chapter: 0 }
+            metadata: { novelID: 'test', chapter: 0 }
         });
 
         await store.addChapter(doc);
@@ -65,7 +65,7 @@ describe('ChapterDocumentStore', () => {
         const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Chapter 5\nOriginal content',
-            metadata: { chapter: 5 }
+            metadata: { novelID: 'test', chapter: 5 }
         });
 
         await store.addChapter(doc);
@@ -80,7 +80,7 @@ describe('ChapterDocumentStore', () => {
         const firstStore = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Epilogue\n\nAnd they lived...',
-            metadata: { chapter: 99 }
+            metadata: { novelID: 'test', chapter: 99 }
         });
 
         await firstStore.addChapter(doc);
@@ -131,7 +131,7 @@ describe('ChapterDocumentStore', () => {
         const store = new ChapterDocumentStore(TEST_DB_PATH, summaryGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Chapter 7\nInitial content',
-            metadata: { chapter: 7 }
+            metadata: { novelID: 'test', chapter: 7 }
         });
         await store.addChapter(doc);
         // Attempt to re-add should throw an error.
@@ -162,7 +162,7 @@ describe('ChapterDocumentStore', () => {
         const store = new ChapterDocumentStore(TEST_DB_PATH, dynamicGenerator);
         const doc = new ChapterDocument({
             pageContent: '# Chapter 21\nInitial chapter content',
-            metadata: { chapter: 21 }
+            metadata: { novelID: 'test', chapter: 21 }
         });
         await store.addChapter(doc);
 
