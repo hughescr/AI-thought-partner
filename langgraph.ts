@@ -276,7 +276,6 @@ const workflow = new StateGraph(QuestionAnswerAnnotation)
 
 const app = workflow.compile();
 
-// eslint-disable-next-line @stylistic/operator-linebreak -- This is fine here cos we can swap in any of the prompts
 const input =
     // `Are there any instances where "it's" or "its" is used incorrectly?`
     // `Are there any instances where "their" or "they're" is used incorrectly?`

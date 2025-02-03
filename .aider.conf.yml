@@ -10,7 +10,8 @@
 ### DO NOT INCLUDE API KEYS HERE THIS FILE WILL BE IN GIT
 
 ## Specify the model to use for the main chat
-model: openrouter/deepseek/deepseek-r1:free
+#model: openrouter/deepseek/deepseek-r1:free
+model: deepseek/deepseek-reasoner
 
 ## Use claude-3-opus-20240229 model for the main chat
 #opus: false
