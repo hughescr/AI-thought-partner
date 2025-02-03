@@ -6,21 +6,11 @@ import path from 'path';
 import _ from 'lodash';
 
 
-class FakeChapterDocumentStore extends ChapterDocumentStore {
-    public chapters: ChapterDocument[] = [];
-    constructor() {
-        const dummyDb = new Loki('dummy.db');
-        const dummySummaryGenerator = { generateSummary: async (doc: any) => ({
-            pageContent: 'dummy',
-            metadata: { chapter: doc?.metadata?.chapter, novelID: doc?.metadata?.novelID }
-        }) } as any;
-        super(dummyDb, dummySummaryGenerator);
-    }
+import { RunnableLambda } from '@langchain/core/runnables';
+import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
+import Loki from 'lokijs';
 
-    async addChapter(chapterDoc: ChapterDocument): Promise<void> {
-        this.chapters.push(chapterDoc);
-    }
-}
+let chapterStore: ChapterDocumentStore;
 
 const TEST_DB_PATH = path.join(import.meta.dir, 'test-novels.db');
 
