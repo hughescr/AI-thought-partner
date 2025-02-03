@@ -92,10 +92,10 @@ Chapter one content.
 afterAll(async () => {
     try {
         await fs.unlink('chapters_test.db');
-    } catch { /* ignore error */ }
+    } catch{ /* ignore error */ }
     try {
         await fs.unlink('test-chunks.db');
-    } catch { /* ignore error */ }
+    } catch{ /* ignore error */ }
 });
 
 describe('computeNovelID', () => {
