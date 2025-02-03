@@ -1,0 +1,66 @@
+import { Document } from '@langchain/core/documents';
+import Loki from 'lokijs';
+import { promisify } from 'node:util';
+import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
+import _ from 'lodash';
+
+export class ChapterChunkDocument extends Document<{ chapter: number; sequence: number }> {
+    constructor(fields: { 
+        pageContent: string; 
+        metadata: { chapter: number; sequence: number } 
+    }) {
+        super(fields);
+    }
+}
+
+export class ChapterChunkDocumentStore {
+    private db: Loki;
+    private collection: Loki.Collection;
+    private textSplitter = new RecursiveCharacterTextSplitter({
+        chunkSize: 512,
+        chunkOverlap: 128,
+        keepSeparator: true
+    });
+
+    constructor(db: Loki) {
+        this.db = db;
+        this.collection = this.db.getCollection('chapter_chunks') || 
+            this.db.addCollection('chapter_chunks', {
+                unique: ['metadata.chapter', 'metadata.sequence'],
+                indices: ['metadata.chapter', 'metadata.sequence']
+            });
+    }
+
+    async deleteChapterChapters(chapter: number): Promise<void> {
+        this.collection.findAndRemove({ 'metadata.chapter': chapter });
+        await promisify(this.db.saveDatabase.bind(this.db))();
+    }
+
+    async addChunksForChapter(chapter: number, content: string): Promise<void> {
+        const chunks = await this.textSplitter.splitText(content);
+        
+        chunks.forEach((chunkContent, sequence) => {
+            this.collection.insert(new ChapterChunkDocument({
+                pageContent: chunkContent,
+                metadata: {
+                    chapter,
+                    sequence: sequence + 1 // Start sequences at 1
+                }
+            }));
+        });
+        
+        await promisify(this.db.saveDatabase.bind(this.db))();
+    }
+
+    async getChapterChunks(chapter: number): Promise<ChapterChunkDocument[]> {
+        return this.collection
+            .chain()
+            .find({ 'metadata.chapter': chapter })
+            .simplesort('metadata.sequence')
+            .data() as ChapterChunkDocument[];
+    }
+
+    async close(): Promise<void> {
+        await promisify(this.db.saveDatabase.bind(this.db))();
+    }
+}
