@@ -32,9 +32,19 @@ describe('NovelDocumentStore', () => {
         try {
             await fs.unlink(TEST_DB_PATH);
         } catch{ /* ignore error */ }
-        fakeChapterStore = new FakeChapterDocumentStore();
-        // Construct novelStore with a given file path and the fake chapter store.
-        novelStore = new NovelDocumentStore(TEST_DB_PATH, fakeChapterStore);
+        const chaptersDb = new Loki('chapters_test.db', {
+            adapter: new Loki.LokiFsAdapter(),
+            autoload: true,
+            autosave: true,
+            autosaveInterval: 5000,
+        });
+        const summaryGenerator = new ChapterSummaryGenerator({
+            llm: RunnableLambda.from(() => 'Concise generated summary'),
+            targetSummarySize: 100,
+        });
+        chapterStore = new ChapterDocumentStore(chaptersDb, summaryGenerator);
+        // Construct novelStore with a given file path and the real chapter store.
+        novelStore = new NovelDocumentStore(TEST_DB_PATH, chapterStore);
     });
 
     afterEach(async () => {
@@ -60,8 +70,9 @@ Content of chapter two.
         const coll = novelStore.db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
         // Verify that chapters were added and numbered correctly.
-        expect(fakeChapterStore.chapters.length).toBeGreaterThan(0);
-        _.forEach(fakeChapterStore.chapters, (chapter, index) => {
+        const chaptersAdded = chapterStore['collection'].find();
+        expect(chaptersAdded.length).toBeGreaterThan(0);
+        chaptersAdded.forEach((chapter, index) => {
             expect(chapter.metadata.chapter).toBe(index + 1);
             expect(chapter.metadata.novelID).toBe(computedID);
         });
@@ -80,8 +91,9 @@ Chapter one content.
         expect(novel.metadata.novelID).toBe(providedID);
         const coll = novelStore.db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': providedID })).toBeDefined();
-        expect(fakeChapterStore.chapters.length).toBe(1);
-        const chapter = fakeChapterStore.chapters[0];
+        const chaptersAdded = chapterStore['collection'].find();
+        expect(chaptersAdded.length).toBe(1);
+        const chapter = chaptersAdded[0];
         expect(chapter.metadata.chapter).toBe(1);
         expect(chapter.metadata.novelID).toBe(providedID);
     });
