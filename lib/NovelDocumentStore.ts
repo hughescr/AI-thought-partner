@@ -66,12 +66,11 @@ export class NovelDocumentStore {
         const chapters = await this.chapterSplitter.splitDocuments([novelDoc]);
         // For each chapter, set metadata.novelID and a chapter number.
         for(let i = 0; i < chapters.length; i++) {
-            if(!chapters[i].metadata) {
+            if (!chapters[i].metadata) {
                 chapters[i].metadata = {};
             }
             chapters[i].metadata.chapter = i + 1;
             chapters[i].metadata.novelID = novelDoc.metadata.novelID;
-            // Create a ChapterDocument (make sure its constructor accepts metadata.novelID now)
             const chapterDoc = new ChapterDocument({
                 pageContent: chapters[i].pageContent,
                 metadata: { novelID: novelDoc.metadata.novelID, chapter: i + 1 },

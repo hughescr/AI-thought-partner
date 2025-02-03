@@ -5,6 +5,7 @@ import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentSto
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import { RunnableLambda } from '@langchain/core/runnables';
 import _ from 'lodash';
+import Loki from 'lokijs';
 
 const TEST_DB_PATH = path.join(import.meta.dir, 'test-chapters.db');
 
