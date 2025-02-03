@@ -22,7 +22,7 @@ describe('NovelDocumentStore', () => {
     beforeEach(async () => {
         try {
             await fs.unlink(TEST_DB_PATH);
-        } catch { /* ignore error */ }
+        } catch{ /* ignore error */ }
         fakeChapterStore = new FakeChapterDocumentStore();
         // Construct novelStore with a given file path and the fake chapter store.
         novelStore = new NovelDocumentStore(TEST_DB_PATH, fakeChapterStore as any);
@@ -31,7 +31,7 @@ describe('NovelDocumentStore', () => {
     afterEach(async () => {
         try {
             await fs.unlink(TEST_DB_PATH);
-        } catch { /* ignore error */ }
+        } catch{ /* ignore error */ }
     });
 
     it('computes novelID if missing and splits novel into chapters', async () => {
@@ -48,7 +48,7 @@ Content of chapter two.
         const computedID = computeNovelID('John Doe', 'Test Novel');
         expect(novel.metadata.novelID).toBe(computedID);
         // Verify the novel was inserted into the novels collection.
-        const coll = novelStore['db'].getCollection('novels');
+        const coll = novelStore.db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
         // Verify that chapters were added and numbered correctly.
         expect(fakeChapterStore.chapters.length).toBeGreaterThan(0);
@@ -69,7 +69,7 @@ Chapter one content.
         });
         await novelStore.addNovel(novel);
         expect(novel.metadata.novelID).toBe(providedID);
-        const coll = novelStore['db'].getCollection('novels');
+        const coll = novelStore.db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': providedID })).toBeDefined();
         expect(fakeChapterStore.chapters.length).toBe(1);
         const chapter = fakeChapterStore.chapters[0];
