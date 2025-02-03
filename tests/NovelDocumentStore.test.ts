@@ -78,6 +78,7 @@ Chapter one content.
         });
         await novelStore.addNovel(novel);
         expect(novel.metadata.novelID).toBe(providedID);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accessing private collection for verification in tests only.
         const coll = (novelStore as any).db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': providedID })).toBeDefined();
         // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
