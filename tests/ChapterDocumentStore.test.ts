@@ -156,14 +156,14 @@ describe('ChapterDocumentStore', () => {
 
     // For the dynamic summary test, instantiate a local generator that reflects the chapter content.
     it('updates chapter summary when chapter content changes', async () => {
-        let summary = 'Initial chapter content';
+        let text = 'Initial chapter content';
         const dynamicGenerator = new ChapterSummaryGenerator({
-            llm: RunnableLambda.from(() => ({ content: [{ text: `Summary: ${summary}`, type: 'text' }] })),
+            llm: RunnableLambda.from(() => ({ content: [{ text: `Summary: ${text}`, type: 'text' }] })),
             targetSummarySize: 100
         });
         const store = new ChapterDocumentStore(db, dynamicGenerator);
         const doc = new ChapterDocument({
-            pageContent: '# Chapter 21\nInitial chapter content',
+            pageContent: `# Chapter 21\n${text}`,
             metadata: { novelID: 'test', chapter: 21 }
         });
         await store.addChapter(doc);
@@ -172,8 +172,8 @@ describe('ChapterDocumentStore', () => {
         expect(summary1?.pageContent).toBe('# Chapter 21\nSummary: Initial chapter content');
 
         // Update chapter content
-        summary = 'Updated chapter content';
-        doc.pageContent = '# Chapter 21\nUpdated chapter content';
+        text = 'Updated chapter content';
+        doc.pageContent = `# Chapter 21\n${text}`;
         // Wait for async update
         await new Promise(resolve => setTimeout(resolve, 150));
         const summary2 = await store.getChapterSummary(21);
