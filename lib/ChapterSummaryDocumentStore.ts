@@ -32,11 +32,13 @@ export class ChapterSummaryDocumentStore {
             set: (newVal) => {
                 currentContent = newVal;
                 this.collection.update(doc);
+                console.log(`Summary auto-update: pageContent updated for chapter ${doc.metadata.chapter}`);
                 // Fire-and-forget save (errors are ignored)
                 promisify(this.db.saveDatabase.bind(this.db))();
             },
             configurable: true
         });
+        console.log(`Attached auto-update hook for summary chapter ${doc.metadata.chapter}`);
         return doc;
     }
 
@@ -62,6 +64,7 @@ export class ChapterSummaryDocumentStore {
     // New close method to properly shut down the database connection
     async close(): Promise<void> {
         await promisify(this.db.saveDatabase.bind(this.db))();
+        console.log("ChapterSummaryDocumentStore closed: Database saved");
         // Do not close the Loki instance here because it's shared.
     }
 }

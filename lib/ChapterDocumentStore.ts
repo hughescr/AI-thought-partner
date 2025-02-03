@@ -41,8 +41,10 @@ export class ChapterDocumentStore {
                 currentContent = newVal;
                 this.collection.update(doc);
                 promisify(this.db.saveDatabase.bind(this.db))();
+                console.log(`Chapter auto-update: pageContent updated for chapter ${doc.metadata.chapter}`);
                 // Async update of chapter summary
                 (async () => {
+                    console.log(`Regenerating summary for chapter ${doc.metadata.chapter}`);
                     // Regenerate the summary using updated pageContent
                     const summaryResult = await this.summaryGenerator.generateSummary(
                         new Document({ pageContent: newVal, metadata: doc.metadata })
@@ -50,10 +52,12 @@ export class ChapterDocumentStore {
                     // Retrieve existing summary
                     const existingSummary = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
                     if(existingSummary) {
+                        console.log(`Updating existing summary for chapter ${doc.metadata.chapter}`);
                         // Update existing summary
                         existingSummary.pageContent = summaryResult.pageContent;
                         await promisify(this.db.saveDatabase.bind(this.db))();
                     } else {
+                        console.log(`Adding new summary for chapter ${doc.metadata.chapter}`);
                         // Add new summary if not present
                         summaryResult.metadata.chapter = doc.metadata.chapter;
                         await this.summaryStore.addChapterSummary(summaryResult as ChapterSummaryDocument);
@@ -68,6 +72,7 @@ export class ChapterDocumentStore {
     private async generateAndStoreSummary(doc: ChapterDocument): Promise<void> {
         const summaryDoc = await this.summaryGenerator.generateSummary(doc);
         summaryDoc.metadata.chapter = doc.metadata.chapter;
+        console.log(`Generated summary for chapter ${doc.metadata.chapter}`);
         await this.summaryStore.addChapterSummary(summaryDoc as ChapterSummaryDocument);
     }
 
@@ -76,6 +81,7 @@ export class ChapterDocumentStore {
             throw new Error('chapter metadata is required');
         }
         if(this.collection.findOne({ 'metadata.novelID': doc.metadata.novelID, 'metadata.chapter': doc.metadata.chapter })) {
+            console.log(`Duplicate add attempted for chapter ${doc.metadata.chapter}`);
             throw new Error('Document is already in collection, please use update()');
         }
         this.collection.insert(doc);
@@ -97,6 +103,7 @@ export class ChapterDocumentStore {
     async close(): Promise<void> {
         await this.loadPromise;
         await promisify(this.db.saveDatabase.bind(this.db))();
+        console.log("Database closed for ChapterDocumentStore");
         this.db.close();
     }
 }

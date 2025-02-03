@@ -48,6 +48,7 @@ export class ChapterSummaryGenerator {
             targetSummarySize: this.targetSummarySize,
             chapterText: chapterText,
         });
+        console.log(`Summary generated for chapter ${chapter.metadata.chapter}: ${summaryText.substring(0,50)}...`);
 
         return new Document({
             // Prepend the chapter header back on the summary after generation
