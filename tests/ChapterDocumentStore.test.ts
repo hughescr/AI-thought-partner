@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { unlink } from 'node:fs/promises';
-import path from 'node:path';
+import { unlink, access } from 'node:fs/promises';
+import { join as pathJoin } from 'node:path';
+import { tmpdir } from 'node:os';
 import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import { RunnableLambda } from '@langchain/core/runnables';
 import _ from 'lodash';
 import Loki from 'lokijs';
 
-const TEST_DB_PATH = path.join(import.meta.dir, 'test-chapters.db');
+const TEST_DB_PATH = pathJoin(tmpdir(), `test-chapters.db`);
 
 describe('ChapterDocument', () => {
     it('creates document with chapter content and metadata', () => {
@@ -30,7 +31,8 @@ describe('ChapterDocumentStore', () => {
             targetSummarySize: 100
         });
         try {
-            await unlink(TEST_DB_PATH);
+            await access(TEST_DB_PATH);
+            throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
         } catch{ /* ignore error */ }
         db = new Loki(TEST_DB_PATH, {
             adapter: new Loki.LokiFsAdapter(),

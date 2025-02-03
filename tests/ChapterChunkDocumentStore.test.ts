@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import Loki from 'lokijs';
 import { ChapterChunkDocumentStore } from '../lib/ChapterChunkDocumentStore';
-import { unlink } from 'node:fs/promises';
+import { unlink, access } from 'node:fs/promises';
+import { join as pathJoin } from 'node:path';
+import { tmpdir } from 'node:os';
 import _ from 'lodash';
 
-import os from 'node:os';
-const TEST_DB_PATH = path.join(os.tmpdir(), `test-chunks-${Date.now()}-${Math.floor(Math.random() * 1000)}.db`);
+const TEST_DB_PATH = pathJoin(tmpdir(), `test-chunks.db`);
 
 describe('ChapterChunkDocumentStore', () => {
     let db: Loki;
@@ -13,7 +14,7 @@ describe('ChapterChunkDocumentStore', () => {
 
     beforeEach(async () => {
         try {
-            await fs.access(TEST_DB_PATH);
+            await access(TEST_DB_PATH);
             throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
         } catch{ /* file does not exist; continue */ }
         db = new Loki(TEST_DB_PATH, {
@@ -25,12 +26,12 @@ describe('ChapterChunkDocumentStore', () => {
     });
 
     afterEach(async () => {
+        await store.close();
         try {
             await unlink(TEST_DB_PATH);
         } catch{
             // Ignore
         }
-        await store.close();
     });
 
     it('stores and retrieves chapter chunks', async () => {

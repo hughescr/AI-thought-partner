@@ -2,6 +2,7 @@ import { Document } from '@langchain/core/documents';
 import { MarkdownChapterTextSplitter } from './MarkdownChapterTextSplitter';
 import { ChapterDocumentStore } from './ChapterDocumentStore';
 import { ChapterDocument } from './ChapterDocumentStore';
+import type { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
 import _ from 'lodash';
 import Loki from 'lokijs';
 

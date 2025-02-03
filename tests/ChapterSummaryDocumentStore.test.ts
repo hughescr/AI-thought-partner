@@ -1,10 +1,11 @@
 import { ChapterSummaryDocument, ChapterSummaryDocumentStore } from '../lib/ChapterSummaryDocumentStore';
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { unlink } from 'node:fs/promises';
+import { unlink, access } from 'node:fs/promises';
+import { join as pathJoin } from 'node:path';
+import { tmpdir } from 'node:os';
 import Loki from 'lokijs';
 
-import os from 'node:os';
-const TEST_DB_PATH = path.join(os.tmpdir(), `test-summaries-${Date.now()}-${Math.floor(Math.random() * 1000)}.db`);
+const TEST_DB_PATH = pathJoin(tmpdir(), `test-summaries.db`);
 
 describe('ChapterSummaryDocument', () => {
     it('creates document with chapter metadata', () => {
@@ -24,7 +25,7 @@ describe('ChapterSummaryDocumentStore', () => {
 
     beforeEach(async () => {
         try {
-            await fs.access(TEST_DB_PATH);
+            await access(TEST_DB_PATH);
             throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
         } catch{ /* file does not exist; continue */ }
         db = new Loki(TEST_DB_PATH, {

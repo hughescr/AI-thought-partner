@@ -52,7 +52,6 @@ export class ChapterDocumentStore {
                     if(existingSummary) {
                         // Update existing summary
                         existingSummary.pageContent = summaryResult.pageContent;
-                        this.summaryStore.collection.update(existingSummary);
                         await promisify(this.db.saveDatabase.bind(this.db))();
                     } else {
                         // Add new summary if not present
