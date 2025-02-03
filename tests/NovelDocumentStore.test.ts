@@ -89,6 +89,14 @@ Chapter one content.
         expect(chapter.metadata.novelID).toBe(providedID);
     });
 });
+afterAll(async () => {
+    try {
+        await fs.unlink('chapters_test.db');
+    } catch { /* ignore error */ }
+    try {
+        await fs.unlink('test-chunks.db');
+    } catch { /* ignore error */ }
+});
 
 describe('computeNovelID', () => {
     it('computes a consistent novelID', () => {
