@@ -4,6 +4,7 @@ import { ChapterDocument } from '../lib/ChapterDocumentStore';
 import Loki from 'lokijs';
 import fs from 'fs/promises';
 import path from 'path';
+import _ from 'lodash';
 
 // Fake ChapterDocumentStore to collect chapters added.
 class FakeChapterDocumentStore {
@@ -25,7 +26,7 @@ describe('NovelDocumentStore', () => {
         } catch{ /* ignore error */ }
         fakeChapterStore = new FakeChapterDocumentStore();
         // Construct novelStore with a given file path and the fake chapter store.
-        novelStore = new NovelDocumentStore(TEST_DB_PATH, fakeChapterStore as any);
+        novelStore = new NovelDocumentStore(TEST_DB_PATH, fakeChapterStore as unknown as ChapterDocumentStore);
     });
 
     afterEach(async () => {
@@ -52,7 +53,7 @@ Content of chapter two.
         expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
         // Verify that chapters were added and numbered correctly.
         expect(fakeChapterStore.chapters.length).toBeGreaterThan(0);
-        fakeChapterStore.chapters.forEach((chapter, index) => {
+        _.forEach(fakeChapterStore.chapters, (chapter, index) => {
             expect(chapter.metadata.chapter).toBe(index + 1);
             expect(chapter.metadata.novelID).toBe(computedID);
         });
