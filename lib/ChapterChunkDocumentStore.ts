@@ -48,8 +48,8 @@ export class ChapterChunkDocumentStore {
                     }
                 }));
             });
-        } catch (error) {
-            if (error instanceof Error && error.message.includes('unique')) {
+        } catch(error) {
+            if(error instanceof Error && error.message.includes('unique')) {
                 throw new Error('Duplicate key for properties metadata.chapter, metadata.sequence');
             }
             throw error;
