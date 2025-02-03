@@ -22,16 +22,22 @@ describe('ChapterDocument', () => {
 });
 
 describe('ChapterDocumentStore', () => {
-    let summaryGenerator: ChapterSummaryGenerator;
+    let summaryGenerator: ChapterDocumentStore;
+    let db: Loki;
     beforeEach(async () => {
-        // For most tests, use a lambda that returns a constant summary as an object.
         summaryGenerator = new ChapterSummaryGenerator({
             llm: RunnableLambda.from(_.constant('Concise generated summary')),
             targetSummarySize: 100
         });
         try {
             await unlink(TEST_DB_PATH);
-        } catch{ /* ignore error */ }
+        } catch { /* ignore error */ }
+        db = new Loki(TEST_DB_PATH, {
+            adapter: new Loki.LokiFsAdapter(),
+            autoload: true,
+            autosave: true,
+            autosaveInterval: 5000,
+        });
     });
 
     afterEach(async () => {
