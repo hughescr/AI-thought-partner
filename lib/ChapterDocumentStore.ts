@@ -54,11 +54,11 @@ export class ChapterDocumentStore {
                         );
                         const genEnd = Date.now();
                         console.log(`[AUTO-UPDATE] Summary generation completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${genEnd - genStart}ms)`);
-                        
+
                         console.log(`[AUTO-UPDATE] Retrieving existing summary for chapter ${doc.metadata.chapter}`);
                         const existingSummary = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
-                        
-                        if (existingSummary) {
+
+                        if(existingSummary) {
                             console.log(`[AUTO-UPDATE] Found existing summary for chapter ${doc.metadata.chapter}. Updating it.`);
                             existingSummary.pageContent = summaryResult.pageContent;
                             const saveStart = Date.now();
@@ -75,7 +75,7 @@ export class ChapterDocumentStore {
                             console.log(`[AUTO-UPDATE] Summary addition completed for chapter ${doc.metadata.chapter} at ${new Date().toISOString()} (elapsed: ${addEnd - addStart}ms)`);
                         }
                         console.log(`[AUTO-UPDATE] Async summary update COMPLETE for chapter ${doc.metadata.chapter}`);
-                    } catch (error) {
+                    } catch(error) {
                         console.error(`[AUTO-UPDATE] Error during async summary update for chapter ${doc.metadata.chapter}:`, error);
                     }
                 })();

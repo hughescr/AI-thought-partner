@@ -192,6 +192,6 @@ describe('ChapterDocumentStore', () => {
         // Verify that the doc now has an own property descriptor for pageContent with a setter
         const descriptor = Object.getOwnPropertyDescriptor(doc, 'pageContent');
         expect(descriptor).toBeDefined();
-        expect(typeof descriptor.set).toBe('function');
+        expect(typeof descriptor?.set).toBe('function');
     });
 });
