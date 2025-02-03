@@ -36,8 +36,8 @@ export class ChapterChunkDocumentStore {
     }
 
     async addChunksForChapter(chapter: number, content: string): Promise<void> {
-        if (this.collection.findOne({ "metadata.chapter": chapter })) {
-            throw new Error("Duplicate key for properties metadata.chapter, metadata.sequence")
+        if(this.collection.findOne({ 'metadata.chapter': chapter })) {
+            throw new Error('Duplicate key for properties metadata.chapter, metadata.sequence');
         }
         const chunks = await this.textSplitter.splitText(content);
 
