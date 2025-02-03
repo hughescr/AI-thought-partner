@@ -55,11 +55,11 @@ Content of chapter two.
         const computedID = computeNovelID('John Doe', 'Test Novel');
         expect(novel.metadata.novelID).toBe(computedID);
         // Verify the novel was inserted into the novels collection.
-        const coll = (novelStore as any).db.getCollection('novels');
+        const coll = (novelStore as unknown as { db: Loki }).db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
         // Verify that chapters were added and numbered correctly.
         // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
-        const chaptersAdded = chapterStore.collection.find();
+        const chaptersAdded = (chapterStore as unknown as { collection: Loki.Collection }).collection.find();
         expect(chaptersAdded.length).toBeGreaterThan(0);
         _.forEach(chaptersAdded, (chapter, index) => {
             expect(chapter.metadata.chapter).toBe(index + 1);
@@ -81,7 +81,7 @@ Chapter one content.
         const coll = (novelStore as any).db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': providedID })).toBeDefined();
         // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
-        const chaptersAdded = chapterStore.collection.find();
+        const chaptersAdded = (chapterStore as unknown as { collection: Loki.Collection }).collection.find();
         expect(chaptersAdded.length).toBe(1);
         const chapter = chaptersAdded[0];
         expect(chapter.metadata.chapter).toBe(1);
