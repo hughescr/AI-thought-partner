@@ -5,6 +5,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import _ from 'lodash';
 
+
 class FakeChapterDocumentStore extends ChapterDocumentStore {
     public chapters: ChapterDocument[] = [];
     constructor() {
@@ -15,6 +16,7 @@ class FakeChapterDocumentStore extends ChapterDocumentStore {
         }) } as any;
         super(dummyDb, dummySummaryGenerator);
     }
+
     async addChapter(chapterDoc: ChapterDocument): Promise<void> {
         this.chapters.push(chapterDoc);
     }
@@ -55,7 +57,7 @@ Content of chapter two.
         const computedID = computeNovelID('John Doe', 'Test Novel');
         expect(novel.metadata.novelID).toBe(computedID);
         // Verify the novel was inserted into the novels collection.
-        const coll = novelStore['db'].getCollection('novels');
+        const coll = novelStore.db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
         // Verify that chapters were added and numbered correctly.
         expect(fakeChapterStore.chapters.length).toBeGreaterThan(0);
@@ -76,7 +78,7 @@ Chapter one content.
         });
         await novelStore.addNovel(novel);
         expect(novel.metadata.novelID).toBe(providedID);
-        const coll = novelStore['db'].getCollection('novels');
+        const coll = novelStore.db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': providedID })).toBeDefined();
         expect(fakeChapterStore.chapters.length).toBe(1);
         const chapter = fakeChapterStore.chapters[0];
