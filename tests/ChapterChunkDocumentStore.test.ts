@@ -2,11 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import Loki from 'lokijs';
 import { ChapterChunkDocumentStore } from '../lib/ChapterChunkDocumentStore';
 import { unlink, access } from 'node:fs/promises';
-import { join as pathJoin } from 'node:path';
-import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { dirname, join as pathJoin } from 'node:path';
 import _ from 'lodash';
 
-const TEST_DB_PATH = pathJoin(tmpdir(), `test-chunks.db`);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const TEST_DB_PATH = pathJoin(__dirname, 'test-chunks.db');
 
 describe('ChapterChunkDocumentStore', () => {
     let db: Loki;

@@ -1,11 +1,14 @@
 import { ChapterSummaryDocument, ChapterSummaryDocumentStore } from '../lib/ChapterSummaryDocumentStore';
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { unlink, access } from 'node:fs/promises';
-import { join as pathJoin } from 'node:path';
-import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { dirname, join as pathJoin } from 'node:path';
 import Loki from 'lokijs';
 
-const TEST_DB_PATH = pathJoin(tmpdir(), `test-summaries.db`);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const TEST_DB_PATH = pathJoin(__dirname, 'test-summaries.db');
 
 describe('ChapterSummaryDocument', () => {
     it('creates document with chapter metadata', () => {

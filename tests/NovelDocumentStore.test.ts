@@ -2,15 +2,18 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { NovelDocumentStore, NovelDocument, computeNovelID } from '../lib/NovelDocumentStore';
 import { ChapterDocumentStore } from '../lib/ChapterDocumentStore';
 import { unlink, access } from 'node:fs/promises';
-import { join as pathJoin } from 'node:path';
-import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { dirname, join as pathJoin } from 'node:path';
 import _ from 'lodash';
 
 import { RunnableLambda } from '@langchain/core/runnables';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import Loki from 'lokijs';
 
-const TEST_DB_PATH = pathJoin(tmpdir(), `test-novels.db`);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const TEST_DB_PATH = pathJoin(__dirname, 'test-novels.db');
 
 describe('NovelDocumentStore', () => {
     let novelStore: NovelDocumentStore;
