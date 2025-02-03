@@ -54,6 +54,10 @@ export class NovelDocumentStore {
 
     // Add a novel document and split it into chapters.
     async addNovel(novelDoc: NovelDocument): Promise<void> {
+        // Ensure novelID is set (compute reproducibly if missing)
+        if (!novelDoc.metadata.novelID) {
+            novelDoc.metadata.novelID = computeNovelID(novelDoc.metadata.author, novelDoc.metadata.title);
+        }
         this.novelsCollection.insert(novelDoc);
         await new Promise<void>((resolve, reject) => {
             this.db.saveDatabase(err => (err ? reject(err) : resolve()));
