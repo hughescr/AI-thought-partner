@@ -55,7 +55,7 @@ export class NovelDocumentStore {
     // Add a novel document and split it into chapters.
     async addNovel(novelDoc: NovelDocument): Promise<void> {
         // Ensure novelID is set (compute reproducibly if missing)
-        if (!novelDoc.metadata.novelID) {
+        if(!novelDoc.metadata.novelID) {
             novelDoc.metadata.novelID = computeNovelID(novelDoc.metadata.author, novelDoc.metadata.title);
         }
         this.novelsCollection.insert(novelDoc);
@@ -66,7 +66,7 @@ export class NovelDocumentStore {
         const chapters = await this.chapterSplitter.splitDocuments([novelDoc]);
         // For each chapter, set metadata.novelID and a chapter number.
         for(let i = 0; i < chapters.length; i++) {
-            if (!chapters[i].metadata) {
+            if(!chapters[i].metadata) {
                 chapters[i].metadata = {};
             }
             chapters[i].metadata.chapter = i + 1;
