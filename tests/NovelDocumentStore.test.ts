@@ -5,7 +5,6 @@ import fs from 'fs/promises';
 import path from 'path';
 import _ from 'lodash';
 
-
 import { RunnableLambda } from '@langchain/core/runnables';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import Loki from 'lokijs';
@@ -60,7 +59,7 @@ Content of chapter two.
         const coll = novelStore.db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
         // Verify that chapters were added and numbered correctly.
-        const chaptersAdded = chapterStore['collection'].find();
+        const chaptersAdded = chapterStore.collection.find();
         expect(chaptersAdded.length).toBeGreaterThan(0);
         chaptersAdded.forEach((chapter, index) => {
             expect(chapter.metadata.chapter).toBe(index + 1);
@@ -81,7 +80,7 @@ Chapter one content.
         expect(novel.metadata.novelID).toBe(providedID);
         const coll = novelStore.db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': providedID })).toBeDefined();
-        const chaptersAdded = chapterStore['collection'].find();
+        const chaptersAdded = chapterStore.collection.find();
         expect(chaptersAdded.length).toBe(1);
         const chapter = chaptersAdded[0];
         expect(chapter.metadata.chapter).toBe(1);
