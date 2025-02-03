@@ -38,15 +38,22 @@ export class ChapterChunkDocumentStore {
     async addChunksForChapter(chapter: number, content: string): Promise<void> {
         const chunks = await this.textSplitter.splitText(content);
 
-        _.forEach(chunks, (chunkContent, sequence) => {
-            this.collection.insert(new ChapterChunkDocument({
-                pageContent: chunkContent,
-                metadata: {
-                    chapter,
-                    sequence: sequence + 1 // Start sequences at 1
-                }
-            }));
-        });
+        try {
+            _.forEach(chunks, (chunkContent, sequence) => {
+                this.collection.insert(new ChapterChunkDocument({
+                    pageContent: chunkContent,
+                    metadata: {
+                        chapter,
+                        sequence: sequence + 1 // Start sequences at 1
+                    }
+                }));
+            });
+        } catch (error) {
+            if (error instanceof Error && error.message.includes('unique')) {
+                throw new Error('Duplicate key for properties metadata.chapter, metadata.sequence');
+            }
+            throw error;
+        }
 
         await promisify(this.db.saveDatabase.bind(this.db))();
     }
