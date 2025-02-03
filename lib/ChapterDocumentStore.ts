@@ -5,8 +5,8 @@ import { promisify } from 'node:util';
 import { ChapterSummaryDocumentStore, ChapterSummaryDocument } from './ChapterSummaryDocumentStore';
 import { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
 
-export class ChapterDocument extends Document<{ chapter: number }> {
-    constructor(fields: { pageContent: string, metadata: { chapter: number } }) {
+export class ChapterDocument extends Document<{ novelID: string, chapter: number }> {
+    constructor(fields: { pageContent: string, metadata: { novelID: string, chapter: number } }) {
         super(fields);
     }
 }
@@ -18,27 +18,18 @@ export class ChapterDocumentStore {
     private summaryGenerator: ChapterSummaryGenerator;
     private loadPromise: Promise<void>;
 
-    constructor(filePath: string, summaryGenerator: ChapterSummaryGenerator) {
+    constructor(db: Loki, summaryGenerator: ChapterSummaryGenerator) {
         this.summaryGenerator = summaryGenerator;
-        this.loadPromise = new Promise((resolve) => {
-            this.db = new Loki(filePath, {
-                adapter: new Loki.LokiFsAdapter(),
-                autoload: true,
-                autoloadCallback: () => {
-                    this.collection =
-                        this.db.getCollection('chapters') ||
-                        this.db.addCollection('chapters', {
-                            unique: ['metadata.chapter'],
-                            indices: ['metadata.chapter']
-                        });
-                    // Pass the same Loki instance to the summary store.
-                    this.summaryStore = new ChapterSummaryDocumentStore(this.db);
-                    resolve();
-                },
-                autosave: true,
-                autosaveInterval: 5000
+        this.db = db;
+        // Create (or get) the chapters collection with unique compound index on novelID and chapter.
+        this.collection =
+            this.db.getCollection('chapters') ||
+            this.db.addCollection('chapters', {
+                unique: ['metadata.novelID', 'metadata.chapter'],
+                indices: ['metadata.novelID', 'metadata.chapter']
             });
-        });
+        // Pass the same db instance to the summary store.
+        this.summaryStore = new ChapterSummaryDocumentStore(this.db);
     }
 
     private attachAutoUpdate(doc: ChapterDocument): ChapterDocument {
@@ -79,9 +70,8 @@ export class ChapterDocumentStore {
     }
 
     async addChapter(doc: ChapterDocument): Promise<void> {
-        await this.loadPromise;
-        if(!doc.metadata || !_.isNumber(doc.metadata.chapter)) {
-            throw new Error('chapter metadata is required');
+        if(!doc.metadata || !_.isNumber(doc.metadata.chapter) || !doc.metadata.novelID) {
+            throw new Error('chapter metadata with novelID is required');
         }
         this.collection.insert(doc);
         await promisify(this.db.saveDatabase.bind(this.db))();
