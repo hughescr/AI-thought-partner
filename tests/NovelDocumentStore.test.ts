@@ -55,7 +55,7 @@ Content of chapter two.
         const computedID = computeNovelID('John Doe', 'Test Novel');
         expect(novel.metadata.novelID).toBe(computedID);
         // Verify the novel was inserted into the novels collection.
-        const coll = novelStore.db.getCollection('novels');
+        const coll = (novelStore as any).db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
         // Verify that chapters were added and numbered correctly.
         // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
@@ -78,7 +78,7 @@ Chapter one content.
         });
         await novelStore.addNovel(novel);
         expect(novel.metadata.novelID).toBe(providedID);
-        const coll = novelStore.db.getCollection('novels');
+        const coll = (novelStore as any).db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': providedID })).toBeDefined();
         // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
         const chaptersAdded = chapterStore.collection.find();

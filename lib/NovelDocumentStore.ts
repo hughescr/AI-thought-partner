@@ -29,7 +29,7 @@ export function computeNovelID(author: string, title: string): string {
 
 // NovelDocumentStore: stores novels and auto-splits them into chapters.
 export class NovelDocumentStore {
-    public db: Loki;
+    private db: Loki;
     private novelsCollection: Loki.Collection;
     private chapterStore: ChapterDocumentStore;
     private chapterSplitter: MarkdownChapterTextSplitter;
