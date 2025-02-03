@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { NovelDocumentStore, NovelDocument, computeNovelID } from '../lib/NovelDocumentStore';
-import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
+import { ChapterDocumentStore } from '../lib/ChapterDocumentStore';
 import fs from 'fs/promises';
 import path from 'path';
 import _ from 'lodash';
@@ -14,7 +14,6 @@ let chapterStore: ChapterDocumentStore;
 const TEST_DB_PATH = path.join(import.meta.dir, 'test-novels.db');
 
 describe('NovelDocumentStore', () => {
-    let fakeChapterStore: FakeChapterDocumentStore;
     let novelStore: NovelDocumentStore;
 
     beforeEach(async () => {
@@ -28,7 +27,7 @@ describe('NovelDocumentStore', () => {
             autosaveInterval: 5000,
         });
         const summaryGenerator = new ChapterSummaryGenerator({
-            llm: RunnableLambda.from(() => 'Concise generated summary'),
+            llm: RunnableLambda.from(_.constant('Concise generated summary')),
             targetSummarySize: 100,
         });
         chapterStore = new ChapterDocumentStore(chaptersDb, summaryGenerator);
@@ -59,9 +58,10 @@ Content of chapter two.
         const coll = novelStore.db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
         // Verify that chapters were added and numbered correctly.
+        // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
         const chaptersAdded = chapterStore.collection.find();
         expect(chaptersAdded.length).toBeGreaterThan(0);
-        chaptersAdded.forEach((chapter, index) => {
+        _.forEach(chaptersAdded, (chapter, index) => {
             expect(chapter.metadata.chapter).toBe(index + 1);
             expect(chapter.metadata.novelID).toBe(computedID);
         });
@@ -80,6 +80,7 @@ Chapter one content.
         expect(novel.metadata.novelID).toBe(providedID);
         const coll = novelStore.db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': providedID })).toBeDefined();
+        // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
         const chaptersAdded = chapterStore.collection.find();
         expect(chaptersAdded.length).toBe(1);
         const chapter = chaptersAdded[0];
