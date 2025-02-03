@@ -31,7 +31,7 @@ describe('ChapterDocumentStore', () => {
         });
         try {
             await unlink(TEST_DB_PATH);
-        } catch { /* ignore error */ }
+        } catch{ /* ignore error */ }
         db = new Loki(TEST_DB_PATH, {
             adapter: new Loki.LokiFsAdapter(),
             autoload: true,
