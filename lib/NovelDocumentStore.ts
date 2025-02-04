@@ -6,9 +6,9 @@ import type { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
 import _ from 'lodash';
 import Loki from 'lokijs';
 
-import { VectorStore } from "@langchain/core/vectorstores";
+import { VectorStore } from '@langchain/core/vectorstores';
 import { FaissStoreWithMMR } from './FAISSStoreWithMMR';
-import type { Embeddings } from "@langchain/core/embeddings";
+import type { Embeddings } from '@langchain/core/embeddings';
 
 // NovelDocument: represents the complete novel in Markdown.
 export class NovelDocument extends Document<{
@@ -102,8 +102,8 @@ export class NovelDocumentStore extends VectorStore {
     }
 
     async addDocuments(documents: Document[]): Promise<void> {
-        for (const doc of documents) {
-            if (!doc.metadata || !doc.metadata.novelID || !doc.metadata.title || !doc.metadata.author) {
+        for(const doc of documents) {
+            if(!doc.metadata || !doc.metadata.novelID || !doc.metadata.title || !doc.metadata.author) {
                 throw new Error('Document missing required novel metadata');
             }
             await this.addNovel(doc as NovelDocument);
@@ -118,12 +118,12 @@ export class NovelDocumentStore extends VectorStore {
         const faissResults = await this.faissStore.similaritySearchVectorWithScore(query, options);
         const seenChapters = new Set<number>();
         const results: [Document, number][] = [];
-        for (const [doc, score] of faissResults) {
-            if (doc.metadata && doc.metadata.chapter) {
+        for(const [doc, score] of faissResults) {
+            if(doc.metadata && doc.metadata.chapter) {
                 const chapNum = doc.metadata.chapter;
-                if (!seenChapters.has(chapNum)) {
+                if(!seenChapters.has(chapNum)) {
                     const chapterDoc = await this.chapterStore.getChapter(chapNum);
-                    if (chapterDoc) {
+                    if(chapterDoc) {
                         results.push([chapterDoc, score]);
                         seenChapters.add(chapNum);
                         continue;
