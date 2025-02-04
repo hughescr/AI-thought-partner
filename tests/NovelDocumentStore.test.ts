@@ -86,7 +86,7 @@ Chapter one content.
         });
         await novelStore.addNovel(novel);
         expect(novel.metadata.novelID).toBe(providedID);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accessing private collection for verification in tests only.
+
         const coll = (novelStore as unknown as { db: Loki }).db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': providedID })).toBeDefined();
         // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
@@ -160,7 +160,7 @@ Chapter two.
         // Create a dummy vector for each chapter (e.g. an array of 512 ones).
         const dummyVector = Array(512).fill(1);
         const chapters = (chapterStore as unknown as { collection: Loki.Collection }).collection.find();
-        const documents: Document[] = chapters.map((ch: { pageContent: string; metadata: { chapter: number; novelID: string } }) =>
+        const documents: Document[] = chapters.map((ch: { pageContent: string, metadata: { chapter: number, novelID: string } }) =>
             new Document({ pageContent: ch.pageContent, metadata: ch.metadata })
         );
         // Build an array of vectors corresponding to the documents.
