@@ -90,6 +90,66 @@ Chapter one content.
     });
 });
 
+describe('NovelDocumentStore - VectorStore API', () => {
+    it('returns _vectorstoreType as "novel"', () => {
+        expect(novelStore._vectorstoreType()).toBe('novel');
+    });
+
+    it('can add documents via addDocuments (calling addNovel internally)', async () => {
+        const markdownText = `# Chapter 1
+Chapter one content.
+# Chapter 2
+Chapter two content.
+`;
+        const novel = new NovelDocument({
+            pageContent: markdownText,
+            metadata: { novelID: '', title: 'Vector Novel', author: 'Vector Author', genre: 'SciFi' }
+        });
+        await novelStore.addDocuments([novel]);
+        // The novelID should be computed.
+        const computedID = computeNovelID(novel.metadata.author, novel.metadata.title);
+        // Verify the novels collection has the inserted novel.
+        const coll = (novelStore as any).db.getCollection('novels');
+        expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
+        // Verify that chapters have been created.
+        const chapters = (chapterStore as any).collection.find();
+        expect(chapters.length).toBeGreaterThan(1);
+    });
+
+    it('delegates addVectors and similaritySearchVectorWithScore correctly', async () => {
+        // Add a novel so that there are chapters.
+        const markdownText = `# Chapter 1
+Chapter one.
+# Chapter 2
+Chapter two.
+`;
+        const novel = new NovelDocument({
+            pageContent: markdownText,
+            metadata: { novelID: '', title: 'Vector Novel 2', author: 'Vector Author', genre: 'SciFi' }
+        });
+        await novelStore.addNovel(novel);
+        // Create a dummy vector for each chapter (e.g. an array of 512 ones).
+        const dummyVector = Array(512).fill(1);
+        const chapters = (chapterStore as any).collection.find();
+        const documents: Document[] = chapters.map((ch: any) =>
+            new Document({ pageContent: ch.pageContent, metadata: ch.metadata })
+        );
+        // Build an array of vectors corresponding to the documents.
+        const vectors = documents.map(() => dummyVector);
+        const ids = await novelStore.addVectors(vectors, documents);
+        expect(ids.length).toBeGreaterThan(0);
+        
+        // Now search using the dummy vector; expect to get back each chapter only once.
+        const searchResults = await novelStore.similaritySearchVectorWithScore(dummyVector, 10);
+        const seenChapters = new Set();
+        for (const [doc, score] of searchResults) {
+            expect(doc.metadata.chapter).toBeDefined();
+            expect(seenChapters.has(doc.metadata.chapter)).toBe(false);
+            seenChapters.add(doc.metadata.chapter);
+        }
+    });
+});
+
 describe('computeNovelID', () => {
     it('computes a consistent novelID', () => {
         expect(computeNovelID(' John Doe ', ' Test Novel ')).toBe('john_doe_test_novel');
