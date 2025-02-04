@@ -11,6 +11,8 @@ import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { FaissStoreWithMMR } from './FAISSStoreWithMMR';
 import type { Embeddings } from '@langchain/core/embeddings';
 
+import type { MultiBar } from 'cli-progress';
+
 // NovelDocument: represents the complete novel in Markdown.
 export class NovelDocument extends Document<{
     novelID?: string
@@ -36,6 +38,7 @@ export function computeNovelID(author: string, title: string): string {
 // NovelDocumentStore: stores novels and auto-splits them into chapters.
 export class NovelDocumentStore extends VectorStore {
     private db: Loki;
+    private debugBar?: MultiBar;
     private novelsCollection: Loki.Collection;
     private chapterStore: ChapterDocumentStore;
     private chapterSplitter: MarkdownChapterTextSplitter;
@@ -45,24 +48,27 @@ export class NovelDocumentStore extends VectorStore {
     // eslint-disable-next-line lodash/prefer-constant -- Cannot use _.constant here because we need to declare this before calling super()
     public _vectorstoreType() { return 'novel'; }
 
-    constructor(embeddings: Embeddings, dbConfig: { filePath: string, summaryGenerator: ChapterSummaryGenerator }) {
+    constructor(embeddings: Embeddings, dbConfig: { filePath: string, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
         super(embeddings, dbConfig);
+        this.debugBar = dbConfig.debugBar;
         this.db = new Loki(dbConfig.filePath, {
             adapter: new Loki.LokiFsAdapter(),
             autoload: true,
             autosave: true,
-            autosaveInterval: 200,   // autosave every 200ms
+            autosaveInterval: 200,
+            throttledSaves: true,
         });
         this.novelsCollection =
             this.db.getCollection('novels') ||
             this.db.addCollection('novels', {
                 unique: ['metadata.novelID'],
                 indices: ['metadata.novelID'],
+                autoupdate: true,
             });
         // Create our own ChapterDocumentStore using the same Loki instance.
         this.filePath = `${dbConfig.filePath}-FAISS`;
         this.embeddings = embeddings;
-        this.chapterStore = new ChapterDocumentStore(this.db, dbConfig.summaryGenerator);
+        this.chapterStore = new ChapterDocumentStore({ db: this.db, summaryGenerator: dbConfig.summaryGenerator, debugBar: this.debugBar });
         this.chapterSplitter = new MarkdownChapterTextSplitter();
         this.faissStore = FaissStore.load(this.filePath, this.embeddings).catch(() => new FaissStore(this.embeddings, {})) as Promise<FaissStoreWithMMR>;
     }
@@ -79,8 +85,13 @@ export class NovelDocumentStore extends VectorStore {
         });
         // Split the full novel text into chapters via MarkdownChapterTextSplitter.
         const chapters = await this.chapterSplitter.splitDocuments([novelDoc]);
+        const chapterBar = this.debugBar?.create(chapters.length, 0, { msg: 'Chapters' });
+        const faiss = await this.faissStore;
+
         // For each chapter, set metadata.novelID and a chapter number.
         for(let i = 0; i < chapters.length; i++) {
+            const chapterTitle = _.chain(chapters[i].pageContent).split('\n').head().trim().value();
+            chapterBar?.update(i+1, { msg: chapterTitle });
             if(!chapters[i].metadata) {
                 chapters[i].metadata = {};
             }
@@ -93,12 +104,32 @@ export class NovelDocumentStore extends VectorStore {
             await this.chapterStore.addChapter(chapterDoc);
             const summaryDoc = await this.chapterStore.getChapterSummary(i + 1);
             if(summaryDoc) {
-                await (await this.faissStore).addDocuments([summaryDoc]);
+                chapterBar?.update(i + 1, { msg: `Adding summary of ${chapterTitle} to FAISS` });
+                await faiss.addDocuments([summaryDoc]);
             }
+            chapterBar?.update(i + 1, { msg: `Getting chunks of ${chapterTitle}` });
             const chunks = await this.chapterStore.getChapterChunks(i + 1);
+            chapterBar?.update(i + 1, { msg: `Got ${chunks.length} chunks of ${chapterTitle}` });
             if(chunks.length) {
-                await (await this.faissStore).addDocuments(chunks);
+                const chunkBar = this.debugBar?.create(chunks.length, 0, { msg: `Adding chunks of ${chapterTitle} to FAISS` });
+                for(const chunk of chunks) {
+                    chunkBar?.increment();
+                    await faiss.addDocuments([chunk]);
+                }
+                chunkBar?.stop();
+                if(chunkBar) {
+                    this.debugBar?.remove(chunkBar);
+                }
             }
+            chapterBar?.update(i + 1, { msg: `Done with chunks of ${chapterTitle}` });
+            // Only save if something was added to the index.
+            if(faiss._index) {
+                await faiss.save(this.filePath);
+            }
+        }
+        chapterBar?.stop();
+        if(chapterBar) {
+            this.debugBar?.remove(chapterBar);
         }
     }
 

@@ -1,10 +1,12 @@
 import { Document } from '@langchain/core/documents';
 import Loki from 'lokijs';
-import _ from 'lodash';
 import { promisify } from 'node:util';
 import { ChapterSummaryDocumentStore, ChapterSummaryDocument } from './ChapterSummaryDocumentStore';
 import { ChapterChunkDocumentStore, ChapterChunkDocument } from './ChapterChunkDocumentStore';
 import { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
+
+import type { MultiBar } from 'cli-progress';
+import _ from 'lodash';
 
 export class ChapterDocument extends Document<{ novelID: string, chapter: number }> {
     constructor(fields: { pageContent: string, metadata: { novelID: string, chapter: number } }) {
@@ -15,25 +17,28 @@ export class ChapterDocument extends Document<{ novelID: string, chapter: number
 export class ChapterDocumentStore {
     private db!: Loki;
     private collection!: Loki.Collection;
+    private debugBar?: MultiBar;
     private summaryStore!: ChapterSummaryDocumentStore;
     private summaryGenerator: ChapterSummaryGenerator;
     private chapterChunkStore!: ChapterChunkDocumentStore;
     private loadPromise: Promise<void>;
 
-    constructor(db: Loki, summaryGenerator: ChapterSummaryGenerator) {
-        this.summaryGenerator = summaryGenerator;
-        this.db = db;
+    constructor(config: { db: Loki, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
+        this.debugBar = config.debugBar;
+        this.summaryGenerator = config.summaryGenerator;
+        this.db = config.db;
         this.loadPromise = Promise.resolve();
         // Create (or get) the chapters collection with unique compound index on novelID and chapter.
         this.collection =
             this.db.getCollection('chapters') ||
             this.db.addCollection('chapters', {
                 unique: ['metadata.novelID', 'metadata.chapter'],
-                indices: ['metadata.novelID', 'metadata.chapter']
+                indices: ['metadata.novelID', 'metadata.chapter'],
+                autoupdate: true,
             });
         // Pass the same db instance to the summary store.
-        this.summaryStore = new ChapterSummaryDocumentStore(this.db);
-        this.chapterChunkStore = new ChapterChunkDocumentStore(this.db);
+        this.summaryStore = new ChapterSummaryDocumentStore({ db: this.db, debugBar: this.debugBar });
+        this.chapterChunkStore = new ChapterChunkDocumentStore({ db: this.db, debugBar: this.debugBar });
     }
 
     private attachAutoUpdate(doc: ChapterDocument): ChapterDocument {
@@ -65,7 +70,13 @@ export class ChapterDocumentStore {
     }
 
     private async generateAndStoreSummary(doc: ChapterDocument): Promise<void> {
+        const chapterTitle = _.chain(doc.pageContent).split('\n').head()?.trim().trim('#').trim().value();
+        const bar = this.debugBar?.create(1, 0, { msg: `Generating summary for ${chapterTitle}` });
         const summaryDoc = await this.summaryGenerator.generateSummary(doc);
+        bar?.stop();
+        if(bar) {
+            this.debugBar?.remove(bar);
+        }
         summaryDoc.metadata.chapter = doc.metadata.chapter;
         await this.summaryStore.addChapterSummary(summaryDoc as ChapterSummaryDocument);
     }

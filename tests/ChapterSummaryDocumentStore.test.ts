@@ -38,7 +38,7 @@ describe('ChapterSummaryDocumentStore', () => {
             autoload: true,
             autoloadCallback: () => ({}),
         });
-        store = new ChapterSummaryDocumentStore(db);
+        store = new ChapterSummaryDocumentStore({ db });
     });
 
     afterEach(async () => {
@@ -82,7 +82,7 @@ describe('ChapterSummaryDocumentStore', () => {
     });
 
     it('persists data between instances', async () => {
-        const firstStore = new ChapterSummaryDocumentStore(db);
+        const firstStore = new ChapterSummaryDocumentStore({ db });
         const doc = new ChapterSummaryDocument({
             pageContent: 'Lasting content',
             metadata: { chapter: 3 }
@@ -95,7 +95,7 @@ describe('ChapterSummaryDocumentStore', () => {
         await new Promise(resolve => setTimeout(resolve, 200));
 
         // Create new store instance to verify persistence
-        const secondStore = new ChapterSummaryDocumentStore(db);
+        const secondStore = new ChapterSummaryDocumentStore({ db });
         const persistedDoc = await secondStore.getChapterSummary(3);
 
         expect(persistedDoc?.pageContent).toBe('Lasting content');

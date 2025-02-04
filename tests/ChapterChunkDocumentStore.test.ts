@@ -25,7 +25,7 @@ describe('ChapterChunkDocumentStore', () => {
             autosave: true,
             autosaveInterval: 50
         });
-        store = new ChapterChunkDocumentStore(db);
+        store = new ChapterChunkDocumentStore({ db });
     });
 
     afterEach(async () => {

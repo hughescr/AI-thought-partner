@@ -3,6 +3,7 @@ import Loki from 'lokijs';
 import { promisify } from 'node:util';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import _ from 'lodash';
+import type { MultiBar } from 'cli-progress';
 
 export class ChapterChunkDocument extends Document<{ chapter: number, sequence: number }> {
     constructor(fields: {
@@ -14,6 +15,7 @@ export class ChapterChunkDocument extends Document<{ chapter: number, sequence: 
 }
 
 export class ChapterChunkDocumentStore {
+    private debugBar?: MultiBar;
     private db: Loki;
     private collection: Loki.Collection;
     private textSplitter = new RecursiveCharacterTextSplitter({
@@ -22,11 +24,13 @@ export class ChapterChunkDocumentStore {
         keepSeparator: true
     });
 
-    constructor(db: Loki) {
-        this.db = db;
+    constructor(config: { db: Loki, debugBar?: MultiBar }) {
+        this.debugBar = config.debugBar;
+        this.db = config.db;
         this.collection = this.db.getCollection('chapter_chunks') || this.db.addCollection('chapter_chunks', {
             unique: ['metadata.novelID', 'metadata.chapter', 'metadata.sequence'],
-            indices: ['metadata.novelID', 'metadata.chapter', 'metadata.sequence']
+            indices: ['metadata.novelID', 'metadata.chapter', 'metadata.sequence'],
+            autoupdate: true,
         });
     }
 
@@ -40,9 +44,10 @@ export class ChapterChunkDocumentStore {
             throw new Error('Duplicate key for properties metadata.chapter, metadata.sequence');
         }
         const chunks = await this.textSplitter.splitText(content);
-
+        const bar = this.debugBar?.create(chunks.length, 0, { msg: `${_.chain(content).split('\n').head().trim().value()} chunks` });
         try {
             _.forEach(chunks, (chunkContent, sequence) => {
+                bar?.increment();
                 this.collection.insert(new ChapterChunkDocument({
                     pageContent: chunkContent,
                     metadata: {
@@ -57,7 +62,10 @@ export class ChapterChunkDocumentStore {
             }
             throw error;
         }
-
+        bar?.stop();
+        if(bar) {
+            this.debugBar?.remove(bar);
+        }
         // No explicit save call, autosave handles it.
     }
 

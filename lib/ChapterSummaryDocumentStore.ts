@@ -2,6 +2,7 @@ import { Document } from '@langchain/core/documents';
 import Loki from 'lokijs';
 import _ from 'lodash';
 import { promisify } from 'node:util';
+import type { MultiBar } from 'cli-progress';
 
 export class ChapterSummaryDocument extends Document<{ chapter: number }> {
     constructor(fields: { pageContent: string, metadata: { chapter: number } }) {
@@ -11,15 +12,18 @@ export class ChapterSummaryDocument extends Document<{ chapter: number }> {
 
 export class ChapterSummaryDocumentStore {
     private db: Loki;
+    private debugBar?: MultiBar;
     private collection: Loki.Collection;
 
-    constructor(db: Loki) {
-        this.db = db;
+    constructor(config: { db: Loki, debugBar?: MultiBar }) {
+        this.debugBar = config.debugBar;
+        this.db = config.db;
         this.collection =
             this.db.getCollection('summaries') ||
             this.db.addCollection('summaries', {
                 unique: ['metadata.novelID', 'metadata.chapter'],
-                indices: ['metadata.novelID', 'metadata.chapter']
+                indices: ['metadata.novelID', 'metadata.chapter'],
+                autoupdate: true,
             });
     }
 
