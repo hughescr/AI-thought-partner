@@ -125,6 +125,11 @@ describe('NovelDocumentStore - VectorStore API', () => {
         try {
             await unlink(TEST_DB_PATH);
         } catch{ /* ignore error */ }
+        try {
+            await rm(TEST_DB_PATH + '-FAISS', { recursive: true, force: true });
+        } catch{
+            // Ignore errors if the directory does not exist.
+        }
     });
     it('returns _vectorstoreType as "novel"', () => {
         expect(novelStore._vectorstoreType()).toBe('novel');
