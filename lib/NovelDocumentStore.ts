@@ -79,4 +79,9 @@ export class NovelDocumentStore {
             await this.chapterStore.addChapter(chapterDoc);
         }
     }
+
+    // New close method to properly shut down the database connection
+    async close(): Promise<void> {
+        return this.db.close();
+    }
 }
