@@ -39,7 +39,7 @@ export class LlamaCppRerank extends BaseDocumentCompressor {
         // Set up a mutex-like promise that resolves when initialization is complete
         this.initializationPromise = (async () => {
             this.llama = await getLlama();
-            this.model = await this.llama.loadModel({ modelPath: fields.modelPath });
+            this.model = await this.llama.loadModel({ modelPath: fields.modelPath, defaultContextFlashAttention: true });
             this.context = await this.model.createRankingContext();
         })();
     }
