@@ -138,11 +138,11 @@ Chapter two.
         const vectors = documents.map(() => dummyVector);
         const ids = await novelStore.addVectors(vectors, documents);
         expect(ids.length).toBeGreaterThan(0);
-        
+
         // Now search using the dummy vector; expect to get back each chapter only once.
         const searchResults = await novelStore.similaritySearchVectorWithScore(dummyVector, 10);
         const seenChapters = new Set();
-        for (const [doc, score] of searchResults) {
+        for(const [doc, score] of searchResults) {
             expect(doc.metadata.chapter).toBeDefined();
             expect(seenChapters.has(doc.metadata.chapter)).toBe(false);
             seenChapters.add(doc.metadata.chapter);
