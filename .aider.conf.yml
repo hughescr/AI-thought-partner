@@ -240,9 +240,9 @@ auto-commits: false
 ## Specify lint commands to run for different languages, eg: "python: flake8 --select=..." (can be used multiple times)
 #lint-cmd: xxx
 ## Specify multiple values like this:
-# lint-cmd:
-#   - "typescript:bun lint"
-#   - "javascript:bun lint"
+lint-cmd:
+  - "typescript:bun lint"
+  - "javascript:bun lint"
 
 ## Enable/disable automatic linting after changes (default: True)
 #auto-lint: true

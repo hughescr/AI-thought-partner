@@ -11,7 +11,7 @@ import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { FaissStoreWithMMR } from './FAISSStoreWithMMR';
 import type { Embeddings } from '@langchain/core/embeddings';
 
-import type { MultiBar } from 'cli-progress';
+import type { MultiBar, SingleBar } from 'cli-progress';
 
 // NovelDocument: represents the complete novel in Markdown.
 export class NovelDocument extends Document<{
@@ -73,9 +73,28 @@ export class NovelDocumentStore extends VectorStore {
         this.faissStore = FaissStore.load(this.filePath, this.embeddings).catch(() => new FaissStore(this.embeddings, {})) as Promise<FaissStoreWithMMR>;
     }
 
-    // Add a novel document and split it into chapters.
     async addNovel(novelDoc: NovelDocument): Promise<void> {
-        // Ensure novelID is set (compute reproducibly if missing)
+        // Persist the novel document.
+        await this.persistNovel(novelDoc);
+
+        // Split the novel into chapters.
+        const chapters = await this.chapterSplitter.splitDocuments([novelDoc]);
+        const chapterBar = this.debugBar?.create(chapters.length, 0, { msg: 'Chapters' });
+        const faiss = await this.faissStore;
+
+        // Process each chapter using a helper.
+        for(let i = 0; i < chapters.length; i++) {
+            await this.processChapter(chapters[i], i, novelDoc.metadata.novelID!, faiss, chapterBar);
+        }
+
+        chapterBar?.stop();
+        if(chapterBar) {
+            this.debugBar?.remove(chapterBar);
+        }
+    }
+
+    private async persistNovel(novelDoc: NovelDocument): Promise<void> {
+        // Ensure novelID is set (compute reproducibly if missing) and insert the document.
         if(!novelDoc.metadata.novelID) {
             novelDoc.metadata.novelID = computeNovelID(novelDoc.metadata.author, novelDoc.metadata.title);
         }
@@ -83,54 +102,80 @@ export class NovelDocumentStore extends VectorStore {
         await new Promise<void>((resolve, reject) => {
             this.db.saveDatabase(err => (err ? reject(err) : resolve()));
         });
-        // Split the full novel text into chapters via MarkdownChapterTextSplitter.
-        const chapters = await this.chapterSplitter.splitDocuments([novelDoc]);
-        const chapterBar = this.debugBar?.create(chapters.length, 0, { msg: 'Chapters' });
-        const faiss = await this.faissStore;
+    }
 
-        // For each chapter, set metadata.novelID and a chapter number.
-        for(let i = 0; i < chapters.length; i++) {
-            const chapterTitle = _.chain(chapters[i].pageContent).split('\n').head().trim().value();
-            chapterBar?.update(i+1, { msg: chapterTitle });
-            if(!chapters[i].metadata) {
-                chapters[i].metadata = {};
+    private async processChapter(
+        chapter: Document,
+        index: number,
+        novelID: string,
+        faiss: FaissStoreWithMMR,
+        chapterBar: SingleBar
+    ): Promise<void> {
+        const chapterTitle = this.extractChapterTitle(chapter.pageContent);
+        chapterBar?.update(index + 1, { msg: chapterTitle });
+
+        this.updateChapterMetadata(chapter, index + 1, novelID);
+
+        const chapterDoc = new ChapterDocument({
+            pageContent: chapter.pageContent,
+            metadata: { novelID, chapter: index + 1 },
+        });
+        await this.chapterStore.addChapter(chapterDoc);
+
+        await this.processChapterSummary(chapterTitle, index + 1, faiss, chapterBar);
+        await this.processChapterChunks(chapterTitle, index + 1, faiss, chapterBar);
+
+        if(faiss._index) {
+            await faiss.save(this.filePath);
+        }
+    }
+
+    private extractChapterTitle(pageContent: string): string {
+        return _.chain(pageContent).split('\n').head().trim().value();
+    }
+
+    private updateChapterMetadata(chapter: Document, chapterNum: number, novelID: string): void {
+        if(!chapter.metadata) {
+            chapter.metadata = {};
+        }
+        chapter.metadata.chapter = chapterNum;
+        chapter.metadata.novelID = novelID;
+    }
+
+    private async processChapterSummary(
+        chapterTitle: string,
+        chapterNum: number,
+        faiss: FaissStoreWithMMR,
+        chapterBar: SingleBar
+    ): Promise<void> {
+        const summaryDoc = await this.chapterStore.getChapterSummary(chapterNum);
+        if(summaryDoc) {
+            chapterBar?.update(chapterNum, { msg: `Adding summary of ${chapterTitle} to FAISS` });
+            await faiss.addDocuments([summaryDoc]);
+        }
+    }
+
+    private async processChapterChunks(
+        chapterTitle: string,
+        chapterNum: number,
+        faiss: FaissStoreWithMMR,
+        chapterBar: SingleBar
+    ): Promise<void> {
+        chapterBar?.update(chapterNum, { msg: `Getting chunks of ${chapterTitle}` });
+        const chunks = await this.chapterStore.getChapterChunks(chapterNum);
+        chapterBar?.update(chapterNum, { msg: `Got ${chunks.length} chunks of ${chapterTitle}` });
+        if(chunks.length > 0) {
+            const chunkBar = this.debugBar?.create(chunks.length, 0, { msg: `Adding chunks of ${chapterTitle} to FAISS` });
+            for(const chunk of chunks) {
+                chunkBar?.increment();
+                await faiss.addDocuments([chunk]);
             }
-            chapters[i].metadata.chapter = i + 1;
-            chapters[i].metadata.novelID = novelDoc.metadata.novelID;
-            const chapterDoc = new ChapterDocument({
-                pageContent: chapters[i].pageContent,
-                metadata: { novelID: novelDoc.metadata.novelID, chapter: i + 1 },
-            });
-            await this.chapterStore.addChapter(chapterDoc);
-            const summaryDoc = await this.chapterStore.getChapterSummary(i + 1);
-            if(summaryDoc) {
-                chapterBar?.update(i + 1, { msg: `Adding summary of ${chapterTitle} to FAISS` });
-                await faiss.addDocuments([summaryDoc]);
-            }
-            chapterBar?.update(i + 1, { msg: `Getting chunks of ${chapterTitle}` });
-            const chunks = await this.chapterStore.getChapterChunks(i + 1);
-            chapterBar?.update(i + 1, { msg: `Got ${chunks.length} chunks of ${chapterTitle}` });
-            if(chunks.length) {
-                const chunkBar = this.debugBar?.create(chunks.length, 0, { msg: `Adding chunks of ${chapterTitle} to FAISS` });
-                for(const chunk of chunks) {
-                    chunkBar?.increment();
-                    await faiss.addDocuments([chunk]);
-                }
-                chunkBar?.stop();
-                if(chunkBar) {
-                    this.debugBar?.remove(chunkBar);
-                }
-            }
-            chapterBar?.update(i + 1, { msg: `Done with chunks of ${chapterTitle}` });
-            // Only save if something was added to the index.
-            if(faiss._index) {
-                await faiss.save(this.filePath);
+            chunkBar?.stop();
+            if(chunkBar) {
+                this.debugBar?.remove(chunkBar);
             }
         }
-        chapterBar?.stop();
-        if(chapterBar) {
-            this.debugBar?.remove(chapterBar);
-        }
+        chapterBar?.update(chapterNum, { msg: `Done with chunks of ${chapterTitle}` });
     }
 
     async addDocuments(documents: Document[]): Promise<void> {
