@@ -88,7 +88,7 @@ weak-model: gpt-4o-mini
 
 ## Specify the model to use for editor tasks (default depends on --model)
 editor-model: o3-mini
-reasoning-effort: medium
+reasoning-effort: high
 
 ## Specify the edit format for the editor model (default: depends on editor model)
 # editor-edit-format: editor-diff
