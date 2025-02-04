@@ -33,3 +33,5 @@ const novelStore = new NovelDocumentStore(cachedSnowflakeArctic2Embeddings, { fi
 await novelStore.addNovel(novel);
 
 await novelStore.close();
+
+bars.stop();
