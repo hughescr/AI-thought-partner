@@ -51,7 +51,6 @@ export class ChapterDocumentStore {
                 this.collection.update(doc);
                 promisify(this.db.saveDatabase.bind(this.db))();
                 (async () => {
-                    console.log(`[AUTO-UPDATE SETTER] Chapter ${doc.metadata.chapter}: pageContent changed.`);
                     const summaryResult = await this.summaryGenerator.generateSummary(
                         new Document({ pageContent: newVal, metadata: doc.metadata })
                     );
@@ -63,7 +62,6 @@ export class ChapterDocumentStore {
                         summaryResult.metadata.chapter = doc.metadata.chapter;
                         await this.summaryStore.addChapterSummary(summaryResult as ChapterSummaryDocument);
                     }
-                    console.log(`[AUTO-UPDATE] Async update complete for chapter ${doc.metadata.chapter}`);
                 })();
             },
             configurable: true

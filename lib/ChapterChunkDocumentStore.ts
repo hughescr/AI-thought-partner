@@ -72,5 +72,6 @@ export class ChapterChunkDocumentStore {
 
     async close(): Promise<void> {
         await promisify(this.db.saveDatabase.bind(this.db))();
+        // Do not close the Loki instance here because it's shared.
     }
 }
