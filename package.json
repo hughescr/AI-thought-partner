@@ -9,10 +9,10 @@
   "author": "Craig R. Hughes <craig.git@rungie.com>",
   "license": "Apache-2.0",
   "scripts": {
-    "test": "bun test",
+    "test": "eslint --fix;tsc;bun test",
     "coverage": "bun test && genhtml coverage/lcov.info --output-directory coverage --header-title 'Coverage report' --footer \"$(git id)\" --legend --sort --show-owners all --annotate-script /opt/homebrew/Cellar/lcov/*/share/lcov/support-scripts/gitblame.pm --version-script /opt/homebrew/Cellar/lcov/*/share/lcov/support-scripts/gitversion.pm --ignore-errors version,version --ignore-errors package,package --hierarchical --criteria-script /opt/homebrew/Cellar/lcov/*/share/lcov/support-scripts/criteria.pm --show-navigation --show-proportion --num-spaces 4 --function-coverage --branch-coverage ; open coverage/index.html",
     "package-check": "bunx npm-check -i bun:test",
-    "lint": "sh -c 'tsc; t=$?; eslint --fix && exit $t'",
+    "lint": "eslint --fix;tsc",
     "postversion": "git commit -m \"Bump package version to $npm_package_version\" package.json; git flow release start $npm_package_version; git flow release finish -m $npm_package_version $npm_package_version; git checkout develop; git merge master"
   },
   "devDependencies": {
