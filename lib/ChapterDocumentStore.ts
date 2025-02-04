@@ -49,7 +49,6 @@ export class ChapterDocumentStore {
             set: (newVal) => {
                 currentContent = newVal;
                 this.collection.update(doc);
-                promisify(this.db.saveDatabase.bind(this.db))();
                 (async () => {
                     const summaryResult = await this.summaryGenerator.generateSummary(
                         new Document({ pageContent: newVal, metadata: doc.metadata })
@@ -57,7 +56,7 @@ export class ChapterDocumentStore {
                     const existing = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
                     if(existing) {
                         existing.pageContent = summaryResult.pageContent;
-                        await promisify(this.db.saveDatabase.bind(this.db))();
+                        // Remove explicit save call here.
                     } else {
                         summaryResult.metadata.chapter = doc.metadata.chapter;
                         await this.summaryStore.addChapterSummary(summaryResult as ChapterSummaryDocument);
@@ -83,7 +82,7 @@ export class ChapterDocumentStore {
             throw new Error('Document is already in collection, please use update()');
         }
         this.collection.insert(doc);
-        await promisify(this.db.saveDatabase.bind(this.db))();
+        // No explicit save here—autosave will handle it.
         await this.generateAndStoreSummary(doc);
         this.attachAutoUpdate(doc);
     }

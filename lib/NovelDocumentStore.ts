@@ -39,7 +39,8 @@ export class NovelDocumentStore {
         this.db = new Loki(filePath, {
             adapter: new Loki.LokiFsAdapter(),
             autoload: true,
-            autosave: false,
+            autosave: true,
+            autosaveInterval: 200,   // autosave every 200ms
         });
         this.novelsCollection =
             this.db.getCollection('novels') ||

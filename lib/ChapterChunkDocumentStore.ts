@@ -32,7 +32,7 @@ export class ChapterChunkDocumentStore {
 
     async deleteChapterChapters(chapter: number): Promise<void> {
         this.collection.findAndRemove({ 'metadata.chapter': chapter });
-        await promisify(this.db.saveDatabase.bind(this.db))();
+        // Rely on autosave.
     }
 
     async addChunksForChapter(chapter: number, content: string): Promise<void> {
@@ -58,7 +58,7 @@ export class ChapterChunkDocumentStore {
             throw error;
         }
 
-        await promisify(this.db.saveDatabase.bind(this.db))();
+        // No explicit save call, autosave handles it.
     }
 
     async getChapterChunks(chapter: number): Promise<ChapterChunkDocument[]> {

@@ -32,8 +32,6 @@ export class ChapterSummaryDocumentStore {
             set: (newVal) => {
                 currentContent = newVal;
                 this.collection.update(doc);
-                // Explicitly save immediately and log potential errors
-                promisify(this.db.saveDatabase.bind(this.db))();
             },
             configurable: true
         });
@@ -45,8 +43,7 @@ export class ChapterSummaryDocumentStore {
             throw new Error('chapter metadata is required');
         }
         this.collection.insert(doc);
-        await promisify(this.db.saveDatabase.bind(this.db))();
-        // Attach auto-update hook to the document so property changes get persisted
+        // No explicit save—rely on autosave.
         this.attachAutoUpdate(doc);
     }
 
