@@ -32,8 +32,10 @@ export class ChapterSummaryDocumentStore {
             set: (newVal) => {
                 currentContent = newVal;
                 this.collection.update(doc);
-                // Fire-and-forget save (errors are ignored)
-                promisify(this.db.saveDatabase.bind(this.db))();
+                // Explicitly save immediately and log potential errors
+                promisify(this.db.saveDatabase.bind(this.db))().catch(err => {
+                    console.error(`Error saving summary document:`, err);
+                });
             },
             configurable: true
         });

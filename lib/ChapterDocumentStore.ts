@@ -49,20 +49,21 @@ export class ChapterDocumentStore {
             set: (newVal) => {
                 currentContent = newVal;
                 this.collection.update(doc);
+                promisify(this.db.saveDatabase.bind(this.db))();
                 (async () => {
-                    // First, ensure the updated chapter document is saved safely.
-                    await this.safeSaveDatabase();
+                    console.log(`[AUTO-UPDATE SETTER] Chapter ${doc.metadata.chapter}: pageContent changed.`);
                     const summaryResult = await this.summaryGenerator.generateSummary(
                         new Document({ pageContent: newVal, metadata: doc.metadata })
                     );
-                    const existingSummary = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
-                    if(existingSummary) {
-                        existingSummary.pageContent = summaryResult.pageContent;
-                        await this.safeSaveDatabase();
+                    const existing = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
+                    if(existing) {
+                        existing.pageContent = summaryResult.pageContent;
+                        await promisify(this.db.saveDatabase.bind(this.db))();
                     } else {
                         summaryResult.metadata.chapter = doc.metadata.chapter;
                         await this.summaryStore.addChapterSummary(summaryResult as ChapterSummaryDocument);
                     }
+                    console.log(`[AUTO-UPDATE] Async update complete for chapter ${doc.metadata.chapter}`);
                 })();
             },
             configurable: true
