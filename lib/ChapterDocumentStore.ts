@@ -3,6 +3,7 @@ import Loki from 'lokijs';
 import _ from 'lodash';
 import { promisify } from 'node:util';
 import { ChapterSummaryDocumentStore, ChapterSummaryDocument } from './ChapterSummaryDocumentStore';
+import { ChapterChunkDocumentStore, ChapterChunkDocument } from './ChapterChunkDocumentStore';
 import { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
 
 export class ChapterDocument extends Document<{ novelID: string, chapter: number }> {
@@ -16,6 +17,7 @@ export class ChapterDocumentStore {
     private collection!: Loki.Collection;
     private summaryStore!: ChapterSummaryDocumentStore;
     private summaryGenerator: ChapterSummaryGenerator;
+    private chapterChunkStore!: ChapterChunkDocumentStore;
     private loadPromise: Promise<void>;
 
     constructor(db: Loki, summaryGenerator: ChapterSummaryGenerator) {
@@ -31,6 +33,7 @@ export class ChapterDocumentStore {
             });
         // Pass the same db instance to the summary store.
         this.summaryStore = new ChapterSummaryDocumentStore(this.db);
+        this.chapterChunkStore = new ChapterChunkDocumentStore(this.db);
     }
 
     private attachAutoUpdate(doc: ChapterDocument): ChapterDocument {
@@ -52,6 +55,8 @@ export class ChapterDocumentStore {
                         summaryResult.metadata.chapter = doc.metadata.chapter;
                         await this.summaryStore.addChapterSummary(summaryResult as ChapterSummaryDocument);
                     }
+                    await this.chapterChunkStore.deleteChapterChapters(doc.metadata.chapter);
+                    await this.chapterChunkStore.addChunksForChapter(doc.metadata.chapter, newVal);
                 })();
             },
             configurable: true
@@ -75,6 +80,7 @@ export class ChapterDocumentStore {
         this.collection.insert(doc);
         // No explicit save here—autosave will handle it.
         await this.generateAndStoreSummary(doc);
+        await this.chapterChunkStore.addChunksForChapter(doc.metadata.chapter, doc.pageContent);
         this.attachAutoUpdate(doc);
     }
 
@@ -84,8 +90,12 @@ export class ChapterDocumentStore {
         return result ? this.attachAutoUpdate(result) as ChapterDocument : undefined;
     }
 
-    async getChapterSummary(chapter: number): Promise<Document | undefined> {
+    async getChapterSummary(chapter: number): Promise<ChapterSummaryDocument | undefined> {
         return this.summaryStore.getChapterSummary(chapter);
+    }
+
+    async getChapterChunks(chapter: number): Promise<ChapterChunkDocument[]> {
+        return this.chapterChunkStore.getChapterChunks(chapter);
     }
 
     async close(): Promise<void> {

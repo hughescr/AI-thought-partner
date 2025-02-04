@@ -202,7 +202,7 @@ cache-prompts: true
 #subtree-only: false
 
 ## Enable/disable auto commit of LLM changes (default: True)
-#auto-commits: true
+auto-commits: false
 
 ## Enable/disable commits when repo is found dirty (default: True)
 #dirty-commits: true
@@ -260,7 +260,7 @@ test-cmd: bun test
 # Analytics:
 
 ## Enable/disable analytics for one session (default: False)
-#analytics: false
+analytics: true
 
 ## Specify a file to log analytics events
 #analytics-log: xxx

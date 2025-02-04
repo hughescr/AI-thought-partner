@@ -10,12 +10,13 @@ import { RunnableLambda } from '@langchain/core/runnables';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import Loki from 'lokijs';
 import { Embeddings } from '@langchain/core/embeddings';
+import type { AsyncCaller } from '@langchain/core/utils/async_caller';
 import { Document } from '@langchain/core/documents';
 
 const dummyEmbeddings: Embeddings = {
-    embedQuery: async (query: string | number[] | Document) => _.fill(new Array(512), 0),
-    embedDocuments: async (docs: string[] | Document[]) => docs.map(() => _.fill(new Array(512), 0)),
-    caller: {} as any
+    embedQuery: async (_query: string | number[] | Document) => _.fill(new Array(512), 0),
+    embedDocuments: async (docs: string[] | Document[]) => _.times(docs.length, () => _.fill(new Array(512), 0)),
+    caller: {} as AsyncCaller
 };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -132,7 +133,7 @@ Chapter two content.
 `;
         const novel = new NovelDocument({
             pageContent: markdownText,
-            metadata: { novelID: '', title: 'Vector Novel', author: 'Vector Author', genre: 'SciFi' }
+            metadata: { title: 'Vector Novel', author: 'Vector Author', genre: 'SciFi' }
         });
         await novelStore.addDocuments([novel]);
         // The novelID should be computed.
@@ -141,11 +142,12 @@ Chapter two content.
         const coll = (novelStore as unknown as { db: Loki }).db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
         // Verify that chapters have been created.
+        // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
         const chapters = (chapterStore as unknown as { collection: Loki.Collection }).collection.find();
         expect(chapters.length).toBeGreaterThan(1);
     });
 
-    it('delegates addVectors and similaritySearchVectorWithScore correctly', async () => {
+    it('delegates similaritySearchVectorWithScore correctly', async () => {
         // Add a novel so that there are chapters.
         const markdownText = `# Chapter 1
 Chapter one.
@@ -154,19 +156,11 @@ Chapter two.
 `;
         const novel = new NovelDocument({
             pageContent: markdownText,
-            metadata: { novelID: '', title: 'Vector Novel 2', author: 'Vector Author', genre: 'SciFi' }
+            metadata: { title: 'Vector Novel 2', author: 'Vector Author', genre: 'SciFi' }
         });
         await novelStore.addNovel(novel);
         // Create a dummy vector for each chapter (e.g. an array of 512 ones).
-        const dummyVector = Array(512).fill(1);
-        const chapters = (chapterStore as unknown as { collection: Loki.Collection }).collection.find();
-        const documents: Document[] = chapters.map((ch: { pageContent: string, metadata: { chapter: number, novelID: string } }) =>
-            new Document({ pageContent: ch.pageContent, metadata: ch.metadata })
-        );
-        // Build an array of vectors corresponding to the documents.
-        const vectors = documents.map(() => dummyVector);
-        const ids = await novelStore.addVectors(vectors, documents);
-        expect(ids.length).toBeGreaterThan(0);
+        const dummyVector = _.fill(Array(512), 1);
 
         // Now search using the dummy vector; expect to get back each chapter only once.
         const searchResults = await novelStore.similaritySearchVectorWithScore(dummyVector, 10);

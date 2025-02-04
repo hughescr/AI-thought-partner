@@ -7,12 +7,13 @@ import _ from 'lodash';
 import Loki from 'lokijs';
 
 import { VectorStore } from '@langchain/core/vectorstores';
+import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { FaissStoreWithMMR } from './FAISSStoreWithMMR';
 import type { Embeddings } from '@langchain/core/embeddings';
 
 // NovelDocument: represents the complete novel in Markdown.
 export class NovelDocument extends Document<{
-    novelID: string
+    novelID?: string
     title: string
     author: string
     genre?: string
@@ -20,7 +21,7 @@ export class NovelDocument extends Document<{
 }> {
     constructor(fields: {
         pageContent: string
-        metadata: { novelID: string, title: string, author: string, genre?: string, filepath?: string }
+        metadata: { novelID?: string, title: string, author: string, genre?: string, filepath?: string }
     }) {
         super(fields);
     }
@@ -38,10 +39,15 @@ export class NovelDocumentStore extends VectorStore {
     private novelsCollection: Loki.Collection;
     private chapterStore: ChapterDocumentStore;
     private chapterSplitter: MarkdownChapterTextSplitter;
+    private filePath: string;
+    public embeddings: Embeddings;
     private faissStore!: FaissStoreWithMMR;
+    // eslint-disable-next-line lodash/prefer-constant -- Cannot use _.constant here because we need to declare this before calling super()
+    public _vectorstoreType() { return 'novel'; }
 
-    constructor(filePath: string, summaryGenerator: ChapterSummaryGenerator) {
-        this.db = new Loki(filePath, {
+    constructor(embeddings: Embeddings, dbConfig: { filePath: string, summaryGenerator: ChapterSummaryGenerator }) {
+        super(embeddings, dbConfig);
+        this.db = new Loki(dbConfig.filePath, {
             adapter: new Loki.LokiFsAdapter(),
             autoload: true,
             autosave: true,
@@ -54,20 +60,10 @@ export class NovelDocumentStore extends VectorStore {
                 indices: ['metadata.novelID'],
             });
         // Create our own ChapterDocumentStore using the same Loki instance.
-        this.chapterStore = new ChapterDocumentStore(this.db, summaryGenerator);
+        this.filePath = `${dbConfig.filePath}-FAISS`;
+        this.embeddings = embeddings;
+        this.chapterStore = new ChapterDocumentStore(this.db, dbConfig.summaryGenerator);
         this.chapterSplitter = new MarkdownChapterTextSplitter();
-    }
-
-    static async create(filePath: string, summaryGenerator: ChapterSummaryGenerator, embeddings: Embeddings): Promise<NovelDocumentStore> {
-        const store = new NovelDocumentStore(filePath, summaryGenerator);
-        try {
-            store.faissStore = await FaissStoreWithMMR.load(filePath + '-FAISS', embeddings);
-        } catch(e) {
-            // If the FAISS store does not exist on disk, create a new empty one.
-            store.faissStore = new FaissStoreWithMMR(embeddings);
-            await store.faissStore.save();  // Save initial empty state.
-        }
-        return store;
     }
 
     // Add a novel document and split it into chapters.
@@ -94,51 +90,70 @@ export class NovelDocumentStore extends VectorStore {
                 metadata: { novelID: novelDoc.metadata.novelID, chapter: i + 1 },
             });
             await this.chapterStore.addChapter(chapterDoc);
+            const summaryDoc = await this.chapterStore.getChapterSummary(i + 1);
+            if(summaryDoc) {
+                await this.initFaissStore();
+                await this.faissStore.addDocuments([summaryDoc]);
+            }
+            const chunks = await this.chapterStore.getChapterChunks(i + 1);
+            if(chunks.length) {
+                await this.initFaissStore();
+                await this.faissStore.addDocuments(chunks);
+            }
         }
-    }
-
-    get _vectorstoreType(): string {
-        return 'novel';
     }
 
     async addDocuments(documents: Document[]): Promise<void> {
         for(const doc of documents) {
-            if(!doc.metadata || !doc.metadata.novelID || !doc.metadata.title || !doc.metadata.author) {
+            if(!doc.metadata || !doc.metadata.title || !doc.metadata.author) {
                 throw new Error('Document missing required novel metadata');
             }
             await this.addNovel(doc as NovelDocument);
         }
     }
 
-    async addVectors(vectors: number[][], documents: Document[]): Promise<void> {
-        return this.faissStore.addVectors(vectors, documents);
+    private async initFaissStore(): Promise<void> {
+        try {
+            if(!this.faissStore) {
+                this.faissStore = await FaissStoreWithMMR.load(this.filePath, this.embeddings) as FaissStoreWithMMR;
+            }
+        } catch{
+            this.faissStore = new FaissStore(this.embeddings, {}) as FaissStoreWithMMR;
+        }
     }
 
-    async similaritySearchVectorWithScore(query: string, options: any): Promise<[Document, number][]> {
-        const faissResults = await this.faissStore.similaritySearchVectorWithScore(query, options);
+    async addVectors(_vectors: number[][], _documents: Document[]): Promise<string[]> {
+        throw new Error('Method not implemented. You can add documents via addDocuments or addNovel.');
+    }
+
+    async similaritySearchVectorWithScore(query: number[], k: number): Promise<[Document, number][]> {
+        await this.initFaissStore();
+        const faissResults = await this.faissStore.similaritySearchVectorWithScore(query, k);
         const seenChapters = new Set<number>();
         const results: [Document, number][] = [];
         for(const [doc, score] of faissResults) {
-            if(doc.metadata && doc.metadata.chapter) {
+            if(doc.metadata?.chapter) {
                 const chapNum = doc.metadata.chapter;
                 if(!seenChapters.has(chapNum)) {
                     const chapterDoc = await this.chapterStore.getChapter(chapNum);
                     if(chapterDoc) {
                         results.push([chapterDoc, score]);
                         seenChapters.add(chapNum);
-                        continue;
                     }
                 }
+                continue;
             }
-            // Fallback: if no chapter metadata is present.
-            results.push([doc, score]);
+            // If no chapter metadata is present.
+            throw new Error(`Chapter metadata missing in document: ${JSON.stringify(doc)}`);
         }
         return results;
     }
 
     // New close method to properly shut down the database connection
     async close(): Promise<void> {
-        await this.faissStore.save();
+        if(this.faissStore) {
+            await this.faissStore.save(this.filePath);
+        }
         return this.db.close();
     }
 }
