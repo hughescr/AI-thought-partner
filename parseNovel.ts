@@ -11,14 +11,6 @@ import { TextLoader } from 'langchain/document_loaders/fs/text';
 import _ from 'lodash';
 import { MultiBar, Presets as cliProgressPresets } from 'cli-progress';
 
-_.mixin({
-    awaitAll: function <T>(promiseArray: Promise<T>[]) {
-        return Promise.all(promiseArray);
-    },
-},
-{ chain: true } // Enable chaining for this mixin
-);
-
 const book = 'Christmas Town query version';
 // const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: true });
 const loader = new TextLoader(`novels/${book}.md`);
