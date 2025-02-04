@@ -185,6 +185,11 @@ Chapter two.
             seenChapters.add(doc.metadata.chapter);
         }
     });
+    it('throws error when calling addVectors', async () => {
+        await expect(novelStore.addVectors([], [])).rejects.toThrow(
+            'Method not implemented. You can add documents via addDocuments or addNovel.'
+        );
+    });
 });
 
 describe('computeNovelID', () => {
