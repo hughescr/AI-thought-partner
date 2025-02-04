@@ -1,5 +1,5 @@
 import {
-    cachedJinaV2BaseENEmbeddings as embeddings,
+    cachedSnowflakeArctic2Embeddings as embeddings,
     llama33_70bLLM as LLM
 } from './lib/LLMs.ts';
 import { TextLoader } from 'langchain/document_loaders/fs/text';

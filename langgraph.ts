@@ -1,8 +1,8 @@
 import {
     cachedSnowflakeArctic2Embeddings as embeddings,
-    phi35_4bLLM as fastLLM,
+    phi4_14bLLM as fastLLM,
     llama33bedrock_70bLLM as slowLLM,
-    jinaV1TinyENReranker as fastReranker,
+    bgeV2M3Reranker as fastReranker,
     bgeV2M3Reranker as goodReranker } from './lib/LLMs';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 // import { HumanMessage, BaseMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
@@ -161,9 +161,7 @@ async function transformQuery(state: QuestionAnswerAnnotationType) {
 
     // Prompt
     const oldTemp = fastLLM.temperature;
-    const oldCtx = fastLLM.numCtx;
     fastLLM.temperature = 2;
-    fastLLM.numCtx = 4096;
     const betterQuery = await transformQueryChain.invoke({
         title: state.novelMetadata.title,
         genre: state.novelMetadata.genre,
@@ -172,7 +170,6 @@ async function transformQuery(state: QuestionAnswerAnnotationType) {
         previous_queries: state.priorQueries.join('\n'),
     });
     fastLLM.temperature = oldTemp;
-    fastLLM.numCtx = oldCtx;
 
     return {
         query: betterQuery,
