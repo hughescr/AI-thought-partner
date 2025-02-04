@@ -13,8 +13,9 @@ import { Embeddings } from '@langchain/core/embeddings';
 import { Document } from '@langchain/core/documents';
 
 const dummyEmbeddings: Embeddings = {
-    embedQuery: async (query: string | number[] | Document) => Array(512).fill(0),
-    embedDocuments: async (docs: string[] | Document[]) => docs.map(() => Array(512).fill(0))
+    embedQuery: async (query: string | number[] | Document) => _.fill(new Array(512), 0),
+    embedDocuments: async (docs: string[] | Document[]) => docs.map(() => _.fill(new Array(512), 0)),
+    caller: {} as any
 };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -86,7 +87,7 @@ Chapter one content.
         await novelStore.addNovel(novel);
         expect(novel.metadata.novelID).toBe(providedID);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accessing private collection for verification in tests only.
-        const coll = (novelStore as any).db.getCollection('novels');
+        const coll = (novelStore as unknown as { db: Loki }).db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': providedID })).toBeDefined();
         // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
         const chaptersAdded = (chapterStore as unknown as { collection: Loki.Collection }).collection.find();
@@ -137,10 +138,10 @@ Chapter two content.
         // The novelID should be computed.
         const computedID = computeNovelID(novel.metadata.author, novel.metadata.title);
         // Verify the novels collection has the inserted novel.
-        const coll = (novelStore as any).db.getCollection('novels');
+        const coll = (novelStore as unknown as { db: Loki }).db.getCollection('novels');
         expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
         // Verify that chapters have been created.
-        const chapters = (chapterStore as any).collection.find();
+        const chapters = (chapterStore as unknown as { collection: Loki.Collection }).collection.find();
         expect(chapters.length).toBeGreaterThan(1);
     });
 
@@ -158,8 +159,8 @@ Chapter two.
         await novelStore.addNovel(novel);
         // Create a dummy vector for each chapter (e.g. an array of 512 ones).
         const dummyVector = Array(512).fill(1);
-        const chapters = (chapterStore as any).collection.find();
-        const documents: Document[] = chapters.map((ch: any) =>
+        const chapters = (chapterStore as unknown as { collection: Loki.Collection }).collection.find();
+        const documents: Document[] = chapters.map((ch: { pageContent: string; metadata: { chapter: number; novelID: string } }) =>
             new Document({ pageContent: ch.pageContent, metadata: ch.metadata })
         );
         // Build an array of vectors corresponding to the documents.
@@ -170,7 +171,7 @@ Chapter two.
         // Now search using the dummy vector; expect to get back each chapter only once.
         const searchResults = await novelStore.similaritySearchVectorWithScore(dummyVector, 10);
         const seenChapters = new Set();
-        for(const [doc, score] of searchResults) {
+        for(const [doc, _score] of searchResults) {
             expect(doc.metadata.chapter).toBeDefined();
             expect(seenChapters.has(doc.metadata.chapter)).toBe(false);
             seenChapters.add(doc.metadata.chapter);
