@@ -34,6 +34,8 @@ describe('NovelDocumentStore', () => {
     });
 
     afterEach(async () => {
+        await chapterStore.close();
+        await novelStore.close();
         try {
             await unlink(TEST_DB_PATH);
         } catch{ /* ignore error */ }
