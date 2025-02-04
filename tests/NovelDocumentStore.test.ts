@@ -9,6 +9,13 @@ import _ from 'lodash';
 import { RunnableLambda } from '@langchain/core/runnables';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import Loki from 'lokijs';
+import { Embeddings } from '@langchain/core/embeddings';
+import { Document } from '@langchain/core/documents';
+
+const dummyEmbeddings: Embeddings = {
+    embedQuery: async (query: string | number[] | Document) => Array(512).fill(0),
+    embedDocuments: async (docs: string[] | Document[]) => docs.map(() => Array(512).fill(0))
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,7 +36,7 @@ describe('NovelDocumentStore', () => {
             targetSummarySize: 100,
         });
         // Construct novelStore with a given file path and the real chapter store.
-        novelStore = new NovelDocumentStore(TEST_DB_PATH, summaryGenerator);
+        novelStore = new NovelDocumentStore(dummyEmbeddings, { filePath: TEST_DB_PATH, summaryGenerator });
         chapterStore = (novelStore as unknown as { chapterStore: ChapterDocumentStore }).chapterStore;
     });
 
@@ -91,6 +98,27 @@ Chapter one content.
 });
 
 describe('NovelDocumentStore - VectorStore API', () => {
+    let novelStore: NovelDocumentStore;
+    let chapterStore: ChapterDocumentStore;
+    beforeEach(async () => {
+        try {
+            await access(TEST_DB_PATH);
+            throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
+        } catch{ /* file does not exist; continue */ }
+        const summaryGenerator = new ChapterSummaryGenerator({
+            llm: RunnableLambda.from(_.constant('Concise generated summary')),
+            targetSummarySize: 100,
+        });
+        novelStore = new NovelDocumentStore(dummyEmbeddings, { filePath: TEST_DB_PATH, summaryGenerator });
+        chapterStore = (novelStore as unknown as { chapterStore: ChapterDocumentStore }).chapterStore;
+    });
+    afterEach(async () => {
+        await chapterStore.close();
+        await novelStore.close();
+        try {
+            await unlink(TEST_DB_PATH);
+        } catch{ /* ignore error */ }
+    });
     it('returns _vectorstoreType as "novel"', () => {
         expect(novelStore._vectorstoreType()).toBe('novel');
     });
