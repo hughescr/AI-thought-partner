@@ -6,6 +6,9 @@ import type { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
 import _ from 'lodash';
 import Loki from 'lokijs';
 
+import { VectorStore } from "@langchain/core/vectorstores";
+import type { Embeddings } from "@langchain/core/embeddings";
+
 // NovelDocument: represents the complete novel in Markdown.
 export class NovelDocument extends Document<{
     novelID: string
@@ -29,7 +32,7 @@ export function computeNovelID(author: string, title: string): string {
 }
 
 // NovelDocumentStore: stores novels and auto-splits them into chapters.
-export class NovelDocumentStore {
+export class NovelDocumentStore extends VectorStore {
     private db: Loki;
     private novelsCollection: Loki.Collection;
     private chapterStore: ChapterDocumentStore;
