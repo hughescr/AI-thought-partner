@@ -41,7 +41,7 @@ export class NovelDocumentStore extends VectorStore {
     private chapterSplitter: MarkdownChapterTextSplitter;
     private filePath: string;
     public embeddings: Embeddings;
-    private faissStore!: FaissStoreWithMMR;
+    private faissStore!: Promise<FaissStoreWithMMR>;
     // eslint-disable-next-line lodash/prefer-constant -- Cannot use _.constant here because we need to declare this before calling super()
     public _vectorstoreType() { return 'novel'; }
 
@@ -64,6 +64,7 @@ export class NovelDocumentStore extends VectorStore {
         this.embeddings = embeddings;
         this.chapterStore = new ChapterDocumentStore(this.db, dbConfig.summaryGenerator);
         this.chapterSplitter = new MarkdownChapterTextSplitter();
+        this.faissStore = FaissStore.load(this.filePath, this.embeddings).catch(() => new FaissStore(this.embeddings, {})) as Promise<FaissStoreWithMMR>;
     }
 
     // Add a novel document and split it into chapters.
@@ -92,13 +93,11 @@ export class NovelDocumentStore extends VectorStore {
             await this.chapterStore.addChapter(chapterDoc);
             const summaryDoc = await this.chapterStore.getChapterSummary(i + 1);
             if(summaryDoc) {
-                await this.initFaissStore();
-                await this.faissStore.addDocuments([summaryDoc]);
+                await (await this.faissStore).addDocuments([summaryDoc]);
             }
             const chunks = await this.chapterStore.getChapterChunks(i + 1);
             if(chunks.length) {
-                await this.initFaissStore();
-                await this.faissStore.addDocuments(chunks);
+                await (await this.faissStore).addDocuments(chunks);
             }
         }
     }
@@ -112,23 +111,12 @@ export class NovelDocumentStore extends VectorStore {
         }
     }
 
-    private async initFaissStore(): Promise<void> {
-        try {
-            if(!this.faissStore) {
-                this.faissStore = await FaissStoreWithMMR.load(this.filePath, this.embeddings) as FaissStoreWithMMR;
-            }
-        } catch{
-            this.faissStore = new FaissStore(this.embeddings, {}) as FaissStoreWithMMR;
-        }
-    }
-
     async addVectors(_vectors: number[][], _documents: Document[]): Promise<string[]> {
         throw new Error('Method not implemented. You can add documents via addDocuments or addNovel.');
     }
 
     async similaritySearchVectorWithScore(query: number[], k: number): Promise<[Document, number][]> {
-        await this.initFaissStore();
-        const faissResults = await this.faissStore.similaritySearchVectorWithScore(query, k);
+        const faissResults = await (await this.faissStore).similaritySearchVectorWithScore(query, k);
         const seenChapters = new Set<number>();
         const results: [Document, number][] = [];
         for(const [doc, score] of faissResults) {
@@ -151,8 +139,10 @@ export class NovelDocumentStore extends VectorStore {
 
     // New close method to properly shut down the database connection
     async close(): Promise<void> {
-        if(this.faissStore) {
-            await this.faissStore.save(this.filePath);
+        const faiss = await this.faissStore;
+        // Only save if something was added to the index.
+        if(faiss._index) {
+            await faiss.save(this.filePath);
         }
         return this.db.close();
     }

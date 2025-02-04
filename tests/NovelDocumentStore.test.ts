@@ -45,6 +45,8 @@ describe('NovelDocumentStore', () => {
     afterEach(async () => {
         await chapterStore.close();
         await novelStore.close();
+        // Sleep for 200ms to allow autosave to complete
+        await new Promise(resolve => setTimeout(resolve, 200));
         try {
             await unlink(TEST_DB_PATH);
         } catch{ /* ignore error */ }
@@ -122,6 +124,8 @@ describe('NovelDocumentStore - VectorStore API', () => {
     afterEach(async () => {
         await chapterStore.close();
         await novelStore.close();
+        // Sleep for 200ms to allow autosave to complete
+        await new Promise(resolve => setTimeout(resolve, 200));
         try {
             await unlink(TEST_DB_PATH);
         } catch{ /* ignore error */ }
