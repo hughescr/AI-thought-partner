@@ -34,7 +34,7 @@ describe('ChapterSummaryDocumentStore', () => {
         db = new Loki(TEST_DB_PATH, {
             adapter: new Loki.LokiFsAdapter(),
             autosave: true,
-            autosaveInterval: 5000,
+            autosaveInterval: 50,
             autoload: true,
             autoloadCallback: () => ({}),
         });
@@ -90,6 +90,9 @@ describe('ChapterSummaryDocumentStore', () => {
 
         await firstStore.addChapterSummary(doc);
         await firstStore.close();
+
+        // Sleep for 200ms to allow autosave to complete
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Create new store instance to verify persistence
         const secondStore = new ChapterSummaryDocumentStore(db);

@@ -23,7 +23,7 @@ describe('ChapterChunkDocumentStore', () => {
         db = new Loki(TEST_DB_PATH, {
             adapter: new Loki.LokiFsAdapter(),
             autosave: true,
-            autosaveInterval: 5000
+            autosaveInterval: 50
         });
         store = new ChapterChunkDocumentStore(db);
     });

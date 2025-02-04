@@ -41,7 +41,7 @@ describe('ChapterDocumentStore', () => {
             adapter: new Loki.LokiFsAdapter(),
             autoload: true,
             autosave: true,
-            autosaveInterval: 5000,
+            autosaveInterval: 50,
         });
     });
 
@@ -90,6 +90,9 @@ describe('ChapterDocumentStore', () => {
 
         await firstStore.addChapter(doc);
         await firstStore.close();
+
+        // Sleep for 200ms to allow autosave to complete
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         const secondStore = new ChapterDocumentStore(db, summaryGenerator);
         const persisted = await secondStore.getChapter(99);
