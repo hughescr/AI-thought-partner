@@ -94,6 +94,7 @@ describe('ChapterDocumentStore', () => {
         const secondStore = new ChapterDocumentStore(db, summaryGenerator);
         const persisted = await secondStore.getChapter(99);
 
+        expect(persisted).toBeDefined();
         expect(persisted?.pageContent).toContain('lived');
         await secondStore.close();
     });
