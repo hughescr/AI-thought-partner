@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { unlink, access } from 'node:fs/promises';
-import { join as pathJoin } from 'node:path';
-import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { dirname, join as pathJoin } from 'node:path';
 import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import { RunnableLambda } from '@langchain/core/runnables';
 import _ from 'lodash';
 import Loki from 'lokijs';
 
-const TEST_DB_PATH = pathJoin(tmpdir(), `test-chapters.db`);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const TEST_DB_PATH = pathJoin(__dirname, 'test-chapters.db');
 
 describe('ChapterDocument', () => {
     it('creates document with chapter content and metadata', () => {
@@ -202,15 +205,15 @@ describe('ChapterDocumentStore', () => {
             metadata: { novelID: 'test', chapter: 30 }
         });
         await store.addChapter(doc);
-        
+
         // Perform multiple updates in rapid succession
         doc.pageContent = '# Chapter 30\nUpdate 1';
         doc.pageContent = '# Chapter 30\nUpdate 2';
         doc.pageContent = '# Chapter 30\nFinal update';
-        
+
         // Wait long enough for all async update chains to finish.
         await new Promise(resolve => setTimeout(resolve, 300));
-        
+
         // Retrieve the summary; it should reflect the final update.
         const finalSummary = await store.getChapterSummary(30);
         expect(finalSummary?.pageContent).toBe('# Chapter 30\nConcise generated summary');
