@@ -33,7 +33,7 @@ export class ChapterSummaryDocumentStore {
                 currentContent = newVal;
                 this.collection.update(doc);
                 // Explicitly save immediately and log potential errors
-                promisify(this.db.saveDatabase.bind(this.db))().catch(err => {
+                promisify(this.db.saveDatabase.bind(this.db))().catch((err) => {
                     console.error(`Error saving summary document:`, err);
                 });
             },
