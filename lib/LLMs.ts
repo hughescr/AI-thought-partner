@@ -77,7 +77,7 @@ export const cachedSnowflakeArctic2Embeddings = makeCachedEmbeddings(snowflakeAr
 // export const qwen25_3bLLM = new ChatOllama({ model: 'qwen2.5:3b-instruct-q6_k_l', ...commonOptions32k });
 export const qwen25_7bLLM = new ChatOpenAI({ model: 'qwen2.5-7b-instruct-1m', configuration: { baseURL: 'http://localhost:1234/v1' } });
 export const qwen25_14bLLM = new ChatOpenAI({ model: 'qwen2.5-14b-instruct-1m', configuration: { baseURL: 'http://localhost:1234/v1' } });
-export const qwen25_32bLLM = new ChatOpenAI({ model: 'qwen2.5-32b-instruct-mlx', configuration: { baseURL: 'http://localhost:1234/v1' } });
+export const qwen25_32bLLM = new ChatOpenAI({ model: 'qwen2.5-32b-instruct', configuration: { baseURL: 'http://localhost:1234/v1' } });
 export const nemo_12b2407LLM = new ChatOpenAI({ model: 'mistral-nemo-instruct-2407', configuration: { baseURL: 'http://localhost:1234/v1' } });
 export const mistralSmall_24b2501LLM = new ChatOpenAI({ model: 'mistral-small-24b-instruct-2501', configuration: { baseURL: 'http://localhost:1234/v1' } });
 
