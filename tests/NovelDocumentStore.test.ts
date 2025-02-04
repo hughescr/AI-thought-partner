@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { NovelDocumentStore, NovelDocument, computeNovelID } from '../lib/NovelDocumentStore';
 import { ChapterDocumentStore } from '../lib/ChapterDocumentStore';
-import { unlink, access } from 'node:fs/promises';
+import { unlink, access, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join as pathJoin } from 'node:path';
 import _ from 'lodash';
@@ -48,6 +48,11 @@ describe('NovelDocumentStore', () => {
         try {
             await unlink(TEST_DB_PATH);
         } catch{ /* ignore error */ }
+        try {
+            await rm(TEST_DB_PATH + '-FAISS', { recursive: true, force: true });
+        } catch{
+            // Ignore errors if the directory does not exist.
+        }
     });
 
     it('computes novelID if missing and splits novel into chapters', async () => {
