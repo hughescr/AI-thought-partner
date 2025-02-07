@@ -1,116 +1,87 @@
 import { Document } from '@langchain/core/documents';
-import Loki from 'lokijs';
-import { promisify } from 'node:util';
+import PouchDB from 'pouchdb';
+import find from 'pouchdb-find';
+PouchDB.plugin(find);
 import { ChapterSummaryDocumentStore, ChapterSummaryDocument } from './ChapterSummaryDocumentStore';
 import { ChapterChunkDocumentStore, ChapterChunkDocument } from './ChapterChunkDocumentStore';
-import { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
+import type { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
 
 import type { MultiBar } from 'cli-progress';
 import _ from 'lodash';
+import { NovelDocument } from './NovelDocumentStore';
 
-export class ChapterDocument extends Document<{ novelID: string, chapter: number }> {
+const CHAPTER_DOCTYPE = 'chapter';
+
+export class ChapterDocument extends Document<{ novelID: string, chapter: number, docType: string }> {
     constructor(fields: { pageContent: string, metadata: { novelID: string, chapter: number } }) {
-        super(fields);
+        super({
+            ...fields,
+            metadata: {
+                ...fields.metadata,
+                docType: CHAPTER_DOCTYPE,
+            },
+        });
     }
 }
 
 export class ChapterDocumentStore {
-    private db!: Loki;
-    private collection!: Loki.Collection;
+    private db!: PouchDB.Database;
     private debugBar?: MultiBar;
     private summaryStore!: ChapterSummaryDocumentStore;
-    private summaryGenerator: ChapterSummaryGenerator;
     private chapterChunkStore!: ChapterChunkDocumentStore;
     private loadPromise: Promise<void>;
+    private isClosed = false;
+    private autoUpdateTimers = new Set<ReturnType<typeof setTimeout>>();
 
-    constructor(config: { db: Loki, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
+    constructor(config: { db: PouchDB.Database, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
         this.debugBar = config.debugBar;
-        this.summaryGenerator = config.summaryGenerator;
         this.db = config.db;
+        (async () => {
+            await this.db.createIndex({ index: { fields: ['metadata.docType', 'metadata.novelID', 'metadata.chapter'] } });
+        })();
         this.loadPromise = Promise.resolve();
-        // Create (or get) the chapters collection with unique compound index on novelID and chapter.
-        this.collection =
-            this.db.getCollection('chapters') ||
-            this.db.addCollection('chapters', {
-                unique: ['metadata.novelID', 'metadata.chapter'],
-                indices: ['metadata.novelID', 'metadata.chapter'],
-                autoupdate: true,
-            });
         // Pass the same db instance to the summary store.
-        this.summaryStore = new ChapterSummaryDocumentStore({ db: this.db, debugBar: this.debugBar });
+        this.summaryStore = new ChapterSummaryDocumentStore({ db: this.db, summaryGenerator: config.summaryGenerator, debugBar: this.debugBar });
         this.chapterChunkStore = new ChapterChunkDocumentStore({ db: this.db, debugBar: this.debugBar });
-    }
-
-    private attachAutoUpdate(doc: ChapterDocument): ChapterDocument {
-        let currentContent = doc.pageContent;
-        Object.defineProperty(doc, 'pageContent', {
-            get: () => currentContent,
-            set: (newVal) => {
-                currentContent = newVal;
-                this.collection.update(doc);
-                (async () => {
-                    const summaryResult = await this.summaryGenerator.generateSummary(
-                        new Document({ pageContent: newVal, metadata: doc.metadata })
-                    );
-                    const existing = await this.summaryStore.getChapterSummary(doc.metadata.chapter);
-                    if(existing) {
-                        existing.pageContent = summaryResult.pageContent;
-                        // Remove explicit save call here.
-                    } else {
-                        summaryResult.metadata.chapter = doc.metadata.chapter;
-                        await this.summaryStore.addChapterSummary(summaryResult as ChapterSummaryDocument);
-                    }
-                    await this.chapterChunkStore.deleteChapterChapters(doc.metadata.chapter);
-                    await this.chapterChunkStore.addChunksForChapter(doc.metadata.chapter, newVal);
-                })();
-            },
-            configurable: true
-        });
-        return doc;
-    }
-
-    private async generateAndStoreSummary(doc: ChapterDocument): Promise<void> {
-        const chapterTitle = _.chain(doc.pageContent).split('\n').head()?.trim().trim('#').trim().value();
-        const bar = this.debugBar?.create(1, 0, { msg: `Generating summary for ${chapterTitle}` });
-        const summaryDoc = await this.summaryGenerator.generateSummary(doc);
-        bar?.stop();
-        if(bar) {
-            this.debugBar?.remove(bar);
-        }
-        summaryDoc.metadata.chapter = doc.metadata.chapter;
-        await this.summaryStore.addChapterSummary(summaryDoc as ChapterSummaryDocument);
     }
 
     async addChapter(doc: ChapterDocument): Promise<void> {
         if(!doc.metadata || !_.isNumber(doc.metadata.chapter) || !doc.metadata.novelID) {
             throw new Error('chapter metadata is required');
         }
-        if(this.collection.findOne({ 'metadata.novelID': doc.metadata.novelID, 'metadata.chapter': doc.metadata.chapter })) {
+        // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
+        const dup = await this.db.find({
+            selector: { 'metadata.docType': CHAPTER_DOCTYPE, 'metadata.novelID': doc.metadata.novelID, 'metadata.chapter': doc.metadata.chapter }
+        });
+        if(dup.docs.length > 0) {
             throw new Error('Document is already in collection, please use update()');
         }
-        this.collection.insert(doc);
+        const storeDoc = doc as ChapterDocument & { _id: string };
+        storeDoc._id = `chapter_${doc.metadata.novelID}_${doc.metadata.chapter}`;
+        await this.db.put(doc);
         // No explicit save here—autosave will handle it.
-        await this.generateAndStoreSummary(doc);
-        await this.chapterChunkStore.addChunksForChapter(doc.metadata.chapter, doc.pageContent);
-        this.attachAutoUpdate(doc);
+        await this.summaryStore.addChapterSummary(doc);
+        await this.chapterChunkStore.addChunksForChapter(doc);
     }
 
-    async getChapter(chapter: number): Promise<ChapterDocument | undefined> {
+    async getChapter(novel: NovelDocument, chapter: number): Promise<ChapterDocument | undefined> {
         await this.loadPromise;
-        const result = this.collection.findOne({ 'metadata.chapter': chapter });
-        return result ? this.attachAutoUpdate(result) as ChapterDocument : undefined;
+        // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
+        const res = await this.db.find({
+            selector: {
+                'metadata.docType': CHAPTER_DOCTYPE,
+                'metadata.novelID': novel.metadata.novelID,
+                'metadata.chapter': chapter
+            }
+        });
+        return res.docs[0] as unknown as ChapterDocument;
     }
 
-    async getChapterSummary(chapter: number): Promise<ChapterSummaryDocument | undefined> {
+    async getChapterSummary(chapter: ChapterDocument): Promise<ChapterSummaryDocument | undefined> {
         return this.summaryStore.getChapterSummary(chapter);
     }
 
-    async getChapterChunks(chapter: number): Promise<ChapterChunkDocument[]> {
+    async getChapterChunks(chapter: ChapterDocument): Promise<ChapterChunkDocument[]> {
         return this.chapterChunkStore.getChapterChunks(chapter);
-    }
-
-    async close(): Promise<void> {
-        await promisify(this.db.saveDatabase.bind(this.db))();
-        // Do not close the Loki instance here because it's shared.
     }
 }

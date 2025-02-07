@@ -1,12 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { unlink, access } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join as pathJoin } from 'node:path';
 import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
+import { NovelDocument } from '../lib/NovelDocumentStore';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import { RunnableLambda } from '@langchain/core/runnables';
 import _ from 'lodash';
-import Loki from 'lokijs';
+import PouchDB from 'pouchdb';
+import find from 'pouchdb-find';
+PouchDB.plugin(find);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -27,7 +30,7 @@ describe('ChapterDocument', () => {
 
 describe('ChapterDocumentStore', () => {
     let summaryGenerator: ChapterSummaryGenerator;
-    let db: Loki;
+    let db: PouchDB.Database;
     beforeEach(async () => {
         summaryGenerator = new ChapterSummaryGenerator({
             llm: RunnableLambda.from(_.constant('Concise generated summary')),
@@ -37,69 +40,55 @@ describe('ChapterDocumentStore', () => {
             await access(TEST_DB_PATH);
             throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
         } catch{ /* ignore error */ }
-        db = new Loki(TEST_DB_PATH, {
-            adapter: new Loki.LokiFsAdapter(),
-            autoload: true,
-            autosave: true,
-            autosaveInterval: 50,
-        });
+        db = new PouchDB(TEST_DB_PATH);
     });
 
     afterEach(async () => {
-        try {
-            await unlink(TEST_DB_PATH);
-        } catch{ /* ignore error */ }
+        if(db) {
+            try {
+                await db.destroy();
+            } catch{
+                // Ignore errors
+            }
+        }
     });
 
     it('stores and retrieves chapters', async () => {
+        const novel = new NovelDocument({
+            pageContent: 'dummy',
+            metadata: { title: 'Test Novel', author: 'Test Author' }
+        });
         const store = new ChapterDocumentStore({ db, summaryGenerator });
         const doc = new ChapterDocument({
             pageContent: '# Prologue\n\nOnce upon a time...',
-            metadata: { novelID: 'test', chapter: 0 }
+            metadata: { novelID: novel.metadata.novelID, chapter: 0 }
         });
 
         await store.addChapter(doc);
-        const retrieved = await store.getChapter(0);
+        const retrieved = await store.getChapter(novel, 0);
 
         expect(retrieved?.pageContent).toContain('Once upon');
         expect(retrieved?.metadata.chapter).toBe(0);
-        await store.close();
-    });
-
-    it('overwrites existing chapters', async () => {
-        const store = new ChapterDocumentStore({ db, summaryGenerator });
-        const doc = new ChapterDocument({
-            pageContent: '# Chapter 5\nOriginal content',
-            metadata: { novelID: 'test', chapter: 5 }
-        });
-
-        await store.addChapter(doc);
-        doc.pageContent = '# Chapter 5\nRevised content';
-
-        const updated = await store.getChapter(5);
-        expect(updated?.pageContent).toBe('# Chapter 5\nRevised content');
-        await store.close();
     });
 
     it('persists chapters across instances', async () => {
+        const novel = new NovelDocument({
+            pageContent: 'dummy',
+            metadata: { title: 'Test Novel', author: 'Test Author' }
+        });
         const firstStore = new ChapterDocumentStore({ db, summaryGenerator });
         const doc = new ChapterDocument({
             pageContent: '# Epilogue\n\nAnd they lived...',
-            metadata: { novelID: 'test', chapter: 99 }
+            metadata: { novelID: novel.metadata.novelID, chapter: 99 }
         });
 
         await firstStore.addChapter(doc);
-        await firstStore.close();
-
-        // Sleep for 200ms to allow autosave to complete
-        await new Promise(resolve => setTimeout(resolve, 200));
 
         const secondStore = new ChapterDocumentStore({ db, summaryGenerator });
-        const persisted = await secondStore.getChapter(99);
+        const persisted = await secondStore.getChapter(novel, 99);
 
         expect(persisted).toBeDefined();
         expect(persisted?.pageContent).toContain('lived');
-        await secondStore.close();
     });
 
     it('rejects documents without chapter metadata', async () => {
@@ -109,30 +98,16 @@ describe('ChapterDocumentStore', () => {
         await expect(store.addChapter(new ChapterDocument({
             pageContent: 'Invalid content'
         }))).rejects.toThrow('chapter metadata is required');
-
-        await store.close();
-    });
-
-    it('auto-updates document changes', async () => {
-        const store = new ChapterDocumentStore({ db, summaryGenerator });
-        const doc = new ChapterDocument({
-            pageContent: '# Chapter 10\nInitial version',
-            metadata: { novelID: 'test', chapter: 10 }
-        });
-
-        await store.addChapter(doc);
-        doc.pageContent = '# Chapter 10\nUpdated version';
-
-        const result = await store.getChapter(10);
-        expect(result?.pageContent).toBe('# Chapter 10\nUpdated version');
-        await store.close();
     });
 
     it('returns undefined for a non-existent chapter', async () => {
+        const novel = new NovelDocument({
+            pageContent: 'dummy',
+            metadata: { title: 'Test Novel', author: 'Test Author' }
+        });
         const store = new ChapterDocumentStore({ db, summaryGenerator });
-        const nonExistent = await store.getChapter(12345);
+        const nonExistent = await store.getChapter(novel, 12345);
         expect(nonExistent).toBeUndefined();
-        await store.close();
     });
 
     // Replace the "updates summary when re-adding the same chapter" test
@@ -145,7 +120,6 @@ describe('ChapterDocumentStore', () => {
         await store.addChapter(doc);
         // Attempt to re-add should throw an error.
         await expect(store.addChapter(doc)).rejects.toThrow('Document is already in collection, please use update()');
-        await store.close();
     });
 
     it('generates and retrieves chapter summary', async () => {
@@ -155,51 +129,32 @@ describe('ChapterDocumentStore', () => {
             metadata: { novelID: 'test', chapter: 15 }
         });
         await store.addChapter(doc);
-        const summary = await store.getChapterSummary(15);
+        const summary = await store.getChapterSummary(doc);
         expect(summary).toBeDefined();
         expect(summary?.pageContent).toBe('# Chapter 15\nConcise generated summary');
-        await store.close();
     });
 
-    // For the dynamic summary test, instantiate a local generator that reflects the chapter content.
-    it('updates chapter summary when chapter content changes', async () => {
-        let text = 'Initial chapter content';
-        const dynamicGenerator = new ChapterSummaryGenerator({
-            llm: RunnableLambda.from(() => ({ content: [{ text: `Summary: ${text}`, type: 'text' }] })),
-            targetSummarySize: 100
+    it('generates and retrieves chapter chunks', async () => {
+        // Create a dummy novel for proper novelID generation.
+        const novel = new NovelDocument({
+            pageContent: 'dummy',
+            metadata: { title: 'Chunk Test Novel', author: 'Test Author' }
         });
-        const store = new ChapterDocumentStore({ db, summaryGenerator: dynamicGenerator });
-        const doc = new ChapterDocument({
-            pageContent: `# Chapter 21\n${text}`,
-            metadata: { novelID: 'test', chapter: 21 }
-        });
-        await store.addChapter(doc);
-
-        const summary1 = await store.getChapterSummary(21);
-        expect(summary1?.pageContent).toBe('# Chapter 21\nSummary: Initial chapter content');
-
-        // Update chapter content
-        text = 'Updated chapter content';
-        doc.pageContent = `# Chapter 21\n${text}`;
-        // Wait for async update
-        await new Promise(resolve => setTimeout(resolve, 150));
-        const summary2 = await store.getChapterSummary(21);
-        expect(summary2?.pageContent).toBe('# Chapter 21\nSummary: Updated chapter content');
-        await store.close();
-    });
-
-    it('attaches auto-update hook to document after adding chapter', async () => {
         const store = new ChapterDocumentStore({ db, summaryGenerator });
+        // Create chapter content that is long enough to trigger chunking.
+        const content = '# Chapter 2\n' + _.repeat('Lorem ipsum dolor sit amet, consectetur adipiscing elit. ', 20);
         const doc = new ChapterDocument({
-            pageContent: '# Test Chapter\nTest content',
-            metadata: { novelID: 'test', chapter: 42 }
+            pageContent: content,
+            metadata: { novelID: novel.metadata.novelID, chapter: 2 }
         });
         await store.addChapter(doc);
-
-        // Verify that the doc now has an own property descriptor for pageContent with a setter
-        const descriptor = Object.getOwnPropertyDescriptor(doc, 'pageContent');
-        expect(descriptor).toBeDefined();
-        expect(typeof descriptor?.set).toBe('function');
+        const chunks = await store.getChapterChunks(doc);
+        expect(chunks.length).toBeGreaterThan(0);
+        _.forEach(chunks, (chunk) => {
+            expect(chunk.metadata.novelID).toEqual(novel.metadata.novelID);
+            expect(chunk.metadata.chapter).toEqual(2);
+            expect(chunk.pageContent).toBeTruthy();
+        });
     });
 
     it('handles concurrent chapter updates safely', async () => {
@@ -219,8 +174,7 @@ describe('ChapterDocumentStore', () => {
         await new Promise(resolve => setTimeout(resolve, 300));
 
         // Retrieve the summary; it should reflect the final update.
-        const finalSummary = await store.getChapterSummary(30);
+        const finalSummary = await store.getChapterSummary(doc);
         expect(finalSummary?.pageContent).toBe('# Chapter 30\nConcise generated summary');
-        await store.close();
     });
 });
