@@ -127,9 +127,4 @@ export class ChapterChunkDocumentStore {
         });
         return res.docs as unknown as ChapterChunkDocument[];
     }
-
-    async close(): Promise<void> {
-        // Do not close the external db instance.
-        return;
-    }
 }

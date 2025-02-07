@@ -98,7 +98,6 @@ describe('ChapterChunkDocumentStore', () => {
     it('persists chunks across store instances', async () => {
         const chapterDoc = new ChapterDocument({ pageContent: 'Persisted content', metadata: { novelID: 'unknown', chapter: 8 } });
         await store.addChunksForChapter(chapterDoc);
-        await store.close();
         const newStore = new ChapterChunkDocumentStore({ db });
         const chunks = await newStore.getChapterChunks(chapterDoc);
         expect(chunks).toHaveLength(1);
