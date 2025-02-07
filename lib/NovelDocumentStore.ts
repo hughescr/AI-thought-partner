@@ -1,3 +1,5 @@
+import { mkdir } from 'node:fs/promises';
+import { join } from 'path';
 import { Document } from '@langchain/core/documents';
 import PouchDB from 'pouchdb';
 import find from 'pouchdb-find';
@@ -53,24 +55,27 @@ export class NovelDocumentStore {
     private db!: PouchDB.Database;
     private indexCreated: Promise<void>;
     private debugBar?: MultiBar;
-    private chapterStore: ChapterDocumentStore;
+    private chapterStore!: ChapterDocumentStore;
     private chapterSplitter: MarkdownChapterTextSplitter;
-    private filePath: string;
     public embeddings: Embeddings;
     private faissFolder: string;
 
     constructor(embeddings: Embeddings, dbConfig: { filePath: string, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
         this.debugBar = dbConfig.debugBar;
-        this.db = new PouchDB(dbConfig.filePath, { auto_compaction: true });
-        this.indexCreated = this.db
-            .createIndex({ index: { fields: ['metadata.docType', 'metadata.novelID'] } })
-            .then(_.noop);
+        const basePath = dbConfig.filePath;
+        const pouchdbPath = join(basePath, 'pouchdb');
+        const faissPath = join(basePath, 'FAISS');
+        this.faissFolder = faissPath;
+        this.indexCreated = (async () => {
+            await mkdir(pouchdbPath, { recursive: true });
+            await mkdir(faissPath, { recursive: true });
+            this.db = new PouchDB(pouchdbPath, { auto_compaction: true });
+            await this.db.createIndex({ index: { fields: ['metadata.docType', 'metadata.novelID'] } });
+            this.chapterStore = new ChapterDocumentStore({ db: this.db, summaryGenerator: dbConfig.summaryGenerator, debugBar: this.debugBar });
+        })();
         // Create our own ChapterDocumentStore using the same Loki instance.
-        this.filePath = `${dbConfig.filePath}-FAISS`;
         this.embeddings = embeddings;
-        this.chapterStore = new ChapterDocumentStore({ db: this.db, summaryGenerator: dbConfig.summaryGenerator, debugBar: this.debugBar });
         this.chapterSplitter = new MarkdownChapterTextSplitter();
-        this.faissFolder = `${dbConfig.filePath}-FAISS`;
         // (No FAISS store creation here; we will do that per novel in addNovel.)
     }
 

@@ -41,6 +41,7 @@ describe('NovelDocumentStore', () => {
         });
         // Construct novelStore with a given file path and the real chapter store.
         novelStore = new NovelDocumentStore(dummyEmbeddings, { filePath: TEST_DB_PATH, summaryGenerator });
+        await (novelStore as unknown as { indexCreated: Promise<void> }).indexCreated;
         chapterStore = (novelStore as unknown as { chapterStore: ChapterDocumentStore }).chapterStore;
     });
 
