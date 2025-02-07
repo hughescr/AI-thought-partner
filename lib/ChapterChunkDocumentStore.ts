@@ -1,85 +1,135 @@
 import { Document } from '@langchain/core/documents';
-import Loki from 'lokijs';
-import { promisify } from 'node:util';
+import PouchDB from 'pouchdb';
+import find from 'pouchdb-find';
+PouchDB.plugin(find);
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import _ from 'lodash';
+import { ChapterDocument } from './ChapterDocumentStore';
 import type { MultiBar } from 'cli-progress';
 
-export class ChapterChunkDocument extends Document<{ chapter: number, sequence: number }> {
+const CHAPTER_CHUNK_DOCTYPE = 'chapter_chunk';
+
+export class ChapterChunkDocument extends Document<{ chapter: number, sequence: number, novelID: string, docType: string }> {
     constructor(fields: {
         pageContent: string
-        metadata: { chapter: number, sequence: number }
+        metadata: { chapter: number, sequence: number, novelID: string }
     }) {
-        super(fields);
+        super({
+            ...fields,
+            metadata: {
+                ...fields.metadata,
+                docType: CHAPTER_CHUNK_DOCTYPE,
+            },
+        });
     }
 }
 
 export class ChapterChunkDocumentStore {
     private debugBar?: MultiBar;
-    private db: Loki;
-    private collection: Loki.Collection;
-    private textSplitter = new RecursiveCharacterTextSplitter({
-        chunkSize: 512,
-        chunkOverlap: 128,
-        keepSeparator: true
-    });
+    private db!: PouchDB.Database;
+    private initializationPromise: Promise<void>;
+    private textSplitter: { splitText(text: string): Promise<string[]> };
 
-    constructor(config: { db: Loki, debugBar?: MultiBar }) {
+    constructor(config: { db: PouchDB.Database, debugBar?: MultiBar, textSplitter?: { splitText(text: string): Promise<string[]> } }) {
         this.debugBar = config.debugBar;
         this.db = config.db;
-        this.collection = this.db.getCollection('chapter_chunks') || this.db.addCollection('chapter_chunks', {
-            unique: ['metadata.novelID', 'metadata.chapter', 'metadata.sequence'],
-            indices: ['metadata.novelID', 'metadata.chapter', 'metadata.sequence'],
-            autoupdate: true,
+        this.textSplitter = config.textSplitter ?? new RecursiveCharacterTextSplitter({
+            chunkSize: 512,
+            chunkOverlap: 128,
+            keepSeparator: true
         });
+        this.initializationPromise = this.db
+            .createIndex({ index: { fields: ['metadata.docType', 'metadata.novelID', 'metadata.chapter', 'metadata.sequence'] } })
+            .then(_.noop);
     }
 
-    async deleteChapterChapters(chapter: number): Promise<void> {
-        this.collection.findAndRemove({ 'metadata.chapter': chapter });
-        // Rely on autosave.
+    async deleteChapterChunks(chapterDoc: ChapterDocument): Promise<void> {
+        await this.initializationPromise;
+        const chapter = chapterDoc.metadata.chapter;
+        const novelID = chapterDoc.metadata.novelID;
+        // eslint-disable-next-line lodash/prefer-lodash-method -- PouchDB API
+        const res = await this.db.find({
+            selector: {
+                'metadata.docType': CHAPTER_CHUNK_DOCTYPE,
+                'metadata.chapter': chapter,
+                'metadata.novelID': novelID
+            }
+        });
+
+        if(res.docs.length === 0) {
+            return;
+        }
+
+        await Promise.all(_.map(res.docs, async (doc) => {
+            const freshDoc = await this.db.get(doc._id!);
+            return this.db.remove(freshDoc);
+        }));
     }
 
-    async addChunksForChapter(chapter: number, content: string): Promise<void> {
-        if(this.collection.findOne({ 'metadata.chapter': chapter })) {
+    async addChunksForChapter(chapterDoc: ChapterDocument): Promise<void> {
+        await this.initializationPromise;
+        const chapter = chapterDoc.metadata.chapter;
+        const novelID = chapterDoc.metadata.novelID;
+        const content = chapterDoc.pageContent;
+        // eslint-disable-next-line lodash/prefer-lodash-method -- PouchDB API
+        const existing = await this.db.find({
+            selector: {
+                'metadata.docType': CHAPTER_CHUNK_DOCTYPE,
+                'metadata.chapter': chapter,
+                'metadata.novelID': novelID
+            }
+        });
+        if(existing.docs.length > 0) {
             throw new Error('Duplicate key for properties metadata.chapter, metadata.sequence');
         }
         const chunks = await this.textSplitter.splitText(content);
+        if(!chunks.length) {
+            throw new Error('No text chunks generated');
+        }
         const bar = this.debugBar?.create(chunks.length, 0, { msg: `${_.chain(content).split('\n').head().trim().value()} chunks` });
-        try {
-            _.forEach(chunks, (chunkContent, sequence) => {
-                bar?.increment();
-                this.collection.insert(new ChapterChunkDocument({
-                    pageContent: chunkContent,
-                    metadata: {
-                        chapter,
-                        sequence: sequence + 1 // Start sequences at 1
-                    }
-                }));
-            });
-        } catch(error) {
-            if(_.isError(error) && error.message.includes('unique')) {
-                throw new Error('Duplicate key for properties metadata.chapter, metadata.sequence');
-            }
-            throw error;
+        for(let sequence = 0; sequence < chunks.length; sequence++) {
+            bar?.increment();
+            const chunkContent = chunks[sequence];
+            const chunkDoc = new ChapterChunkDocument({
+                pageContent: chunkContent,
+                metadata: {
+                    chapter,
+                    sequence: sequence + 1,
+                    novelID
+                }
+            }) as ChapterChunkDocument & { _id: string };
+            chunkDoc._id = `chapter_chunk_${novelID}_${chapter}_${sequence + 1}`;
+            await this.db.put(chunkDoc);
         }
         bar?.stop();
         if(bar) {
             this.debugBar?.remove(bar);
         }
-        // No explicit save call, autosave handles it.
     }
 
-    async getChapterChunks(chapter: number): Promise<ChapterChunkDocument[]> {
-        // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
-        return this.collection
-            .chain()
-            .find({ 'metadata.chapter': chapter })
-            .simplesort('metadata.sequence')
-            .data() as ChapterChunkDocument[];
+    async getChapterChunks(chapterDoc: ChapterDocument): Promise<ChapterChunkDocument[]> {
+        await this.initializationPromise;
+        const chapter = chapterDoc.metadata.chapter;
+        const novelID = chapterDoc.metadata.novelID;
+        // eslint-disable-next-line lodash/prefer-lodash-method -- PouchDB API
+        const res = await this.db.find({
+            selector: {
+                'metadata.docType': CHAPTER_CHUNK_DOCTYPE,
+                'metadata.chapter': chapter,
+                'metadata.novelID': novelID
+            },
+            sort: [
+                { 'metadata.docType': 'asc' },
+                { 'metadata.novelID': 'asc' },
+                { 'metadata.chapter': 'asc' },
+                { 'metadata.sequence': 'asc' }
+            ]
+        });
+        return res.docs as unknown as ChapterChunkDocument[];
     }
 
     async close(): Promise<void> {
-        await promisify(this.db.saveDatabase.bind(this.db))();
-        // Do not close the Loki instance here because it's shared.
+        // Do not close the external db instance.
+        return;
     }
 }
