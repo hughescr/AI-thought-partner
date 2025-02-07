@@ -27,18 +27,19 @@ export class ChapterSummaryDocumentStore {
     private summaryGenerator: ChapterSummaryGenerator;
     private isClosed = false;
     private autoUpdateTimers = new Set<ReturnType<typeof setTimeout>>();
-    // Removed collection; using this.db directly.
+    private initializationPromise: Promise<void>;
 
     constructor(config: { db: PouchDB.Database, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
         this.debugBar = config.debugBar;
         this.db = config.db;
         this.summaryGenerator = config.summaryGenerator;
-        (async () => {
-            await this.db.createIndex({ index: { fields: ['metadata.docType', 'metadata.novelID', 'metadata.chapter'] } });
-        })();
+        this.initializationPromise = this.db.createIndex({
+            index: { fields: ['metadata.docType', 'metadata.novelID', 'metadata.chapter'] }
+        }).then(_.noop);
     }
 
     async addChapterSummary(chapterDoc: ChapterDocument): Promise<void> {
+        await this.initializationPromise;
         const chapterTitle = _.chain(chapterDoc.pageContent).split('\n').head()?.trim().trim('#').trim().value();
         const bar = this.debugBar?.create(1, 0, { msg: `Generating summary for ${chapterTitle}` });
         const summaryDoc = await this.summaryGenerator.generateSummary(chapterDoc);
@@ -56,9 +57,15 @@ export class ChapterSummaryDocumentStore {
     }
 
     async getChapterSummary(chapter: ChapterDocument): Promise<ChapterSummaryDocument | undefined> {
+        await this.initializationPromise;
         // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
         const res = await this.db.find({
-            selector: { 'metadata.docType': CHAPTER_SUMMARY_DOCTYPE, 'metadata.chapter': chapter.metadata.chapter }
+            selector: {
+                metadata: {
+                    docType: CHAPTER_SUMMARY_DOCTYPE,
+                    chapter: chapter.metadata.chapter,
+                },
+            },
         }) as unknown as { docs: ChapterSummaryDocument[] };
         return res?.docs[0];
     }

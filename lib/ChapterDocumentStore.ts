@@ -29,29 +29,33 @@ export class ChapterDocumentStore {
     private debugBar?: MultiBar;
     private summaryStore!: ChapterSummaryDocumentStore;
     private chapterChunkStore!: ChapterChunkDocumentStore;
-    private loadPromise: Promise<void>;
-    private isClosed = false;
-    private autoUpdateTimers = new Set<ReturnType<typeof setTimeout>>();
+    private initializationPromise: Promise<void>;
 
     constructor(config: { db: PouchDB.Database, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
         this.debugBar = config.debugBar;
         this.db = config.db;
-        (async () => {
-            await this.db.createIndex({ index: { fields: ['metadata.docType', 'metadata.novelID', 'metadata.chapter'] } });
-        })();
-        this.loadPromise = Promise.resolve();
+        this.initializationPromise = this.db.createIndex({
+            index: { fields: ['metadata.docType', 'metadata.novelID', 'metadata.chapter'] }
+        }).then(_.noop);
         // Pass the same db instance to the summary store.
         this.summaryStore = new ChapterSummaryDocumentStore({ db: this.db, summaryGenerator: config.summaryGenerator, debugBar: this.debugBar });
         this.chapterChunkStore = new ChapterChunkDocumentStore({ db: this.db, debugBar: this.debugBar });
     }
 
     async addChapter(doc: ChapterDocument): Promise<void> {
+        await this.initializationPromise;
         if(!doc.metadata || !_.isNumber(doc.metadata.chapter) || !doc.metadata.novelID) {
             throw new Error('chapter metadata is required');
         }
         // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
         const dup = await this.db.find({
-            selector: { 'metadata.docType': CHAPTER_DOCTYPE, 'metadata.novelID': doc.metadata.novelID, 'metadata.chapter': doc.metadata.chapter }
+            selector: {
+                metadata: {
+                    docType: CHAPTER_DOCTYPE,
+                    novelID: doc.metadata.novelID,
+                    chapter: doc.metadata.chapter,
+                },
+            },
         });
         if(dup.docs.length > 0) {
             throw new Error('Document is already in collection, please use update()');
@@ -65,14 +69,16 @@ export class ChapterDocumentStore {
     }
 
     async getChapter(novel: NovelDocument, chapter: number): Promise<ChapterDocument | undefined> {
-        await this.loadPromise;
+        await this.initializationPromise;
         // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
         const res = await this.db.find({
             selector: {
-                'metadata.docType': CHAPTER_DOCTYPE,
-                'metadata.novelID': novel.metadata.novelID,
-                'metadata.chapter': chapter
-            }
+                metadata: {
+                    docType: CHAPTER_DOCTYPE,
+                    novelID: novel.metadata.novelID,
+                    chapter,
+                },
+            },
         });
         return res.docs[0] as unknown as ChapterDocument;
     }

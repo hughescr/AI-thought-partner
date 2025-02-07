@@ -1,0 +1,54 @@
+import { Document } from '@langchain/core/documents';
+import { FaissStore } from '@langchain/community/vectorstores/faiss';
+import type { Embeddings } from '@langchain/core/embeddings';
+import { NovelDocument } from './NovelDocumentStore';
+import { ChapterDocumentStore } from './ChapterDocumentStore';
+
+export class NovelFaissStore {
+    private store: FaissStore;
+    private novel: NovelDocument;
+    private chapterStore: ChapterDocumentStore;
+
+    private constructor(store: FaissStore, novel: NovelDocument, chapterStore: ChapterDocumentStore) {
+        this.store = store;
+        this.novel = novel;
+        this.chapterStore = chapterStore;
+    }
+
+    public static async load(
+        storePath: string,
+        embeddings: Embeddings,
+        novel: NovelDocument,
+        chapterStore: ChapterDocumentStore
+    ): Promise<NovelFaissStore> {
+        let loadedStore: FaissStore;
+        try {
+            loadedStore = await FaissStore.load(storePath, embeddings);
+        } catch{
+            throw new Error(`No FAISS store exists at path ${storePath} for novel ${novel.metadata.novelID}`);
+        }
+        return new NovelFaissStore(loadedStore, novel, chapterStore);
+    }
+
+    async similaritySearchVectorWithScore(query: number[], k: number): Promise<[Document, number][]> {
+    // Perform the regular vector search.
+        const baseResults = await this.store.similaritySearchVectorWithScore(query, k);
+        const results: [Document, number][] = [];
+        const seenChapters = new Set<number>();
+        for(const [doc, score] of baseResults) {
+            if(doc.metadata?.chapter) {
+                if(!seenChapters.has(doc.metadata.chapter)) {
+                    // Fetch the full chapter document using the stored chapterStore.
+                    const chapterDoc = await this.chapterStore.getChapter(this.novel, doc.metadata.chapter);
+                    if(chapterDoc) {
+                        results.push([chapterDoc, score]);
+                        seenChapters.add(doc.metadata.chapter);
+                    }
+                }
+            } else {
+                throw new Error(`Missing chapter metadata on document: ${JSON.stringify(doc)}`);
+            }
+        }
+        return results;
+    }
+}

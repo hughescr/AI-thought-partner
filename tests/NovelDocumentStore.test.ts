@@ -1,14 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { NovelDocumentStore, NovelDocument, computeNovelID } from '../lib/NovelDocumentStore';
-import { ChapterDocumentStore } from '../lib/ChapterDocumentStore';
-import { unlink, access, rm } from 'node:fs/promises';
+import { ChapterDocumentStore, ChapterDocument } from '../lib/ChapterDocumentStore';
+import { access, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join as pathJoin } from 'node:path';
 import _ from 'lodash';
 
 import { RunnableLambda } from '@langchain/core/runnables';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
-import Loki from 'lokijs';
+import PouchDB from 'pouchdb';
+import find from 'pouchdb-find';
+PouchDB.plugin(find);
 import { Embeddings } from '@langchain/core/embeddings';
 import type { AsyncCaller } from '@langchain/core/utils/async_caller';
 import { Document } from '@langchain/core/documents';
@@ -43,17 +45,15 @@ describe('NovelDocumentStore', () => {
     });
 
     afterEach(async () => {
-        await chapterStore.close();
-        await novelStore.close();
-        // Sleep for 200ms to allow autosave to complete
-        await new Promise(resolve => setTimeout(resolve, 200));
         try {
-            await unlink(TEST_DB_PATH);
-        } catch{ /* ignore error */ }
+            await novelStore.destroy();
+        } catch{
+            // ignore cleanup errors
+        }
         try {
             await rm(TEST_DB_PATH + '-FAISS', { recursive: true, force: true });
         } catch{
-            // Ignore errors if the directory does not exist.
+            // ignore errors if the folder does not exist
         }
     });
 
@@ -65,50 +65,60 @@ Content of chapter two.
 `;
         const novel: NovelDocument = new NovelDocument({
             pageContent: markdownText,
-            metadata: { novelID: '', title: 'Test Novel', author: 'John Doe', genre: 'Fiction' }
+            metadata: { title: 'Test Novel', author: 'John Doe', genre: 'Fiction' }
         });
         await novelStore.addNovel(novel);
         const computedID = computeNovelID('John Doe', 'Test Novel');
         expect(novel.metadata.novelID).toBe(computedID);
+
         // Verify the novel was inserted into the novels collection.
-        const coll = (novelStore as unknown as { db: Loki }).db.getCollection('novels');
-        expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
+        // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
+        const res = await (novelStore as unknown as { db: PouchDB.Database }).db.find({
+            selector: { metadata: { docType: 'novel', novelID: computedID } }
+        });
+        expect(res.docs.length).toBeGreaterThan(0);
+
         // Verify that chapters were added and numbered correctly.
-        // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
-        const chaptersAdded = (chapterStore as unknown as { collection: Loki.Collection }).collection.find();
-        expect(chaptersAdded.length).toBeGreaterThan(0);
-        _.forEach(chaptersAdded, (chapter, index) => {
+        // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
+        const chaptersRes = await (chapterStore as unknown as { db: PouchDB.Database }).db.find({
+            selector: { metadata: { docType: 'chapter', novelID: computedID } }
+        }) as unknown as { docs: ChapterDocument[] };
+        expect(chaptersRes.docs.length).toBeGreaterThan(0);
+        _.forEach(chaptersRes.docs, (chapter, index) => {
             expect(chapter.metadata.chapter).toBe(index + 1);
             expect(chapter.metadata.novelID).toBe(computedID);
         });
     });
 
     it('preserves provided novelID and works correctly', async () => {
-        const providedID = 'custom_novel';
         const markdownText = `# Chapter 1
 Chapter one content.
 `;
         const novel: NovelDocument = new NovelDocument({
             pageContent: markdownText,
-            metadata: { novelID: providedID, title: 'Some Title', author: 'Jane Smith' }
+            metadata: { title: 'Some Title', author: 'Jane Smith' }
         });
         await novelStore.addNovel(novel);
-        expect(novel.metadata.novelID).toBe(providedID);
+        expect(novel.metadata).toHaveProperty('novelID');
 
-        const coll = (novelStore as unknown as { db: Loki }).db.getCollection('novels');
-        expect(coll.findOne({ 'metadata.novelID': providedID })).toBeDefined();
-        // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
-        const chaptersAdded = (chapterStore as unknown as { collection: Loki.Collection }).collection.find();
-        expect(chaptersAdded.length).toBe(1);
-        const chapter = chaptersAdded[0];
+        // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
+        const res = await (novelStore as unknown as { db: PouchDB.Database }).db.find({
+            selector: { metadata: { docType: 'novel', novelID: novel.metadata.novelID } }
+        });
+        expect(res.docs.length).toBeGreaterThan(0);
+        // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
+        const chaptersRes = await (chapterStore as unknown as { db: PouchDB.Database }).db.find({
+            selector: { 'metadata.docType': 'chapter', 'metadata.novelID': novel.metadata.novelID }
+        }) as unknown as { docs: ChapterDocument[] };
+        expect(chaptersRes.docs.length).toBe(1);
+        const chapter = chaptersRes.docs[0];
         expect(chapter.metadata.chapter).toBe(1);
-        expect(chapter.metadata.novelID).toBe(providedID);
+        expect(chapter.metadata.novelID).toBe(novel.metadata.novelID);
     });
 });
 
 describe('NovelDocumentStore - VectorStore API', () => {
     let novelStore: NovelDocumentStore;
-    let chapterStore: ChapterDocumentStore;
     beforeEach(async () => {
         try {
             await access(TEST_DB_PATH);
@@ -119,46 +129,18 @@ describe('NovelDocumentStore - VectorStore API', () => {
             targetSummarySize: 100,
         });
         novelStore = new NovelDocumentStore(dummyEmbeddings, { filePath: TEST_DB_PATH, summaryGenerator });
-        chapterStore = (novelStore as unknown as { chapterStore: ChapterDocumentStore }).chapterStore;
     });
     afterEach(async () => {
-        await chapterStore.close();
-        await novelStore.close();
-        // Sleep for 200ms to allow autosave to complete
-        await new Promise(resolve => setTimeout(resolve, 200));
         try {
-            await unlink(TEST_DB_PATH);
-        } catch{ /* ignore error */ }
+            await novelStore.destroy();
+        } catch{
+            // ignore cleanup errors
+        }
         try {
             await rm(TEST_DB_PATH + '-FAISS', { recursive: true, force: true });
         } catch{
-            // Ignore errors if the directory does not exist.
+            // ignore errors if the folder does not exist
         }
-    });
-    it('returns _vectorstoreType as "novel"', () => {
-        expect(novelStore._vectorstoreType()).toBe('novel');
-    });
-
-    it('can add documents via addDocuments (calling addNovel internally)', async () => {
-        const markdownText = `# Chapter 1
-Chapter one content.
-# Chapter 2
-Chapter two content.
-`;
-        const novel = new NovelDocument({
-            pageContent: markdownText,
-            metadata: { title: 'Vector Novel', author: 'Vector Author', genre: 'SciFi' }
-        });
-        await novelStore.addDocuments([novel]);
-        // The novelID should be computed.
-        const computedID = computeNovelID(novel.metadata.author, novel.metadata.title);
-        // Verify the novels collection has the inserted novel.
-        const coll = (novelStore as unknown as { db: Loki }).db.getCollection('novels');
-        expect(coll.findOne({ 'metadata.novelID': computedID })).toBeDefined();
-        // Verify that chapters have been created.
-        // eslint-disable-next-line lodash/prefer-lodash-method -- collection is not an array
-        const chapters = (chapterStore as unknown as { collection: Loki.Collection }).collection.find();
-        expect(chapters.length).toBeGreaterThan(1);
     });
 
     it('delegates similaritySearchVectorWithScore correctly', async () => {
@@ -173,22 +155,19 @@ Chapter two.
             metadata: { title: 'Vector Novel 2', author: 'Vector Author', genre: 'SciFi' }
         });
         await novelStore.addNovel(novel);
-        // Create a dummy vector for each chapter (e.g. an array of 512 ones).
-        const dummyVector = _.fill(Array(512), 1);
 
         // Now search using the dummy vector; expect to get back each chapter only once.
-        const searchResults = await novelStore.similaritySearchVectorWithScore(dummyVector, 10);
+        const faiss = await novelStore.getVectorStoreForNovel(novel);
+
+        // Create a dummy vector to search for
+        const dummyVector = _.fill(Array(512), 1);
+        const searchResults = await faiss.similaritySearchVectorWithScore(dummyVector, 10);
         const seenChapters = new Set();
         for(const [doc, _score] of searchResults) {
             expect(doc.metadata.chapter).toBeDefined();
             expect(seenChapters.has(doc.metadata.chapter)).toBe(false);
             seenChapters.add(doc.metadata.chapter);
         }
-    });
-    it('throws error when calling addVectors', async () => {
-        await expect(novelStore.addVectors([], [])).rejects.toThrow(
-            'Method not implemented. You can add documents via addDocuments or addNovel.'
-        );
     });
 });
 

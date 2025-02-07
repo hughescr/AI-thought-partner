@@ -70,7 +70,7 @@ describe('ChapterChunkDocumentStore', () => {
         await store.addChunksForChapter(chapterDoc1);
         const chapterDoc2 = new ChapterDocument({ pageContent: 'New content', metadata: { novelID: 'unknown', chapter: 3 } });
         await expect(store.addChunksForChapter(chapterDoc2))
-            .rejects.toThrow('Duplicate key for properties metadata.chapter, metadata.sequence');
+            .rejects.toThrow('Document update conflict');
     });
 
     it('maintains proper sequence numbering', async () => {
@@ -108,6 +108,6 @@ describe('ChapterChunkDocumentStore', () => {
         await store.addChunksForChapter(chapterDoc1);
         const chapterDoc2 = new ChapterDocument({ pageContent: 'Batch 2', metadata: { novelID: 'unknown', chapter: 9 } });
         await expect(store.addChunksForChapter(chapterDoc2))
-            .rejects.toThrow('Duplicate key for properties metadata.chapter, metadata.sequence');
+            .rejects.toThrow('Document update conflict');
     });
 });

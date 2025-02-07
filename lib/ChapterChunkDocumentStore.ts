@@ -50,10 +50,12 @@ export class ChapterChunkDocumentStore {
         // eslint-disable-next-line lodash/prefer-lodash-method -- PouchDB API
         const res = await this.db.find({
             selector: {
-                'metadata.docType': CHAPTER_CHUNK_DOCTYPE,
-                'metadata.chapter': chapter,
-                'metadata.novelID': novelID
-            }
+                metadata: {
+                    docType: CHAPTER_CHUNK_DOCTYPE,
+                    chapter,
+                    novelID,
+                },
+            },
         });
 
         if(res.docs.length === 0) {
@@ -71,27 +73,16 @@ export class ChapterChunkDocumentStore {
         const chapter = chapterDoc.metadata.chapter;
         const novelID = chapterDoc.metadata.novelID;
         const content = chapterDoc.pageContent;
-        // eslint-disable-next-line lodash/prefer-lodash-method -- PouchDB API
-        const existing = await this.db.find({
-            selector: {
-                'metadata.docType': CHAPTER_CHUNK_DOCTYPE,
-                'metadata.chapter': chapter,
-                'metadata.novelID': novelID
-            }
-        });
-        if(existing.docs.length > 0) {
-            throw new Error('Duplicate key for properties metadata.chapter, metadata.sequence');
-        }
+
         const chunks = await this.textSplitter.splitText(content);
         if(!chunks.length) {
             throw new Error('No text chunks generated');
         }
         const bar = this.debugBar?.create(chunks.length, 0, { msg: `${_.chain(content).split('\n').head().trim().value()} chunks` });
-        for(let sequence = 0; sequence < chunks.length; sequence++) {
+        const chunkDocs = await Promise.all(_.map(chunks, async (chunk, sequence) => {
             bar?.increment();
-            const chunkContent = chunks[sequence];
             const chunkDoc = new ChapterChunkDocument({
-                pageContent: chunkContent,
+                pageContent: chunk,
                 metadata: {
                     chapter,
                     sequence: sequence + 1,
@@ -99,8 +90,15 @@ export class ChapterChunkDocumentStore {
                 }
             }) as ChapterChunkDocument & { _id: string };
             chunkDoc._id = `chapter_chunk_${novelID}_${chapter}_${sequence + 1}`;
-            await this.db.put(chunkDoc);
-        }
+            return chunkDoc;
+        }));
+        // Put them all
+        const result = await this.db.bulkDocs(chunkDocs);
+        _.forEach(result, (res) => {
+            if('error' in res && res.error) {
+                throw res;
+            }
+        });
         bar?.stop();
         if(bar) {
             this.debugBar?.remove(bar);
@@ -114,16 +112,12 @@ export class ChapterChunkDocumentStore {
         // eslint-disable-next-line lodash/prefer-lodash-method -- PouchDB API
         const res = await this.db.find({
             selector: {
-                'metadata.docType': CHAPTER_CHUNK_DOCTYPE,
-                'metadata.chapter': chapter,
-                'metadata.novelID': novelID
-            },
-            sort: [
-                { 'metadata.docType': 'asc' },
-                { 'metadata.novelID': 'asc' },
-                { 'metadata.chapter': 'asc' },
-                { 'metadata.sequence': 'asc' }
-            ]
+                metadata: {
+                    docType: CHAPTER_CHUNK_DOCTYPE,
+                    chapter,
+                    novelID,
+                },
+            }
         });
         return res.docs as unknown as ChapterChunkDocument[];
     }

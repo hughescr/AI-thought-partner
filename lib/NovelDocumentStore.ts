@@ -1,21 +1,26 @@
 import { Document } from '@langchain/core/documents';
+import PouchDB from 'pouchdb';
+import find from 'pouchdb-find';
+PouchDB.plugin(find);
 import { MarkdownChapterTextSplitter } from './MarkdownChapterTextSplitter';
 import { ChapterDocumentStore } from './ChapterDocumentStore';
 import { ChapterDocument } from './ChapterDocumentStore';
 import type { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
 import _ from 'lodash';
-import Loki from 'lokijs';
 
-import { VectorStore } from '@langchain/core/vectorstores';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
-import { FaissStoreWithMMR } from './FAISSStoreWithMMR';
+import { NovelFaissStore } from './NovelFaissStore';
 import type { Embeddings } from '@langchain/core/embeddings';
 
 import type { MultiBar, SingleBar } from 'cli-progress';
+import { rm } from 'node:fs/promises';
+
+const NOVEL_DOCTYPE = 'novel';
 
 // NovelDocument: represents the complete novel in Markdown.
 export class NovelDocument extends Document<{
-    novelID?: string
+    docType: string
+    novelID: string
     title: string
     author: string
     genre?: string
@@ -23,9 +28,16 @@ export class NovelDocument extends Document<{
 }> {
     constructor(fields: {
         pageContent: string
-        metadata: { novelID?: string, title: string, author: string, genre?: string, filepath?: string }
+        metadata: { title: string, author: string, genre?: string, filepath?: string }
     }) {
-        super(fields);
+        super({
+            ...fields,
+            metadata: {
+                ...fields.metadata,
+                docType: NOVEL_DOCTYPE,
+                novelID: computeNovelID(fields.metadata.author, fields.metadata.title),
+            },
+        });
     }
 }
 
@@ -36,56 +48,48 @@ export function computeNovelID(author: string, title: string): string {
 }
 
 // NovelDocumentStore: stores novels and auto-splits them into chapters.
-export class NovelDocumentStore extends VectorStore {
-    private db: Loki;
+export class NovelDocumentStore {
+    private db!: PouchDB.Database;
+    private indexCreated: Promise<void>;
     private debugBar?: MultiBar;
-    private novelsCollection: Loki.Collection;
     private chapterStore: ChapterDocumentStore;
     private chapterSplitter: MarkdownChapterTextSplitter;
     private filePath: string;
     public embeddings: Embeddings;
-    private faissStore!: Promise<FaissStoreWithMMR>;
-    // eslint-disable-next-line lodash/prefer-constant -- Cannot use _.constant here because we need to declare this before calling super()
-    public _vectorstoreType() { return 'novel'; }
+    private faissFolder: string;
 
     constructor(embeddings: Embeddings, dbConfig: { filePath: string, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
-        super(embeddings, dbConfig);
         this.debugBar = dbConfig.debugBar;
-        this.db = new Loki(dbConfig.filePath, {
-            adapter: new Loki.LokiFsAdapter(),
-            autoload: true,
-            autosave: true,
-            autosaveInterval: 200,
-            throttledSaves: true,
-        });
-        this.novelsCollection =
-            this.db.getCollection('novels') ||
-            this.db.addCollection('novels', {
-                unique: ['metadata.novelID'],
-                indices: ['metadata.novelID'],
-                autoupdate: true,
-            });
+        this.db = new PouchDB(dbConfig.filePath, { auto_compaction: true });
+        this.indexCreated = this.db
+            .createIndex({ index: { fields: ['metadata.docType', 'metadata.novelID'] } })
+            .then(_.noop);
         // Create our own ChapterDocumentStore using the same Loki instance.
         this.filePath = `${dbConfig.filePath}-FAISS`;
         this.embeddings = embeddings;
         this.chapterStore = new ChapterDocumentStore({ db: this.db, summaryGenerator: dbConfig.summaryGenerator, debugBar: this.debugBar });
         this.chapterSplitter = new MarkdownChapterTextSplitter();
-        this.faissStore = FaissStore.load(this.filePath, this.embeddings).catch(() => new FaissStore(this.embeddings, {})) as Promise<FaissStoreWithMMR>;
+        this.faissFolder = `${dbConfig.filePath}-FAISS`;
+        // (No FAISS store creation here; we will do that per novel in addNovel.)
     }
 
     async addNovel(novelDoc: NovelDocument): Promise<void> {
+        await this.indexCreated;
         // Persist the novel document.
-        await this.persistNovel(novelDoc);
+        const storeNovel = novelDoc as NovelDocument & { _id: string };
+        storeNovel._id = `novel_${novelDoc.metadata.novelID}`;
+        await this.db.put(storeNovel);
 
         // Split the novel into chapters.
         const chapters = await this.chapterSplitter.splitDocuments([novelDoc]);
         const chapterBar = this.debugBar?.create(chapters.length, 0, { msg: 'Chapters' });
-        const faiss = await this.faissStore;
+        const novelID = novelDoc.metadata.novelID;
+        const storePath = `${this.faissFolder}/${novelID}`;
+        await rm(storePath, { recursive: true, force: true }); // Remove any existing FAISS store
+        const faiss = new FaissStore(this.embeddings, {});
 
         // Process each chapter using a helper.
-        for(let i = 0; i < chapters.length; i++) {
-            await this.processChapter(chapters[i], i, novelDoc.metadata.novelID!, faiss, chapterBar);
-        }
+        await Promise.all(_.map(chapters, (chapter, index) => this.processChapter(chapter, index + 1, novelDoc.metadata.novelID, faiss, chapterBar)));
 
         chapterBar?.stop();
         if(chapterBar) {
@@ -93,40 +97,27 @@ export class NovelDocumentStore extends VectorStore {
         }
     }
 
-    private async persistNovel(novelDoc: NovelDocument): Promise<void> {
-        // Ensure novelID is set (compute reproducibly if missing) and insert the document.
-        if(!novelDoc.metadata.novelID) {
-            novelDoc.metadata.novelID = computeNovelID(novelDoc.metadata.author, novelDoc.metadata.title);
-        }
-        this.novelsCollection.insert(novelDoc);
-        await new Promise<void>((resolve, reject) => {
-            this.db.saveDatabase(err => (err ? reject(err) : resolve()));
-        });
-    }
-
     private async processChapter(
         chapter: Document,
         index: number,
         novelID: string,
-        faiss: FaissStoreWithMMR,
-        chapterBar: SingleBar
+        faiss: FaissStore,
+        chapterBar: SingleBar | undefined
     ): Promise<void> {
         const chapterTitle = this.extractChapterTitle(chapter.pageContent);
-        chapterBar?.update(index + 1, { msg: chapterTitle });
-
-        this.updateChapterMetadata(chapter, index + 1, novelID);
+        chapterBar?.update(index, { msg: chapterTitle });
 
         const chapterDoc = new ChapterDocument({
             pageContent: chapter.pageContent,
-            metadata: { novelID, chapter: index + 1 },
+            metadata: { novelID, chapter: index },
         });
         await this.chapterStore.addChapter(chapterDoc);
 
-        await this.processChapterSummary(chapterTitle, index + 1, faiss, chapterBar);
-        await this.processChapterChunks(chapterTitle, index + 1, faiss, chapterBar);
+        await this.processChapterSummary(chapterDoc, chapterTitle, faiss, chapterBar);
+        await this.processChapterChunks(chapterDoc, chapterTitle, faiss, chapterBar);
 
         if(faiss._index) {
-            await faiss.save(this.filePath);
+            await faiss.save(`${this.faissFolder}/${novelID}`);
         }
     }
 
@@ -134,36 +125,28 @@ export class NovelDocumentStore extends VectorStore {
         return _.chain(pageContent).split('\n').head().trim().value();
     }
 
-    private updateChapterMetadata(chapter: Document, chapterNum: number, novelID: string): void {
-        if(!chapter.metadata) {
-            chapter.metadata = {};
-        }
-        chapter.metadata.chapter = chapterNum;
-        chapter.metadata.novelID = novelID;
-    }
-
     private async processChapterSummary(
+        chapter: ChapterDocument,
         chapterTitle: string,
-        chapterNum: number,
-        faiss: FaissStoreWithMMR,
-        chapterBar: SingleBar
+        faiss: FaissStore,
+        chapterBar: SingleBar | undefined
     ): Promise<void> {
-        const summaryDoc = await this.chapterStore.getChapterSummary(chapterNum);
+        const summaryDoc = await this.chapterStore.getChapterSummary(chapter);
         if(summaryDoc) {
-            chapterBar?.update(chapterNum, { msg: `Adding summary of ${chapterTitle} to FAISS` });
+            chapterBar?.update(chapter.metadata.chapter, { msg: `Adding summary of ${chapterTitle} to FAISS` });
             await faiss.addDocuments([summaryDoc]);
         }
     }
 
     private async processChapterChunks(
+        chapter: ChapterDocument,
         chapterTitle: string,
-        chapterNum: number,
-        faiss: FaissStoreWithMMR,
-        chapterBar: SingleBar
+        faiss: FaissStore,
+        chapterBar: SingleBar | undefined
     ): Promise<void> {
-        chapterBar?.update(chapterNum, { msg: `Getting chunks of ${chapterTitle}` });
-        const chunks = await this.chapterStore.getChapterChunks(chapterNum);
-        chapterBar?.update(chapterNum, { msg: `Got ${chunks.length} chunks of ${chapterTitle}` });
+        chapterBar?.update(chapter.metadata.chapter, { msg: `Getting chunks of ${chapterTitle}` });
+        const chunks = await this.chapterStore.getChapterChunks(chapter);
+        chapterBar?.update(chapter.metadata.chapter, { msg: `Got ${chunks.length} chunks of ${chapterTitle}` });
         if(chunks.length > 0) {
             const chunkBar = this.debugBar?.create(chunks.length, 0, { msg: `Adding chunks of ${chapterTitle} to FAISS` });
             for(const chunk of chunks) {
@@ -175,51 +158,15 @@ export class NovelDocumentStore extends VectorStore {
                 this.debugBar?.remove(chunkBar);
             }
         }
-        chapterBar?.update(chapterNum, { msg: `Done with chunks of ${chapterTitle}` });
+        chapterBar?.update(chapter.metadata.chapter, { msg: `Done with chunks of ${chapterTitle}` });
     }
 
-    async addDocuments(documents: Document[]): Promise<void> {
-        for(const doc of documents) {
-            if(!doc.metadata || !doc.metadata.title || !doc.metadata.author) {
-                throw new Error('Document missing required novel metadata');
-            }
-            await this.addNovel(doc as NovelDocument);
-        }
+    public async getVectorStoreForNovel(novel: NovelDocument): Promise<NovelFaissStore> {
+        const storePath = `${this.faissFolder}/${novel.metadata.novelID}`;
+        return await NovelFaissStore.load(storePath, this.embeddings, novel, this.chapterStore);
     }
 
-    async addVectors(_vectors: number[][], _documents: Document[]): Promise<string[]> {
-        throw new Error('Method not implemented. You can add documents via addDocuments or addNovel.');
-    }
-
-    async similaritySearchVectorWithScore(query: number[], k: number): Promise<[Document, number][]> {
-        const faissResults = await (await this.faissStore).similaritySearchVectorWithScore(query, k);
-        const seenChapters = new Set<number>();
-        const results: [Document, number][] = [];
-        for(const [doc, score] of faissResults) {
-            if(doc.metadata?.chapter) {
-                const chapNum = doc.metadata.chapter;
-                if(!seenChapters.has(chapNum)) {
-                    const chapterDoc = await this.chapterStore.getChapter(chapNum);
-                    if(chapterDoc) {
-                        results.push([chapterDoc, score]);
-                        seenChapters.add(chapNum);
-                    }
-                }
-                continue;
-            }
-            // If no chapter metadata is present.
-            throw new Error(`Chapter metadata missing in document: ${JSON.stringify(doc)}`);
-        }
-        return results;
-    }
-
-    // New close method to properly shut down the database connection
-    async close(): Promise<void> {
-        const faiss = await this.faissStore;
-        // Only save if something was added to the index.
-        if(faiss._index) {
-            await faiss.save(this.filePath);
-        }
-        return this.db.close();
+    public async destroy(): Promise<void> {
+        await this.db.destroy();
     }
 }
