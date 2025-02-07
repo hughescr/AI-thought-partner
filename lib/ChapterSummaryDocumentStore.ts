@@ -1,5 +1,6 @@
 import { Document } from '@langchain/core/documents';
 import type { ChapterDocument } from './ChapterDocumentStore';
+import type { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
 import PouchDB from 'pouchdb';
 import find from 'pouchdb-find';
 PouchDB.plugin(find);
@@ -23,26 +24,35 @@ export class ChapterSummaryDocument extends Document<{ chapter: number, novelID:
 export class ChapterSummaryDocumentStore {
     private db!: PouchDB.Database;
     private debugBar?: MultiBar;
+    private summaryGenerator: ChapterSummaryGenerator;
     private isClosed = false;
     private autoUpdateTimers = new Set<ReturnType<typeof setTimeout>>();
     // Removed collection; using this.db directly.
 
-    constructor(config: { db: PouchDB.Database, debugBar?: MultiBar }) {
+    constructor(config: { db: PouchDB.Database, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
         this.debugBar = config.debugBar;
         this.db = config.db;
+        this.summaryGenerator = config.summaryGenerator;
         (async () => {
             await this.db.createIndex({ index: { fields: ['metadata.docType', 'metadata.novelID', 'metadata.chapter'] } });
         })();
     }
 
-    async addChapterSummary(doc: ChapterSummaryDocument): Promise<void> {
-        if(!doc.metadata || !_.isNumber(doc.metadata.chapter)) {
-            throw new Error('chapter metadata is required');
+    async addChapterSummary(chapterDoc: ChapterDocument): Promise<void> {
+        const chapterTitle = _.chain(chapterDoc.pageContent).split('\n').head()?.trim().trim('#').trim().value();
+        const bar = this.debugBar?.create(1, 0, { msg: `Generating summary for ${chapterTitle}` });
+        const summaryDoc = await this.summaryGenerator.generateSummary(chapterDoc);
+        bar?.stop();
+        if(bar) {
+            this.debugBar?.remove(bar);
         }
-        // Mimic ChapterChunkDocumentStore:
-        const summaryDoc = doc as ChapterSummaryDocument & { _id?: string };
-        summaryDoc._id = `chapter_summary_${doc.metadata.novelID}_${doc.metadata.chapter}`;
-        await this.db.put(doc);
+        // Ensure proper metadata.
+        summaryDoc.metadata.chapter = chapterDoc.metadata.chapter;
+        summaryDoc.metadata.novelID = chapterDoc.metadata.novelID;
+        summaryDoc.metadata.docType = 'summary';
+        const sDoc = summaryDoc as ChapterSummaryDocument & { _id?: string };
+        sDoc._id = `chapter_summary_${chapterDoc.metadata.novelID}_${chapterDoc.metadata.chapter}`;
+        await this.db.put(sDoc);
     }
 
     async getChapterSummary(chapter: ChapterDocument): Promise<ChapterSummaryDocument | undefined> {

@@ -1,5 +1,6 @@
 import { ChapterSummaryDocument, ChapterSummaryDocumentStore } from '../lib/ChapterSummaryDocumentStore';
 import { ChapterDocument } from '../lib/ChapterDocumentStore';
+import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,8 @@ import { dirname, join as pathJoin } from 'node:path';
 import PouchDB from 'pouchdb';
 import find from 'pouchdb-find';
 PouchDB.plugin(find);
+import { RunnableLambda } from '@langchain/core/runnables';
+import _ from 'lodash';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -25,6 +28,11 @@ describe('ChapterSummaryDocument', () => {
     });
 });
 
+const summaryGenerator = new ChapterSummaryGenerator({
+    targetSummarySize: 100,
+    llm: RunnableLambda.from(_.constant('Concise generated summary')),
+});
+
 describe('ChapterSummaryDocumentStore', () => {
     let db: PouchDB.Database;
     let store: ChapterSummaryDocumentStore;
@@ -35,7 +43,7 @@ describe('ChapterSummaryDocumentStore', () => {
             throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
         } catch{ /* file does not exist; continue */ }
         db = new PouchDB(TEST_DB_PATH);
-        store = new ChapterSummaryDocumentStore({ db });
+        store = new ChapterSummaryDocumentStore({ db, summaryGenerator });
     });
 
     afterEach(async () => {
@@ -50,24 +58,20 @@ describe('ChapterSummaryDocumentStore', () => {
 
     it('stores and retrieves chapter summaries', async () => {
         const chapter = new ChapterDocument({
-            pageContent: 'Chapter 1 content',
-            metadata: { novelID: 'test', chapter: 1 }
-        });
-        const doc = new ChapterSummaryDocument({
-            pageContent: 'Chapter 1 summary',
+            pageContent: '# Chapter 1\nChapter 1 content',
             metadata: { novelID: 'test', chapter: 1 }
         });
 
-        await store.addChapterSummary(doc);
+        await store.addChapterSummary(chapter);
         const retrieved = await store.getChapterSummary(chapter);
 
-        expect(retrieved?.pageContent).toBe('Chapter 1 summary');
+        expect(retrieved?.pageContent).toBe('# Chapter 1\nConcise generated summary');
         expect(retrieved?.metadata.chapter).toBe(1);
     });
 
     it('returns undefined for non-existent chapters', async () => {
         const doc = new ChapterDocument({
-            pageContent: 'Non-existent chapter',
+            pageContent: '#Chapter 999\nNon-existent chapter',
             metadata: { novelID: 'test', chapter: 999 }
         });
         const result = await store.getChapterSummary(doc);
@@ -76,25 +80,18 @@ describe('ChapterSummaryDocumentStore', () => {
 
     it('persists data between instances', async () => {
         const chapter = new ChapterDocument({
-            pageContent: 'Chapter 3 content',
+            pageContent: '#Chapter 3\nChapter 3 content',
             metadata: { novelID: 'test', chapter: 3 }
         });
-        const firstStore = new ChapterSummaryDocumentStore({ db });
-        const doc = new ChapterSummaryDocument({
-            pageContent: 'Lasting content',
-            metadata: { novelID: 'test', chapter: 3 }
-        });
+        const firstStore = new ChapterSummaryDocumentStore({ db, summaryGenerator });
 
-        await firstStore.addChapterSummary(doc);
-
-        // Sleep for 200ms to allow autosave to complete
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await firstStore.addChapterSummary(chapter);
 
         // Create new store instance to verify persistence
-        const secondStore = new ChapterSummaryDocumentStore({ db });
+        const secondStore = new ChapterSummaryDocumentStore({ db, summaryGenerator });
         const persistedDoc = await secondStore.getChapterSummary(chapter);
 
-        expect(persistedDoc?.pageContent).toBe('Lasting content');
+        expect(persistedDoc?.pageContent).toBe('#Chapter 3\nConcise generated summary');
     });
 
     it('handles invalid chapter numbers', async () => {
