@@ -1,15 +1,19 @@
-import { Document } from '@langchain/core/documents';
+import { Document, type DocumentInterface } from '@langchain/core/documents';
+import { VectorStore } from '@langchain/core/vectorstores';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import type { Embeddings } from '@langchain/core/embeddings';
 import { NovelDocument } from './NovelDocumentStore';
 import { ChapterDocumentStore } from './ChapterDocumentStore';
+import _ from 'lodash';
 
-export class NovelFaissStore {
+export class NovelFaissStore extends VectorStore {
     private store: FaissStore;
     private novel: NovelDocument;
     private chapterStore: ChapterDocumentStore;
+    public _vectorstoreType() { return 'novel_faiss'; }
 
     private constructor(store: FaissStore, novel: NovelDocument, chapterStore: ChapterDocumentStore) {
+        super(store.embeddings, {});
         this.store = store;
         this.novel = novel;
         this.chapterStore = chapterStore;
@@ -50,5 +54,13 @@ export class NovelFaissStore {
             }
         }
         return results;
+    }
+
+    async addDocuments(_documents: DocumentInterface[], _options?: Record<string, unknown>): Promise<string[] | void> {
+        throw new Error('Method not implemented.');
+    }
+
+    async addVectors(_vectors: number[][], _documents: DocumentInterface[], _options?: Record<string, unknown>): Promise<string[] | void> {
+        throw new Error('Method not implemented.');
     }
 }

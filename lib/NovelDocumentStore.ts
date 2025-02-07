@@ -8,6 +8,7 @@ import { ChapterDocument } from './ChapterDocumentStore';
 import type { ChapterSummaryGenerator } from './ChapterSummaryGenerator';
 import _ from 'lodash';
 
+import { VectorStore } from '@langchain/core/vectorstores';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { NovelFaissStore } from './NovelFaissStore';
 import type { Embeddings } from '@langchain/core/embeddings';
@@ -161,7 +162,7 @@ export class NovelDocumentStore {
         chapterBar?.update(chapter.metadata.chapter, { msg: `Done with chunks of ${chapterTitle}` });
     }
 
-    public async getVectorStoreForNovel(novel: NovelDocument): Promise<NovelFaissStore> {
+    public async getVectorStoreForNovel(novel: NovelDocument): Promise<VectorStore> {
         const storePath = `${this.faissFolder}/${novel.metadata.novelID}`;
         return await NovelFaissStore.load(storePath, this.embeddings, novel, this.chapterStore);
     }

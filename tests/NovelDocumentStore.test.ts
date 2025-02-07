@@ -169,6 +169,59 @@ Chapter two.
             seenChapters.add(doc.metadata.chapter);
         }
     });
+
+    it('retrieves chapters using the vectorstore retriever interface with a text query', async () => {
+        const markdownText = `# Chapter 1
+The quick brown fox jumps over the lazy dog.
+# Chapter 2
+Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+`;
+        const novel = new NovelDocument({
+            pageContent: markdownText,
+            metadata: { title: 'Retriever Novel', author: 'Retriever Author', genre: 'Test' }
+        });
+        await novelStore.addNovel(novel);
+        const vectorStore = await novelStore.getVectorStoreForNovel(novel);
+        // Use as retriever if available, otherwise use the vectorStore directly.
+        const retriever = vectorStore.asRetriever();
+        const query = 'quick brown fox';
+        const results = await retriever.invoke(query);
+        expect(results.length).toBeGreaterThan(0);
+        _.forEach(results, (doc) => {
+            expect(doc.metadata.chapter).toBeDefined();
+        });
+        // Optionally check that at least one result contains the query text.
+        const hasQuery = _.some(results, doc => _(doc.pageContent).toLower().includes('quick brown fox'));
+        expect(hasQuery).toBe(true);
+    });
+
+    it('addDocuments should throw "Method not implemented."', async () => {
+        // Create a novel to obtain a NovelFaissStore instance.
+        const markdownText = `# Chapter 1
+Test chapter content.`;
+        const novel = new NovelDocument({
+            pageContent: markdownText,
+            metadata: { title: 'AddDocs Novel', author: 'Test Author' }
+        });
+        await novelStore.addNovel(novel);
+        const faiss = await novelStore.getVectorStoreForNovel(novel);
+        await expect(faiss.addDocuments([{ pageContent: 'dummy', metadata: {} }]))
+        .rejects.toThrow('Method not implemented.');
+    });
+
+    it('addVectors should throw "Method not implemented."', async () => {
+        // Create another novel to get a fresh vector store.
+        const markdownText = `# Chapter 1
+Test chapter content.`;
+        const novel = new NovelDocument({
+            pageContent: markdownText,
+            metadata: { title: 'AddVectors Novel', author: 'Test Author' }
+        });
+        await novelStore.addNovel(novel);
+        const faiss = await novelStore.getVectorStoreForNovel(novel);
+        await expect(faiss.addVectors([[0]], [{ pageContent: 'dummy', metadata: {} }]))
+        .rejects.toThrow('Method not implemented.');
+    });
 });
 
 describe('computeNovelID', () => {
