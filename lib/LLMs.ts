@@ -69,6 +69,8 @@ export const llama33bedrock_70bLLM = new ChatBedrockConverse({
 // Apache License 2.0
 export const snowflakeArctic2Embeddings = new OpenAIEmbeddings({ model: 'text-embedding-snowflake-arctic-embed-l-v2.0', configuration: { baseURL: 'http://localhost:1234/v1' } });
 export const cachedSnowflakeArctic2Embeddings = makeCachedEmbeddings(snowflakeArctic2Embeddings);
+export const mxBAIEmbeddings = new OpenAIEmbeddings({ model: 'text-embedding-mxbai-embed-large-v1', configuration: { baseURL: 'http://localhost:1234/v1' } });
+export const cachedMxBAIEmbeddings = makeCachedEmbeddings(mxBAIEmbeddings);
 
 // LLMs
 
@@ -105,6 +107,3 @@ export const llama33_70bLLM = new ChatOpenAI({ model: 'llama-3.3-70b-instruct', 
 // // Apache License 2.0
 // export const jinaV2RerankBaseMultilingual = new LlamaCppRerank({ modelPath: '/Users/craig/.lmstudio/models/gpustack/jina-reranker-v2-base-multilingual-GGUF/jina-reranker-v2-base-multilingual-FP16.gguf', topN: 10 });
 export const bgeV2M3Reranker = new LlamaCppRerank({ modelPath: '/Users/craig/.lmstudio/models/gpustack/bge-reranker-v2-m3-GGUF/bge-reranker-v2-m3-FP16.gguf', topN: 5 });
-// export const snowflakeArctic2Reranker = new LlamaCppRerank({ modelPath: '/Users/craig/.lmstudio/models/limcheekin/snowflake-arctic-embed-l-v2.0-GGUF/snowflake-arctic-embed-l-v2.0.F16.gguf', topN: 5 });
-// export const jinaV1TinyENReranker = new LlamaCppRerank({ modelPath: '/Users/craig/.lmstudio/models/mradermacher/jina-reranker-v1-tiny-en-GGUF/jina-reranker-v1-tiny-en.f16.gguf', topN: 10 });
-// export const jinaV1TurboENReranker = new LlamaCppRerank({ modelPath: '/Users/craig/.lmstudio/models/mradermacher/jina-reranker-v1-turbo-en-GGUF/jina-reranker-v1-turbo-en.f16.gguf', topN: 10 });
