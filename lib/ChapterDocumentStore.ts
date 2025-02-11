@@ -31,7 +31,7 @@ export class ChapterDocumentStore {
     private chapterChunkStore!: ChapterChunkDocumentStore;
     private initializationPromise: Promise<void>;
 
-    constructor(config: { db: PouchDB.Database, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
+    constructor(config: { db: PouchDB.Database, summaryGenerator?: ChapterSummaryGenerator, debugBar?: MultiBar }) {
         this.debugBar = config.debugBar;
         this.db = config.db;
         this.initializationPromise = this.db.createIndex({

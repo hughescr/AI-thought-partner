@@ -68,7 +68,7 @@ export class NovelDocumentStore {
     public embeddings: Embeddings;
     private faissFolder: string;
 
-    constructor(embeddings: Embeddings, dbConfig: { filePath: string, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
+    constructor(embeddings: Embeddings, dbConfig: { filePath: string, summaryGenerator?: ChapterSummaryGenerator, debugBar?: MultiBar }) {
         this.debugBar = dbConfig.debugBar;
         const basePath = dbConfig.filePath;
         const pouchdbPath = join(basePath, 'pouchdb');
@@ -236,6 +236,7 @@ export class NovelDocumentStore {
     }
 
     public async getVectorStoreForNovel(novel: NovelDocument): Promise<VectorStore> {
+        await this.indexCreated;
         const storePath = `${this.faissFolder}/${novel.metadata.novelID}`;
         return await NovelFaissStore.load(storePath, this.embeddings, novel, this.chapterStore);
     }

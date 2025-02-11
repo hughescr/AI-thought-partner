@@ -24,12 +24,12 @@ export class ChapterSummaryDocument extends Document<{ chapter: number, novelID:
 export class ChapterSummaryDocumentStore {
     private db!: PouchDB.Database;
     private debugBar?: MultiBar;
-    private summaryGenerator: ChapterSummaryGenerator;
+    private summaryGenerator?: ChapterSummaryGenerator;
     private isClosed = false;
     private autoUpdateTimers = new Set<ReturnType<typeof setTimeout>>();
     private initializationPromise: Promise<void>;
 
-    constructor(config: { db: PouchDB.Database, summaryGenerator: ChapterSummaryGenerator, debugBar?: MultiBar }) {
+    constructor(config: { db: PouchDB.Database, summaryGenerator?: ChapterSummaryGenerator, debugBar?: MultiBar }) {
         this.debugBar = config.debugBar;
         this.db = config.db;
         this.summaryGenerator = config.summaryGenerator;
@@ -42,7 +42,7 @@ export class ChapterSummaryDocumentStore {
         await this.initializationPromise;
         const chapterTitle = _.chain(chapterDoc.pageContent).split('\n').head()?.trim().trim('#').trim().value();
         const bar = this.debugBar?.create(1, 0, { msg: `Generating summary for ${chapterTitle}` });
-        const summaryDoc = await this.summaryGenerator.generateSummary(chapterDoc);
+        const summaryDoc = await this.summaryGenerator!.generateSummary(chapterDoc);
         bar?.stop();
         if(bar) {
             this.debugBar?.remove(bar);
