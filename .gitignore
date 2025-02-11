@@ -132,6 +132,7 @@ dist
 # Ignore neo4j database
 neo4j_db/
 novels/
+novels_db/
 repopack-output.txt
 
 # Ignore python .venv and venv
