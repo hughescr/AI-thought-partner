@@ -56,6 +56,7 @@ export class ChapterDocumentStore {
                     chapter: doc.metadata.chapter,
                 },
             },
+            limit: Number.MAX_SAFE_INTEGER,
         });
         if(dup.docs.length > 0) {
             throw new Error('Document is already in collection, please use update()');
@@ -79,6 +80,7 @@ export class ChapterDocumentStore {
                     chapter,
                 },
             },
+            limit: Number.MAX_SAFE_INTEGER,
         });
         return res.docs[0] as unknown as ChapterDocument;
     }

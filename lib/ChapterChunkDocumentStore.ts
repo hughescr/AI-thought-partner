@@ -56,6 +56,7 @@ export class ChapterChunkDocumentStore {
                     novelID,
                 },
             },
+            limit: Number.MAX_SAFE_INTEGER,
         });
 
         if(res.docs.length === 0) {
@@ -117,7 +118,8 @@ export class ChapterChunkDocumentStore {
                     chapter,
                     novelID,
                 },
-            }
+            },
+            limit: Number.MAX_SAFE_INTEGER,
         });
         return res.docs as unknown as ChapterChunkDocument[];
     }

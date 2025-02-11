@@ -75,14 +75,16 @@ Content of chapter two.
         // Verify the novel was inserted into the novels collection.
         // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
         const res = await (novelStore as unknown as { db: PouchDB.Database }).db.find({
-            selector: { metadata: { docType: 'novel', novelID: computedID } }
+            selector: { metadata: { docType: 'novel', novelID: computedID } },
+            limit: Number.MAX_SAFE_INTEGER,
         });
         expect(res.docs.length).toBeGreaterThan(0);
 
         // Verify that chapters were added and numbered correctly.
         // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
         const chaptersRes = await (chapterStore as unknown as { db: PouchDB.Database }).db.find({
-            selector: { metadata: { docType: 'chapter', novelID: computedID } }
+            selector: { metadata: { docType: 'chapter', novelID: computedID } },
+            limit: Number.MAX_SAFE_INTEGER,
         }) as unknown as { docs: ChapterDocument[] };
         expect(chaptersRes.docs.length).toBeGreaterThan(0);
         _.forEach(chaptersRes.docs, (chapter, index) => {
@@ -104,12 +106,14 @@ Chapter one content.
 
         // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
         const res = await (novelStore as unknown as { db: PouchDB.Database }).db.find({
-            selector: { metadata: { docType: 'novel', novelID: novel.metadata.novelID } }
+            selector: { metadata: { docType: 'novel', novelID: novel.metadata.novelID } },
+            limit: Number.MAX_SAFE_INTEGER,
         });
         expect(res.docs.length).toBeGreaterThan(0);
         // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
         const chaptersRes = await (chapterStore as unknown as { db: PouchDB.Database }).db.find({
-            selector: { 'metadata.docType': 'chapter', 'metadata.novelID': novel.metadata.novelID }
+            selector: { 'metadata.docType': 'chapter', 'metadata.novelID': novel.metadata.novelID },
+            limit: Number.MAX_SAFE_INTEGER,
         }) as unknown as { docs: ChapterDocument[] };
         expect(chaptersRes.docs.length).toBe(1);
         const chapter = chaptersRes.docs[0];

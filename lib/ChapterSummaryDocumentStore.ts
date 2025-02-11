@@ -66,6 +66,7 @@ export class ChapterSummaryDocumentStore {
                     chapter: chapter.metadata.chapter,
                 },
             },
+            limit: Number.MAX_SAFE_INTEGER,
         }) as unknown as { docs: ChapterSummaryDocument[] };
         return res?.docs[0];
     }
