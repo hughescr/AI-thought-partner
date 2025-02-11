@@ -70,4 +70,19 @@ export class ChapterSummaryDocumentStore {
         }) as unknown as { docs: ChapterSummaryDocument[] };
         return res?.docs[0];
     }
+
+    async getChapterSummaries(novelID: string): Promise<ChapterSummaryDocument[]> {
+        await this.initializationPromise;
+        // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
+        const res = await this.db.find({
+            selector: {
+                metadata: {
+                    docType: CHAPTER_SUMMARY_DOCTYPE,
+                    novelID,
+                },
+            },
+            limit: Number.MAX_SAFE_INTEGER,
+        }) as unknown as { docs: ChapterSummaryDocument[] };
+        return res.docs;
+    }
 }

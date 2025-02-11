@@ -17,6 +17,7 @@ import type { Embeddings } from '@langchain/core/embeddings';
 
 import type { MultiBar, SingleBar } from 'cli-progress';
 import { rm } from 'node:fs/promises';
+import type { ChapterSummaryDocument } from './ChapterSummaryDocumentStore';
 
 const NOVEL_DOCTYPE = 'novel';
 
@@ -40,6 +41,13 @@ export class NovelDocument extends Document<{
                 docType: NOVEL_DOCTYPE,
                 novelID: computeNovelID(fields.metadata.author, fields.metadata.title),
             },
+        });
+    }
+
+    public static fromDocument(doc: Document, title: string, author: string, genre?: string, filepath?: string): NovelDocument {
+        return new NovelDocument({
+            pageContent: doc.pageContent,
+            metadata: { title, author, genre, filepath },
         });
     }
 }
@@ -96,11 +104,34 @@ export class NovelDocumentStore {
 
         // Process each chapter using a helper.
         await Promise.all(_.map(chapters, (chapter, index) => this.processChapter(chapter, index + 1, novelDoc.metadata.novelID, faiss, chapterBar)));
+        // await this.processChapter(chapters[0], 1, novelDoc.metadata.novelID, faiss, chapterBar);
 
         chapterBar?.stop();
         if(chapterBar) {
             this.debugBar?.remove(chapterBar);
         }
+    }
+
+    private async _getNovel(novelID: string): Promise<NovelDocument | undefined> {
+        await this.indexCreated;
+        // eslint-disable-next-line lodash/prefer-lodash-method -- PouchDB API
+        const found = await this.db.find({
+            selector: {
+                metadata: {
+                    docType: NOVEL_DOCTYPE,
+                    novelID,
+                },
+            },
+            limit: 1,
+        });
+        if(found && found.docs && found.docs.length > 0) {
+            return new NovelDocument(found.docs[0] as unknown as { pageContent: string, metadata: { title: string, author: string, genre?: string, filepath?: string } });
+        }
+        return undefined;
+    }
+
+    async getNovel(title: string, author: string): Promise<NovelDocument | undefined> {
+        return await this._getNovel(computeNovelID(author, title));
     }
 
     private async processChapter(
@@ -165,6 +196,43 @@ export class NovelDocumentStore {
             }
         }
         chapterBar?.update(chapter.metadata.chapter, { msg: `Done with chunks of ${chapterTitle}` });
+    }
+
+    public async getChapterSummary(chapter: ChapterDocument): Promise<ChapterSummaryDocument | undefined> {
+        return this.chapterStore.getChapterSummary(chapter);
+    }
+
+    public async getNovelSummary(novelID: string): Promise<NovelDocument | undefined> {
+        await this.indexCreated;
+        const chapterSummaries = await this.chapterStore.getChapterSummaries(novelID);
+        const novelContent = _(chapterSummaries)
+            .sortBy('metadata.chapter')
+            .map('pageContent')
+            .join('\n');
+        // eslint-disable-next-line lodash/prefer-lodash-method -- PouchDB API
+        const found = await this.db.find({
+            selector: {
+                metadata: {
+                    docType: NOVEL_DOCTYPE,
+                    novelID,
+                },
+            },
+            fields: ['metadata.title', 'metadata.author', 'metadata.genre', 'metadata.filepath'],
+            limit: Number.MAX_SAFE_INTEGER,
+        });
+        if(found && found.docs && found.docs.length > 0) {
+            const novelData = (found.docs[0] as unknown as { metadata: { title: string, author: string, genre?: string, filepath?: string } }).metadata;
+            return new NovelDocument({
+                pageContent: novelContent,
+                metadata: {
+                    title: novelData.title,
+                    author: novelData.author,
+                    genre: novelData.genre,
+                    filepath: novelData.filepath,
+                },
+            });
+        }
+        return undefined;
     }
 
     public async getVectorStoreForNovel(novel: NovelDocument): Promise<VectorStore> {

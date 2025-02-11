@@ -85,8 +85,27 @@ export class ChapterDocumentStore {
         return res.docs[0] as unknown as ChapterDocument;
     }
 
+    async getChapters(novel: NovelDocument): Promise<ChapterDocument[]> {
+        await this.initializationPromise;
+        // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
+        const res = await this.db.find({
+            selector: {
+                metadata: {
+                    docType: CHAPTER_DOCTYPE,
+                    novelID: novel.metadata.novelID,
+                },
+            },
+            limit: Number.MAX_SAFE_INTEGER,
+        });
+        return res.docs as unknown as ChapterDocument[];
+    }
+
     async getChapterSummary(chapter: ChapterDocument): Promise<ChapterSummaryDocument | undefined> {
         return this.summaryStore.getChapterSummary(chapter);
+    }
+
+    async getChapterSummaries(novelID: string): Promise<ChapterSummaryDocument[]> {
+        return this.summaryStore.getChapterSummaries(novelID);
     }
 
     async getChapterChunks(chapter: ChapterDocument): Promise<ChapterChunkDocument[]> {
