@@ -142,7 +142,7 @@ export class NovelDocumentStore {
         chapterBar: SingleBar | undefined
     ): Promise<void> {
         const chapterTitle = this.extractChapterTitle(chapter.pageContent);
-        chapterBar?.update(index, { msg: chapterTitle });
+        chapterBar?.update(chapterBar?.getProgress(), { msg: chapterTitle });
 
         const chapterDoc = new ChapterDocument({
             pageContent: chapter.pageContent,
@@ -170,7 +170,7 @@ export class NovelDocumentStore {
     ): Promise<void> {
         const summaryDoc = await this.chapterStore.getChapterSummary(chapter);
         if(summaryDoc) {
-            chapterBar?.update(chapter.metadata.chapter, { msg: `Adding summary of ${chapterTitle} to FAISS` });
+            chapterBar?.update(chapterBar?.getProgress(), { msg: `Adding summary of ${chapterTitle} to FAISS` });
             await faiss.addDocuments([summaryDoc]);
         }
     }
@@ -181,9 +181,9 @@ export class NovelDocumentStore {
         faiss: FaissStore,
         chapterBar: SingleBar | undefined
     ): Promise<void> {
-        chapterBar?.update(chapter.metadata.chapter, { msg: `Getting chunks of ${chapterTitle}` });
+        chapterBar?.update(chapterBar?.getProgress(), { msg: `Getting chunks of ${chapterTitle}` });
         const chunks = await this.chapterStore.getChapterChunks(chapter);
-        chapterBar?.update(chapter.metadata.chapter, { msg: `Got ${chunks.length} chunks of ${chapterTitle}` });
+        chapterBar?.update(chapterBar?.getProgress(), { msg: `Got ${chunks.length} chunks of ${chapterTitle}` });
         if(chunks.length > 0) {
             const chunkBar = this.debugBar?.create(chunks.length, 0, { msg: `Adding chunks of ${chapterTitle} to FAISS` });
             for(const chunk of chunks) {
@@ -195,7 +195,7 @@ export class NovelDocumentStore {
                 this.debugBar?.remove(chunkBar);
             }
         }
-        chapterBar?.update(chapter.metadata.chapter, { msg: `Done with chunks of ${chapterTitle}` });
+        chapterBar?.increment({ msg: `Done with chunks of ${chapterTitle}` });
     }
 
     public async getChapterSummary(chapter: ChapterDocument): Promise<ChapterSummaryDocument | undefined> {
