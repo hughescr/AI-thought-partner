@@ -92,6 +92,7 @@ export class NovelDocumentStore {
         // Persist the novel document.
         const storeNovel = novelDoc as NovelDocument & { _id: string };
         storeNovel._id = `novel_${novelDoc.metadata.novelID}`;
+        await this.db.get(storeNovel._id).then(doc => this.db.remove(doc)).catch(() => undefined); // Remove any existing novel
         await this.db.put(storeNovel);
 
         // Split the novel into chapters.

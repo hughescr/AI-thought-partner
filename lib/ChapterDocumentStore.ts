@@ -47,23 +47,10 @@ export class ChapterDocumentStore {
         if(!doc.metadata || !_.isNumber(doc.metadata.chapter) || !doc.metadata.novelID) {
             throw new Error('chapter metadata is required');
         }
-        // eslint-disable-next-line lodash/prefer-lodash-method -- not actually an array
-        const dup = await this.db.find({
-            selector: {
-                metadata: {
-                    docType: CHAPTER_DOCTYPE,
-                    novelID: doc.metadata.novelID,
-                    chapter: doc.metadata.chapter,
-                },
-            },
-            limit: Number.MAX_SAFE_INTEGER,
-        });
-        if(dup.docs.length > 0) {
-            throw new Error('Document is already in collection, please use update()');
-        }
         const storeDoc = doc as ChapterDocument & { _id: string };
         storeDoc._id = `chapter_${doc.metadata.novelID}_${doc.metadata.chapter}`;
-        await this.db.put(doc);
+        await this.db.get(storeDoc._id).then(doc => this.db.remove(doc)).catch(() => undefined); // Remove any existing chapter
+        await this.db.put(storeDoc);
         // No explicit save here—autosave will handle it.
         await this.summaryStore.addChapterSummary(doc);
         await this.chapterChunkStore.addChunksForChapter(doc);

@@ -53,6 +53,7 @@ export class ChapterSummaryDocumentStore {
         summaryDoc.metadata.docType = 'summary';
         const sDoc = summaryDoc as ChapterSummaryDocument & { _id?: string };
         sDoc._id = `chapter_summary_${chapterDoc.metadata.novelID}_${chapterDoc.metadata.chapter}`;
+        await this.db.get(sDoc._id).then(doc => this.db.remove(doc)).catch(() => undefined); // Remove any existing summary
         await this.db.put(sDoc);
     }
 
