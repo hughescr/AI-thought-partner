@@ -143,7 +143,7 @@ export class NovelDocumentStore {
         chapterBar: SingleBar | undefined
     ): Promise<void> {
         const chapterTitle = this.extractChapterTitle(chapter.pageContent);
-        chapterBar?.update(chapterBar?.getProgress(), { msg: chapterTitle });
+        chapterBar?.update(null as unknown as number, { msg: chapterTitle });
 
         const chapterDoc = new ChapterDocument({
             pageContent: chapter.pageContent,
@@ -171,7 +171,7 @@ export class NovelDocumentStore {
     ): Promise<void> {
         const summaryDoc = await this.chapterStore.getChapterSummary(chapter);
         if(summaryDoc) {
-            chapterBar?.update(chapterBar?.getProgress(), { msg: `Adding summary of ${chapterTitle} to FAISS` });
+            chapterBar?.update(null as unknown as number, { msg: `Adding summary of ${chapterTitle} to FAISS` });
             await faiss.addDocuments([summaryDoc]);
         }
     }
@@ -182,9 +182,9 @@ export class NovelDocumentStore {
         faiss: FaissStore,
         chapterBar: SingleBar | undefined
     ): Promise<void> {
-        chapterBar?.update(chapterBar?.getProgress(), { msg: `Getting chunks of ${chapterTitle}` });
+        chapterBar?.update(null as unknown as number, { msg: `Getting chunks of ${chapterTitle}` });
         const chunks = await this.chapterStore.getChapterChunks(chapter);
-        chapterBar?.update(chapterBar?.getProgress(), { msg: `Got ${chunks.length} chunks of ${chapterTitle}` });
+        chapterBar?.update(null as unknown as number, { msg: `Got ${chunks.length} chunks of ${chapterTitle}` });
         if(chunks.length > 0) {
             const chunkBar = this.debugBar?.create(chunks.length, 0, { msg: `Adding chunks of ${chapterTitle} to FAISS` });
             for(const chunk of chunks) {
