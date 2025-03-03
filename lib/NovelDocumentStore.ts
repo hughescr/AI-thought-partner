@@ -199,6 +199,20 @@ export class NovelDocumentStore {
         chapterBar?.increment({ msg: `Done with chunks of ${chapterTitle}` });
     }
 
+    public async getChapter(title: string, author: string, chapter: number): Promise<ChapterDocument | undefined> {
+        const novel = await this.getNovel(title, author);
+        if(novel) {
+            return await this.chapterStore.getChapter(novel, chapter);
+        }
+    }
+
+    public async getChapters(title: string, author: string): Promise<ChapterDocument[] | undefined> {
+        const novel = await this.getNovel(title, author);
+        if(novel) {
+            return await this.chapterStore.getChapters(novel);
+        }
+    }
+
     public async getChapterSummary(chapter: ChapterDocument): Promise<ChapterSummaryDocument | undefined> {
         return this.chapterStore.getChapterSummary(chapter);
     }
