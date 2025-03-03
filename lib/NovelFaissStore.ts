@@ -10,7 +10,9 @@ export class NovelFaissStore extends VectorStore {
     private store: FaissStore;
     private novel: NovelDocument;
     private chapterStore: ChapterDocumentStore;
-    public _vectorstoreType = _.constant('novel_faiss');
+    // This method must return a literal string for the VectorStore base class to work correctly
+    // eslint-disable-next-line lodash/prefer-constant -- We need to return a literal directly to avoid runtime errors
+    _vectorstoreType(): string { return 'novel_faiss'; }
 
     private constructor(store: FaissStore, novel: NovelDocument, chapterStore: ChapterDocumentStore) {
         super(store.embeddings, {});
