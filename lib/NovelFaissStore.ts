@@ -10,7 +10,7 @@ export class NovelFaissStore extends VectorStore {
     private store: FaissStore;
     private novel: NovelDocument;
     private chapterStore: ChapterDocumentStore;
-    public _vectorstoreType() { return 'novel_faiss'; }
+    public _vectorstoreType = _.constant('novel_faiss');
 
     private constructor(store: FaissStore, novel: NovelDocument, chapterStore: ChapterDocumentStore) {
         super(store.embeddings, {});
