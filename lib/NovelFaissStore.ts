@@ -30,8 +30,9 @@ export class NovelFaissStore extends VectorStore {
         let loadedStore: FaissStore;
         try {
             loadedStore = await FaissStore.load(storePath, embeddings);
-        } catch{
-            throw new Error(`No FAISS store exists at path ${storePath} for novel ${novel.metadata.novelID}`);
+        } catch(err: unknown) {
+            const errorMessage = _.isError(err) ? err.message : String(err);
+            throw new Error(`No FAISS store exists at path ${storePath} for novel ${novel.metadata.novelID} - ${errorMessage}`);
         }
         return new NovelFaissStore(loadedStore, novel, chapterStore);
     }
