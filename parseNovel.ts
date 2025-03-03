@@ -36,6 +36,6 @@ if(!(await novelStore.getNovel(novel.metadata.title, novel.metadata.author))) {
 }
 bars.stop();
 
-console.log("Novel:", novel.metadata);
+console.log('Novel:', novel.metadata);
 const novelSummary = await novelStore.getNovelSummary(novel.metadata.novelID);
-console.log("Novel Summary:", novelSummary?.pageContent);
+console.log('Novel Summary:', novelSummary?.pageContent);
