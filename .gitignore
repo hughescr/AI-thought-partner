@@ -131,9 +131,15 @@ dist
 
 # Ignore neo4j database
 neo4j_db/
+
+# Ignore novel source texts
 novels/
+
+# Ignore parsed/chunked novel DB
 novels_db/
-repopack-output.txt
+
+# Ignore temp databases created during testing
+tests/test-chapters.db*
 
 # Ignore python .venv and venv
 .venv/
@@ -142,4 +148,3 @@ venv/
 # Ignore aider stuff other than config
 .aider*
 !.aider.conf.yml
-
