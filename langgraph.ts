@@ -1,9 +1,9 @@
 import {
     cachedSnowflakeArctic2Embeddings as embeddings,
     phi4_14bLLM as fastLLM,
-    llama33bedrock_70bLLM as slowLLM,
-    bgeV2M3Reranker as fastReranker,
-    bgeV2M3Reranker as goodReranker } from './lib/LLMs';
+    deepseekR1_Qwen32bLLM as slowLLM,
+    bgeV2M3Reranker as reranker
+} from './lib/LLMs';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 // import { HumanMessage, BaseMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
