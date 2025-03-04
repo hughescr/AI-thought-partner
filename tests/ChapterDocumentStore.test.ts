@@ -170,4 +170,46 @@ describe('ChapterDocumentStore', () => {
         const finalSummary = await store.getChapterSummary(doc);
         expect(finalSummary?.pageContent).toBe('# Chapter 30\nConcise generated summary');
     });
+
+    it('getChapters retrieves all chapters for a novel', async () => {
+        const novel = new NovelDocument({
+            pageContent: 'dummy',
+            metadata: { title: 'Multiple Chapters', author: 'Test Author' }
+        });
+        const store = new ChapterDocumentStore({ db, summaryGenerator });
+
+        // Add multiple chapters
+        for (let i = 1; i <= 3; i++) {
+            const doc = new ChapterDocument({
+                pageContent: `# Chapter ${i}\nContent for chapter ${i}`,
+                metadata: { novelID: novel.metadata.novelID, chapter: i }
+            });
+            await store.addChapter(doc);
+        }
+
+        // Retrieve all chapters
+        const chapters = await store.getChapters(novel);
+        expect(chapters.length).toBe(3);
+        expect(_.map(chapters, 'metadata.chapter').sort()).toEqual([1, 2, 3]);
+    });
+
+    it('getChapterSummaries retrieves all summaries for a novel', async () => {
+        const store = new ChapterDocumentStore({ db, summaryGenerator });
+        const novelID = 'summaries_test_novel';
+
+        // Add multiple chapters
+        for (let i = 1; i <= 2; i++) {
+            const doc = new ChapterDocument({
+                pageContent: `# Chapter ${i}\nContent for summaries test ${i}`,
+                metadata: { novelID, chapter: i }
+            });
+            await store.addChapter(doc);
+        }
+
+        // Retrieve all summaries
+        const summaries = await store.getChapterSummaries(novelID);
+        expect(summaries.length).toBe(2);
+        expect(_.every(summaries, summary => summary.pageContent.includes('Concise generated summary'))).toBe(true);
+        expect(_.map(summaries, 'metadata.chapter').sort()).toEqual([1, 2]);
+    });
 });

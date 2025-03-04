@@ -108,6 +108,129 @@ Chapter one content.
         expect(chapter.metadata.chapter).toBe(1);
         expect(chapter.metadata.novelID).toBe(novel.metadata.novelID);
     });
+
+    it('getNovel retrieves a novel by title and author', async () => {
+        const markdownText = `# Chapter 1
+Test content.
+`;
+        const novel = new NovelDocument({
+            pageContent: markdownText,
+            metadata: { title: 'Get Novel Test', author: 'Test Author' }
+        });
+        await novelStore.addNovel(novel);
+
+        const retrievedNovel = await novelStore.getNovel('Get Novel Test', 'Test Author');
+        expect(retrievedNovel).toBeDefined();
+        expect(retrievedNovel?.metadata.title).toBe('Get Novel Test');
+        expect(retrievedNovel?.metadata.author).toBe('Test Author');
+        expect(retrievedNovel?.metadata.novelID).toBe(novel.metadata.novelID);
+        
+        // Test with non-existent novel
+        const nonExistentNovel = await novelStore.getNovel('Non Existent', 'Not Real');
+        expect(nonExistentNovel).toBeUndefined();
+    });
+
+    it('getChapter retrieves a specific chapter', async () => {
+        const markdownText = `# Chapter 1
+First chapter content.
+# Chapter 2
+Second chapter content.
+`;
+        const novel = new NovelDocument({
+            pageContent: markdownText,
+            metadata: { title: 'Chapter Test', author: 'Chapter Author' }
+        });
+        await novelStore.addNovel(novel);
+
+        const chapter = await novelStore.getChapter('Chapter Test', 'Chapter Author', 1);
+        expect(chapter).toBeDefined();
+        expect(chapter?.metadata.chapter).toBe(1);
+        expect(chapter?.pageContent).toContain('First chapter content');
+
+        // Test with non-existent chapter
+        const nonExistentChapter = await novelStore.getChapter('Chapter Test', 'Chapter Author', 999);
+        expect(nonExistentChapter).toBeUndefined();
+        
+        // Test with non-existent novel
+        const chapterFromNonExistentNovel = await novelStore.getChapter('Non Existent', 'Not Real', 1);
+        expect(chapterFromNonExistentNovel).toBeUndefined();
+    });
+
+    it('getChapters retrieves all chapters for a novel', async () => {
+        const markdownText = `# Chapter 1
+First chapter.
+# Chapter 2
+Second chapter.
+# Chapter 3
+Third chapter.
+`;
+        const novel = new NovelDocument({
+            pageContent: markdownText,
+            metadata: { title: 'Multi Chapter', author: 'Multi Author' }
+        });
+        await novelStore.addNovel(novel);
+
+        const chapters = await novelStore.getChapters('Multi Chapter', 'Multi Author');
+        expect(chapters).toBeDefined();
+        expect(chapters?.length).toBe(3);
+        expect(_.map(chapters, 'metadata.chapter')).toEqual([1, 2, 3]);
+        
+        // Test with non-existent novel
+        const chaptersFromNonExistentNovel = await novelStore.getChapters('Non Existent', 'Not Real');
+        expect(chaptersFromNonExistentNovel).toBeUndefined();
+    });
+
+    it('getChapterSummary retrieves a summary for a chapter', async () => {
+        const markdownText = `# Chapter 1
+Summary test content.
+`;
+        const novel = new NovelDocument({
+            pageContent: markdownText,
+            metadata: { title: 'Summary Test', author: 'Summary Author' }
+        });
+        await novelStore.addNovel(novel);
+        
+        const chapter = await novelStore.getChapter('Summary Test', 'Summary Author', 1);
+        expect(chapter).toBeDefined();
+        
+        if (chapter) {
+            const summary = await novelStore.getChapterSummary(chapter);
+            expect(summary).toBeDefined();
+            expect(summary?.pageContent).toContain('Concise generated summary');
+            expect(summary?.metadata.chapter).toBe(1);
+        }
+    });
+
+    it('getNovelSummary retrieves a summary of all chapters', async () => {
+        const markdownText = `# Chapter 1
+First chapter content.
+# Chapter 2
+Second chapter content.
+`;
+        const novel = new NovelDocument({
+            pageContent: markdownText,
+            metadata: { 
+                title: 'Novel Summary Test', 
+                author: 'Summary Author',
+                genre: 'Test Genre',
+                filepath: '/path/to/file'
+            }
+        });
+        await novelStore.addNovel(novel);
+        
+        const novelSummary = await (novelStore as any).getNovelSummary(novel.metadata.novelID);
+        expect(novelSummary).toBeDefined();
+        expect(novelSummary?.metadata.title).toBe('Novel Summary Test');
+        expect(novelSummary?.metadata.author).toBe('Summary Author');
+        expect(novelSummary?.metadata.genre).toBe('Test Genre');
+        expect(novelSummary?.metadata.filepath).toBe('/path/to/file');
+        expect(novelSummary?.pageContent).toContain('# Chapter 1\nConcise generated summary');
+        expect(novelSummary?.pageContent).toContain('# Chapter 2\nConcise generated summary');
+        
+        // Test with non-existent novel
+        const nonExistentNovelSummary = await (novelStore as any).getNovelSummary('non_existent_id');
+        expect(nonExistentNovelSummary).toBeUndefined();
+    });
 });
 
 describe('NovelDocumentStore - VectorStore API', () => {
@@ -208,5 +331,29 @@ Test chapter content.`;
 describe('computeNovelID', () => {
     it('computes a consistent novelID', () => {
         expect(computeNovelID(' John Doe ', ' Test Novel ')).toBe('john_doe_test_novel');
+    });
+});
+
+describe('NovelDocument', () => {
+    it('creates document with computed novelID', () => {
+        const novel = new NovelDocument({
+            pageContent: 'Novel content',
+            metadata: { title: 'Test Novel', author: 'John Doe' }
+        });
+        expect(novel.metadata.novelID).toBe('john_doe_test_novel');
+        expect(novel.metadata.docType).toBe('novel');
+    });
+
+    it('creates document from an existing document', () => {
+        const doc = new Document({
+            pageContent: 'Novel content',
+            metadata: {}
+        });
+        const novel = NovelDocument.fromDocument(doc, 'Test Novel', 'John Doe', 'Fiction', '/path/to/file');
+        expect(novel.metadata.novelID).toBe('john_doe_test_novel');
+        expect(novel.metadata.title).toBe('Test Novel');
+        expect(novel.metadata.author).toBe('John Doe');
+        expect(novel.metadata.genre).toBe('Fiction');
+        expect(novel.metadata.filepath).toBe('/path/to/file');
     });
 });
