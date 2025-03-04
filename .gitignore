@@ -140,6 +140,8 @@ novels_db/
 
 # Ignore temp databases created during testing
 tests/test-chapters.db*
+tests/test-chunks.db*
+tests/test-novels.db*
 
 # Ignore python .venv and venv
 .venv/
