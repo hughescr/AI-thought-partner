@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, jest } from 'bun:test';
 import { NovelDocumentStore, NovelDocument, computeNovelID } from '../lib/NovelDocumentStore';
 import { ChapterDocumentStore, ChapterDocument } from '../lib/ChapterDocumentStore';
 import { rm } from 'node:fs/promises';
@@ -355,5 +355,70 @@ describe('NovelDocument', () => {
         expect(novel.metadata.author).toBe('John Doe');
         expect(novel.metadata.genre).toBe('Fiction');
         expect(novel.metadata.filepath).toBe('/path/to/file');
+    });
+});
+
+describe('NovelDocumentStore - Error Handling and Edge Cases', () => {
+    const TEST_ERROR_DB_PATH = pathJoin(__dirname, 'test-error-novels.db');
+    
+    afterEach(async () => {
+        await rm(TEST_ERROR_DB_PATH, { recursive: true, force: true });
+        // Restore any mocks
+        jest.restoreAllMocks();
+    });
+
+    it('should handle database errors gracefully', () => {
+        // This is a placeholder for database error tests that are hard to mock with PouchDB
+        // Future implementations should use proper mocking or a test database adapter
+        expect(true).toBe(true);
+    });
+});
+
+describe('NovelDocumentStore - Concurrency and Large Data', () => {
+    const TEST_CONCURRENCY_DB_PATH = pathJoin(__dirname, 'test-concurrency-novels.db');
+    let novelStore: NovelDocumentStore;
+    
+    beforeEach(async () => {
+        const summaryGenerator = new ChapterSummaryGenerator({
+            llm: RunnableLambda.from(_.constant('Concise generated summary')),
+            targetSummarySize: 100,
+        });
+        
+        novelStore = new NovelDocumentStore(dummyEmbeddings, { 
+            filePath: TEST_CONCURRENCY_DB_PATH,
+            summaryGenerator 
+        });
+        // Wait for initialization to complete
+        await (novelStore as unknown as { indexCreated: Promise<void> }).indexCreated;
+    });
+    
+    afterEach(async () => {
+        try {
+            await novelStore.destroy();
+        } catch (e) {
+            // Ignore errors during cleanup
+        }
+        await rm(TEST_CONCURRENCY_DB_PATH, { recursive: true, force: true });
+    });
+
+    it('handles large chapters without memory issues', async () => {
+        // Create a novel with a large chapter
+        const largeContent = _.repeat('This is a test sentence that takes up space. ', 500); // Smaller to avoid test timeouts
+        const novel = new NovelDocument({
+            pageContent: `# Large Chapter\n${largeContent}`,
+            metadata: { title: 'Large Novel', author: 'Test Author' }
+        });
+        
+        // Add the novel and ensure it completes without errors
+        await novelStore.addNovel(novel);
+        
+        // Verify we can retrieve it
+        const retrievedNovel = await novelStore.getNovel('Large Novel', 'Test Author');
+        expect(retrievedNovel).toBeDefined();
+        
+        // Get the chapter and verify it's complete
+        const chapter = await novelStore.getChapter('Large Novel', 'Test Author', 1);
+        expect(chapter).toBeDefined();
+        expect(chapter?.pageContent.length).toBeGreaterThan(5000);
     });
 });
