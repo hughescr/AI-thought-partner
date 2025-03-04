@@ -8,11 +8,8 @@ import { StringOutputParser } from '@langchain/core/output_parsers';
 // import { HumanMessage, BaseMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
-// import { HydeRetriever } from 'langchain/retrievers/hyde';
-import { FaissStoreWithMMR } from './lib/FAISSStoreWithMMR';
-// import { StringPromptValue, BasePromptValueInterface } from '@langchain/core/prompt_values';
-import { Document } from '@langchain/core/documents';
-// import { BM25Retriever } from '@langchain/community/retrievers/bm25';
+import { NovelDocument, NovelDocumentStore } from './lib/NovelDocumentStore';
+import type { Document } from '@langchain/core/documents';
 
 import { logger } from '@hughescr/logger';
 import _ from 'lodash';
@@ -26,8 +23,16 @@ if(process.versions.bun === undefined) {
     logger.warn(chalk.yellowBright('Running under Bun, not setting global dispatcher so LLMs might timeout'));
 }
 
-const book = 'DMK_V9';
-const storeDirectory = `novels/${book}`;
+const title = 'Christmas Town query version';
+const author = 'Erica S. Hughes';
+const genre = 'Young Adult';
+const store = new NovelDocumentStore(embeddings, { filePath: 'novels_db' });
+const novel = new NovelDocument({ pageContent: '', metadata: { title, author } });
+
+const vectorStore = await store.getVectorStoreForNovel(novel);
+const qaRetriever = vectorStore.asRetriever({
+    k: 25, // Retriever will give 25 chapters
+});
 
 interface NovelMetadata {
     title: string
@@ -35,6 +40,7 @@ interface NovelMetadata {
     today: string
     genre: string
 }
+
 /**
  * Call the retriever to find matching documents
  * @param {GraphState} state - The current state of the agent, including the query.
@@ -45,27 +51,18 @@ async function setupMetadata(): Promise<{ novelMetadata: NovelMetadata }> {
 
     return {
         novelMetadata: {
-            title: 'Dean Martin’s Kiss',
-            author: 'Amy Schottenfels',
+            title,
+            author,
             today: new Date().toISOString(),
-            genre: 'Historical fiction',
+            genre,
         },
     };
 }
 
-const vectorStore = await FaissStoreWithMMR.load(
-    storeDirectory,
-    embeddings
-);
-
-const qaRetriever = vectorStore.asRetriever({
-    k: 75,
-});
-
 const sortDocsFormatAsJSON = (documents: Document[]) => {
     return JSON.stringify(
         _(documents)
-            .sortBy(['metadata.source', 'metadata.loc.pageNumber', 'metadata.loc.lines.from'])
+            .sortBy(['metadata.source', 'metadata.chapter', 'metadata.sequence', 'metadata.loc.pageNumber', 'metadata.loc.lines.from'])
             .map(doc => ({
                 loc: doc.metadata.loc,
                 extract: doc.pageContent,
@@ -77,7 +74,8 @@ const sortDocsFormatAsJSON = (documents: Document[]) => {
 
 const QuestionAnswerAnnotation = Annotation.Root({
     novelMetadata: Annotation<NovelMetadata>,
-    documents: Annotation<Document[]>,
+    novelSummary: Annotation<string>,
+    relevantChapters: Annotation<Document[]>,
     origQuery: Annotation<string>,
     priorQueries: Annotation<string[]>({
         reducer: (left, right) => _.concat(left, right),
@@ -87,6 +85,13 @@ const QuestionAnswerAnnotation = Annotation.Root({
     generation: Annotation<string>,
 });
 type QuestionAnswerAnnotationType = typeof QuestionAnswerAnnotation.State;
+
+async function getNovelSummary(_state: QuestionAnswerAnnotationType) {
+    logger.debug('---GET NOVEL SUMMARY---');
+
+    const novelSummary = await store.getNovelSummary(novel.metadata.novelID);
+    return { novelSummary: novelSummary?.pageContent || '<no summary>' };
+}
 
 /**
  * Call the retriever to find matching documents
@@ -102,36 +107,31 @@ async function retrieve(state: QuestionAnswerAnnotationType) {
         .withConfig({ runName: 'FetchRelevantDocuments' })
         .invoke(state.query || state.origQuery);
     logger.debug(`Retrieved ${documents.length} documents`);
-    const mergedDocs = _.unionBy(state.documents, documents, 'pageContent');
-    return { documents: mergedDocs, query: state.query || state.origQuery };
+    const mergedDocs = _.unionBy(state.relevantChapters, documents, 'pageContent');
+    return { relevantChapters: mergedDocs, query: state.query || state.origQuery };
 }
 
 async function rerankDocuments(state: QuestionAnswerAnnotationType) {
-    const docsToRerank: string[] = _(state.documents)
+    const docsToRerank: string[] = _(state.relevantChapters)
                         .map(doc => ({ extract: doc.pageContent, context: doc.metadata.context }))
                         .map(JSON.stringify)
                         .value() as unknown as string[]; // Confused about types for some reason
     logger.debug(`Reranking ${docsToRerank.length} documents`);
 
-    fastReranker.topN = Math.min(docsToRerank.length, 100);
-    const preRerankedDocuments = await fastReranker.rerank(docsToRerank, state.origQuery);
-
-    const preRerankedDocs = _.map(preRerankedDocuments, 'doc');
-
-    goodReranker.topN = Math.min(preRerankedDocs.length, 50);
-    const rerankedDocuments = await goodReranker.rerank(preRerankedDocs, state.origQuery);
+    reranker.topN = Math.min(docsToRerank.length, 5); // We only want to rerank the top 5 chapters
+    const rerankedDocuments = await reranker.rerank(docsToRerank, state.origQuery);
 
     logger.debug(`Reranked ${rerankedDocuments.length} documents`);
     // Now figure out which the original documents were
     const rerankedDocs = _.map(rerankedDocuments, (doc) => {
-        const found = _.find(state.documents, { pageContent: JSON.parse(doc.doc).extract });
+        const found = _.find(state.relevantChapters, { pageContent: JSON.parse(doc.doc).extract });
         if(found) {
             found.metadata.relevanceScore = doc.relevanceScore;
         }
         return found;
     });
     // const ditchedDocs = _.difference(state.documents, rerankedDocs);
-    return { documents: rerankedDocs };
+    return { relevantChapters: rerankedDocs };
 }
 
 /**
@@ -160,8 +160,6 @@ async function transformQuery(state: QuestionAnswerAnnotationType) {
     logger.debug(`---TRANSFORM QUERY: ${state.priorQueries.length} PREVIOUS QUERIES---`);
 
     // Prompt
-    const oldTemp = fastLLM.temperature;
-    fastLLM.temperature = 2;
     const betterQuery = await transformQueryChain.invoke({
         title: state.novelMetadata.title,
         genre: state.novelMetadata.genre,
@@ -169,8 +167,8 @@ async function transformQuery(state: QuestionAnswerAnnotationType) {
         query: state.origQuery,
         previous_queries: state.priorQueries.join('\n'),
     });
-    fastLLM.temperature = oldTemp;
 
+    logger.debug(chalk.yellowBright(`Better query: ${betterQuery}`));
     return {
         query: betterQuery,
         priorQueries: [state.query],
@@ -184,10 +182,10 @@ async function transformQuery(state: QuestionAnswerAnnotationType) {
  * @returns {"transformQuery" | "generate"} Next node to call
  */
 function decideToGenerate(state: QuestionAnswerAnnotationType) {
-    logger.debug(`---DECIDE TO GENERATE: ${state.documents.length} RELEVANT DOCUMENTS---`);
-    const documents = state.documents;
+    logger.debug(`---DECIDE TO GENERATE: ${state.relevantChapters.length} RELEVANT DOCUMENTS---`);
+    const documents = state.relevantChapters;
 
-    if(documents.length <= 250 && state.priorQueries.length < 5) {
+    if(documents.length <= 5 && state.priorQueries.length < 5) {
         //
         // Too many documents have been filtered checkRelevance
         // We will re-generate a new query
@@ -204,18 +202,21 @@ const mainAgentPromptTemplate = ChatPromptTemplate.fromMessages([
 You are a powerful AI assistant trained as a developmental editor to help authors improve their unpublished novels before submitting drafts to literary agents. Your persona is that of an experienced editor who provides constructive feedback, identifies flaws, and suggests improvements while maintaining a professional and supportive but frank tone. You do not blow smoke up authors' asses.
 
 ## Task Overview
-Your task is to review extracts from a novel titled "{title}" by {author}, which belongs to the {genre} genre. You will be provided with one or more extracts from the novel, along with contextual information to help you understand the excerpts better. Based on these extracts, you will assist the author by answering their queries and requests related to the novel.
+Your task is to review chapters from a novel titled "{title}" by {author}, which belongs to the {genre} genre. You will be provided with one or more chapters from the novel, along with a summary of the entire novel to help you understand the excerpts better. Based on these chapters, you will assist the author by answering their queries and requests related to the novel.
 
 ## Instructions
-1. Read and carefully analyze the provided extracts from the novel.
-2. Understand the context surrounding each extract to better comprehend the excerpts.
-3. When answering the author's query, use evidence and examples from the extracts to support your response. Do not make up information that is not present in the extracts. When referencing an extract, mention the chapter it's from.
-4. Identify potential flaws or areas for improvement in the novel based on the extracts. Provide constructive criticism and suggestions on how the author can address these issues.
-5. Cite the relevant extracts when quoting or referencing specific passages from the novel in your response.
+1. Read and carefully analyze the provided chapters from the novel.
+2. Understand the overall novel summary to better comprehend the excerpted chapters.
+3. When answering the author's query, use evidence and examples from the extracts to support your response. Do not make up information that is not present in the extracts. Make reference the which chapter or chapters you are referring to.
+4. Identify potential flaws or areas for improvement in the novel based on the summary and chapters. Provide constructive criticism and suggestions on how the author can address these issues.
+5. Cite the relevant chapters when quoting or referencing specific passages from the novel in your response.
 6. Remember that you only have access to limited excerpts, so your analysis and feedback should be based solely on the provided extracts and their context.
 7. Present your response in a well-structured format, using proper grammar, spelling, and Markdown formatting for better readability.
 8. Do not reply in Chinese unless specifically asked to reply in Chinese.`),
-    HumanMessagePromptTemplate.fromTemplate(`## Extracts
+    HumanMessagePromptTemplate.fromTemplate(`## Summary of the Novel
+{novelSummary}
+
+## Extracts
 {extracts}
 
 ## Author's Query
@@ -232,22 +233,23 @@ const ragChain = mainAgentPromptTemplate.pipe(slowLLM).pipe(new StringOutputPars
  * @returns {Promise<GraphState>} The new state object.
  */
 async function generate(state: QuestionAnswerAnnotationType) {
-    logger.debug(`---GENERATE FROM ${state.documents.length} DOCS---`);
+    logger.debug(`---GENERATE FROM ${state.relevantChapters.length} DOCS---`);
     // Pull in the prompt
 
-    const docs = sortDocsFormatAsJSON(state.documents);
+    const docs = sortDocsFormatAsJSON(state.relevantChapters);
     logger.debug(`Context has length ${docs.length}`);
 
     const generation = await ragChain.invoke({
         title: state.novelMetadata.title,
         genre: state.novelMetadata.genre,
         author: state.novelMetadata.author,
+        novelSummary: state.novelSummary,
         extracts: docs,
         query: state.origQuery,
     });
 
     return {
-        documents: [],
+        relevantChapters: [],
         generation,
     };
 }
@@ -256,8 +258,11 @@ const workflow = new StateGraph(QuestionAnswerAnnotation)
     .addNode('setupMetadata', setupMetadata)
     .addEdge(START, 'setupMetadata')
 
+    .addNode('getNovelSummary', getNovelSummary)
+    .addEdge('setupMetadata', 'getNovelSummary')
+
     .addNode('retrieve', retrieve)
-    .addEdge('setupMetadata', 'retrieve')
+    .addEdge('getNovelSummary', 'retrieve')
 
     .addNode('transformQuery', transformQuery)
     .addEdge('transformQuery', 'retrieve')
