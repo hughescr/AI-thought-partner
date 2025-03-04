@@ -49,18 +49,19 @@ export class ChapterDocumentStore {
         }
         const storeDoc = doc as ChapterDocument & { _id: string };
         storeDoc._id = `chapter_${doc.metadata.novelID}_${doc.metadata.chapter}`;
-        
+
         // Check if document already exists
         try {
             await this.db.get(storeDoc._id);
             throw new Error('Document is already in collection, please use update()');
-        } catch (err: any) {
+        } catch(err: unknown) {
+            const error = err as { status?: number };
             // If document doesn't exist (404), continue with adding it
-            if (err.status !== 404) {
+            if(error.status !== 404) {
                 throw err; // Re-throw if it's not a "not found" error
             }
         }
-        
+
         await this.db.put(storeDoc);
         // No explicit save here—autosave will handle it.
         await this.summaryStore.addChapterSummary(doc);

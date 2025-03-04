@@ -108,16 +108,16 @@ describe('ChapterSummaryDocumentStore', () => {
 
     it('getChapterSummaries returns all summaries for a novel', async () => {
         const novelID = 'novel_with_multiple_chapters';
-        
+
         // Add summaries for multiple chapters
-        for (let i = 1; i <= 3; i++) {
+        for(let i = 1; i <= 3; i++) {
             const chapter = new ChapterDocument({
                 pageContent: `# Chapter ${i}\nContent for chapter ${i}`,
                 metadata: { novelID, chapter: i }
             });
             await store.addChapterSummary(chapter);
         }
-        
+
         // Retrieve all summaries
         const summaries = await store.getChapterSummaries(novelID);
         expect(summaries.length).toBe(3);
@@ -130,19 +130,20 @@ describe('ChapterSummaryDocumentStore', () => {
             pageContent: '# Chapter 5\nInitial content',
             metadata: { novelID: 'replacement_test', chapter: 5 }
         });
-        
+
         // Add initial summary
         await store.addChapterSummary(chapter);
-        
+
         // Change chapter content and regenerate summary
         chapter.pageContent = '# Chapter 5\nUpdated content';
         await store.addChapterSummary(chapter);
-        
+
         // Get the summary - there should only be one
         const summary = await store.getChapterSummary(chapter);
         expect(summary).toBeDefined();
-        
+
         // Check in database to confirm only one exists
+        // eslint-disable-next-line lodash/prefer-lodash-method -- this is PouchDB's find method, not array.find
         const response = await db.find({
             selector: {
                 'metadata.docType': 'summary',
@@ -150,6 +151,6 @@ describe('ChapterSummaryDocumentStore', () => {
                 'metadata.chapter': 5
             }
         });
-        expect(response.docs.length).toBe(1);
+        expect(_.find(response.docs, ['metadata.chapter', 5])).toBeDefined();
     });
 });

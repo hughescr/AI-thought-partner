@@ -179,7 +179,7 @@ describe('ChapterDocumentStore', () => {
         const store = new ChapterDocumentStore({ db, summaryGenerator });
 
         // Add multiple chapters
-        for (let i = 1; i <= 3; i++) {
+        for(let i = 1; i <= 3; i++) {
             const doc = new ChapterDocument({
                 pageContent: `# Chapter ${i}\nContent for chapter ${i}`,
                 metadata: { novelID: novel.metadata.novelID, chapter: i }
@@ -198,7 +198,7 @@ describe('ChapterDocumentStore', () => {
         const novelID = 'summaries_test_novel';
 
         // Add multiple chapters
-        for (let i = 1; i <= 2; i++) {
+        for(let i = 1; i <= 2; i++) {
             const doc = new ChapterDocument({
                 pageContent: `# Chapter ${i}\nContent for summaries test ${i}`,
                 metadata: { novelID, chapter: i }

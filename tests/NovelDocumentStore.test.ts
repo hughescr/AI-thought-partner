@@ -124,7 +124,7 @@ Test content.
         expect(retrievedNovel?.metadata.title).toBe('Get Novel Test');
         expect(retrievedNovel?.metadata.author).toBe('Test Author');
         expect(retrievedNovel?.metadata.novelID).toBe(novel.metadata.novelID);
-        
+
         // Test with non-existent novel
         const nonExistentNovel = await novelStore.getNovel('Non Existent', 'Not Real');
         expect(nonExistentNovel).toBeUndefined();
@@ -150,7 +150,7 @@ Second chapter content.
         // Test with non-existent chapter
         const nonExistentChapter = await novelStore.getChapter('Chapter Test', 'Chapter Author', 999);
         expect(nonExistentChapter).toBeUndefined();
-        
+
         // Test with non-existent novel
         const chapterFromNonExistentNovel = await novelStore.getChapter('Non Existent', 'Not Real', 1);
         expect(chapterFromNonExistentNovel).toBeUndefined();
@@ -174,7 +174,7 @@ Third chapter.
         expect(chapters).toBeDefined();
         expect(chapters?.length).toBe(3);
         expect(_.map(chapters, 'metadata.chapter')).toEqual([1, 2, 3]);
-        
+
         // Test with non-existent novel
         const chaptersFromNonExistentNovel = await novelStore.getChapters('Non Existent', 'Not Real');
         expect(chaptersFromNonExistentNovel).toBeUndefined();
@@ -189,11 +189,11 @@ Summary test content.
             metadata: { title: 'Summary Test', author: 'Summary Author' }
         });
         await novelStore.addNovel(novel);
-        
+
         const chapter = await novelStore.getChapter('Summary Test', 'Summary Author', 1);
         expect(chapter).toBeDefined();
-        
-        if (chapter) {
+
+        if(chapter) {
             const summary = await novelStore.getChapterSummary(chapter);
             expect(summary).toBeDefined();
             expect(summary?.pageContent).toContain('Concise generated summary');
@@ -209,16 +209,16 @@ Second chapter content.
 `;
         const novel = new NovelDocument({
             pageContent: markdownText,
-            metadata: { 
-                title: 'Novel Summary Test', 
+            metadata: {
+                title: 'Novel Summary Test',
                 author: 'Summary Author',
                 genre: 'Test Genre',
                 filepath: '/path/to/file'
             }
         });
         await novelStore.addNovel(novel);
-        
-        const novelSummary = await (novelStore as any).getNovelSummary(novel.metadata.novelID);
+
+        const novelSummary = await (novelStore as unknown as { getNovelSummary(novelID: string): Promise<Document | undefined> }).getNovelSummary(novel.metadata.novelID);
         expect(novelSummary).toBeDefined();
         expect(novelSummary?.metadata.title).toBe('Novel Summary Test');
         expect(novelSummary?.metadata.author).toBe('Summary Author');
@@ -226,9 +226,9 @@ Second chapter content.
         expect(novelSummary?.metadata.filepath).toBe('/path/to/file');
         expect(novelSummary?.pageContent).toContain('# Chapter 1\nConcise generated summary');
         expect(novelSummary?.pageContent).toContain('# Chapter 2\nConcise generated summary');
-        
+
         // Test with non-existent novel
-        const nonExistentNovelSummary = await (novelStore as any).getNovelSummary('non_existent_id');
+        const nonExistentNovelSummary = await (novelStore as unknown as { getNovelSummary(novelID: string): Promise<Document | undefined> }).getNovelSummary('non_existent_id');
         expect(nonExistentNovelSummary).toBeUndefined();
     });
 });
@@ -360,7 +360,7 @@ describe('NovelDocument', () => {
 
 describe('NovelDocumentStore - Error Handling and Edge Cases', () => {
     const TEST_ERROR_DB_PATH = pathJoin(__dirname, 'test-error-novels.db');
-    
+
     afterEach(async () => {
         await rm(TEST_ERROR_DB_PATH, { recursive: true, force: true });
         // Restore any mocks
@@ -377,27 +377,23 @@ describe('NovelDocumentStore - Error Handling and Edge Cases', () => {
 describe('NovelDocumentStore - Concurrency and Large Data', () => {
     const TEST_CONCURRENCY_DB_PATH = pathJoin(__dirname, 'test-concurrency-novels.db');
     let novelStore: NovelDocumentStore;
-    
+
     beforeEach(async () => {
         const summaryGenerator = new ChapterSummaryGenerator({
             llm: RunnableLambda.from(_.constant('Concise generated summary')),
             targetSummarySize: 100,
         });
-        
-        novelStore = new NovelDocumentStore(dummyEmbeddings, { 
+
+        novelStore = new NovelDocumentStore(dummyEmbeddings, {
             filePath: TEST_CONCURRENCY_DB_PATH,
-            summaryGenerator 
+            summaryGenerator
         });
         // Wait for initialization to complete
         await (novelStore as unknown as { indexCreated: Promise<void> }).indexCreated;
     });
-    
+
     afterEach(async () => {
-        try {
-            await novelStore.destroy();
-        } catch (e) {
-            // Ignore errors during cleanup
-        }
+        await novelStore.destroy();
         await rm(TEST_CONCURRENCY_DB_PATH, { recursive: true, force: true });
     });
 
@@ -408,14 +404,14 @@ describe('NovelDocumentStore - Concurrency and Large Data', () => {
             pageContent: `# Large Chapter\n${largeContent}`,
             metadata: { title: 'Large Novel', author: 'Test Author' }
         });
-        
+
         // Add the novel and ensure it completes without errors
         await novelStore.addNovel(novel);
-        
+
         // Verify we can retrieve it
         const retrievedNovel = await novelStore.getNovel('Large Novel', 'Test Author');
         expect(retrievedNovel).toBeDefined();
-        
+
         // Get the chapter and verify it's complete
         const chapter = await novelStore.getChapter('Large Novel', 'Test Author', 1);
         expect(chapter).toBeDefined();
