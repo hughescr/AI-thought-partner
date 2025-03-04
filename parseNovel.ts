@@ -12,13 +12,33 @@ import { TextLoader } from 'langchain/document_loaders/fs/text';
 
 import _ from 'lodash';
 import { MultiBar, Presets as cliProgressPresets } from 'cli-progress';
+import { Command } from 'commander';
+import { logger } from '@hughescr/logger';
 
-const book = 'Christmas Town query version';
-// const loader = new PDFLoader(`novels/${book}.pdf`, { splitPages: true });
-// const loader = new DocxLoader(`novels/${book}.docx`);
-const loader = new TextLoader(`novels/${book}.md`);
+const program = new Command();
+program
+    .description('Parse a novel file and add it to the database')
+    .requiredOption('-t, --title <title>', 'title of the novel')
+    .requiredOption('-a, --author <author>', 'author of the novel')
+    .option('-g, --genre <genre>', 'genre of the novel', 'Unknown')
+    .option('-f, --format <format>', 'file format (md, pdf, docx)', 'md')
+    .parse(process.argv);
+
+const options = program.opts();
+
+const book = options.title;
+const filepath = `novels/${book}.${options.format}`;
+
+// Select loader based on file format
+let loader;
+if(options.format === 'md') {
+    loader = new TextLoader(filepath);
+} else {
+    throw new Error(`Unsupported format: ${options.format}. Please use md.`);
+}
+
 const docs = await loader.load();
-const novel = NovelDocument.fromDocument(docs[0], book, 'Erica S. Hughes', 'Young Adult', loader.filePathOrBlob.toString());
+const novel = NovelDocument.fromDocument(docs[0], book, options.author, options.genre, loader.filePathOrBlob.toString());
 
 const summaryGenerator = new ChapterSummaryGenerator({
     llm: summarizerLLM,
@@ -36,6 +56,6 @@ if(!(await novelStore.getNovel(novel.metadata.title, novel.metadata.author))) {
 }
 bars.stop();
 
-console.log('Novel:', novel.metadata);
+logger.info('Novel:', novel.metadata);
 const novelSummary = await novelStore.getNovelSummary(novel.metadata.novelID);
-console.log('Novel Summary:', novelSummary?.pageContent);
+logger.info(`Novel Summary: ${novelSummary?.pageContent}`);
