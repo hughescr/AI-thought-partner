@@ -118,7 +118,7 @@ async function rerankDocuments(state: QuestionAnswerAnnotationType) {
                         .value() as unknown as string[]; // Confused about types for some reason
     logger.debug(`Reranking ${docsToRerank.length} documents`);
 
-    reranker.topN = Math.min(docsToRerank.length, 5); // We only want to rerank the top 5 chapters
+    reranker.topN = Math.min(docsToRerank.length, 3); // We only want to rerank the top 3 chapters
     const rerankedDocuments = await reranker.rerank(docsToRerank, state.origQuery);
 
     logger.debug(`Reranked ${rerankedDocuments.length} documents`);
@@ -185,7 +185,7 @@ function decideToGenerate(state: QuestionAnswerAnnotationType) {
     logger.debug(`---DECIDE TO GENERATE: ${state.relevantChapters.length} RELEVANT DOCUMENTS---`);
     const documents = state.relevantChapters;
 
-    if(documents.length <= 5 && state.priorQueries.length < 5) {
+    if(documents.length <= 3 && state.priorQueries.length < 5) {
         //
         // Too many documents have been filtered checkRelevance
         // We will re-generate a new query
@@ -233,7 +233,7 @@ const ragChain = mainAgentPromptTemplate.pipe(slowLLM).pipe(new StringOutputPars
  * @returns {Promise<GraphState>} The new state object.
  */
 async function generate(state: QuestionAnswerAnnotationType) {
-    logger.debug(`---GENERATE FROM ${state.relevantChapters.length} DOCS---`);
+    logger.debug(`---GENERATE FROM ${state.relevantChapters.length} CHAPTERS (${_(state.relevantChapters).map('metadata.chapter').sort().join(',')})---`);
     // Pull in the prompt
 
     const docs = sortDocsFormatAsJSON(state.relevantChapters);
