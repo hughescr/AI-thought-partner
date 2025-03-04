@@ -3,7 +3,6 @@ import PouchDB from 'pouchdb';
 import find from 'pouchdb-find';
 PouchDB.plugin(find);
 import { ChapterChunkDocumentStore } from '../lib/ChapterChunkDocumentStore';
-import { access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join as pathJoin } from 'node:path';
 import _ from 'lodash';
@@ -26,21 +25,15 @@ describe('ChapterChunkDocumentStore', () => {
     let store: ChapterChunkDocumentStore;
 
     beforeEach(async () => {
-        try {
-            await access(TEST_DB_PATH);
-            throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
-        } catch{ /* file does not exist; continue */ }
-        db = new PouchDB(TEST_DB_PATH);
+        db = new PouchDB(TEST_DB_PATH); // Create or open existing DB
+        await db.destroy();             // Delete it -- will clean up if there was already DB there
+        db = new PouchDB(TEST_DB_PATH); // Now create a new one which will be empty
         store = new ChapterChunkDocumentStore({ db, textSplitter: new DummyTextSplitter() });
     });
 
     afterEach(async () => {
         if(db) {
-            try {
-                await db.destroy();
-            } catch{
-                // Ignore errors
-            }
+            await db.destroy();
         }
     });
 

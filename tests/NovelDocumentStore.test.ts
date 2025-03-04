@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { NovelDocumentStore, NovelDocument, computeNovelID } from '../lib/NovelDocumentStore';
 import { ChapterDocumentStore, ChapterDocument } from '../lib/ChapterDocumentStore';
-import { access, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join as pathJoin } from 'node:path';
 import _ from 'lodash';
@@ -31,10 +31,6 @@ describe('NovelDocumentStore', () => {
     let chapterStore: ChapterDocumentStore;
 
     beforeEach(async () => {
-        try {
-            await access(TEST_DB_PATH);
-            throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
-        } catch{ /* file does not exist; continue */ }
         const summaryGenerator = new ChapterSummaryGenerator({
             llm: RunnableLambda.from(_.constant('Concise generated summary')),
             targetSummarySize: 100,
@@ -46,16 +42,8 @@ describe('NovelDocumentStore', () => {
     });
 
     afterEach(async () => {
-        try {
-            await novelStore.destroy();
-        } catch{
-            // ignore cleanup errors
-        }
-        try {
-            await rm(TEST_DB_PATH + '-FAISS', { recursive: true, force: true });
-        } catch{
-            // ignore errors if the folder does not exist
-        }
+        await novelStore.destroy();
+        await rm(TEST_DB_PATH, { recursive: true, force: true });
     });
 
     it('computes novelID if missing and splits novel into chapters', async () => {
@@ -125,10 +113,6 @@ Chapter one content.
 describe('NovelDocumentStore - VectorStore API', () => {
     let novelStore: NovelDocumentStore;
     beforeEach(async () => {
-        try {
-            await access(TEST_DB_PATH);
-            throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
-        } catch{ /* file does not exist; continue */ }
         const summaryGenerator = new ChapterSummaryGenerator({
             llm: RunnableLambda.from(_.constant('Concise generated summary')),
             targetSummarySize: 100,
@@ -136,16 +120,8 @@ describe('NovelDocumentStore - VectorStore API', () => {
         novelStore = new NovelDocumentStore(dummyEmbeddings, { filePath: TEST_DB_PATH, summaryGenerator });
     });
     afterEach(async () => {
-        try {
-            await novelStore.destroy();
-        } catch{
-            // ignore cleanup errors
-        }
-        try {
-            await rm(TEST_DB_PATH + '-FAISS', { recursive: true, force: true });
-        } catch{
-            // ignore errors if the folder does not exist
-        }
+        await novelStore.destroy();
+        await rm(TEST_DB_PATH, { recursive: true, force: true });
     });
 
     it('delegates similaritySearchVectorWithScore correctly', async () => {

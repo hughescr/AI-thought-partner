@@ -2,7 +2,6 @@ import { ChapterSummaryDocument, ChapterSummaryDocumentStore } from '../lib/Chap
 import { ChapterDocument } from '../lib/ChapterDocumentStore';
 import { ChapterSummaryGenerator } from '../lib/ChapterSummaryGenerator';
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join as pathJoin } from 'node:path';
 import PouchDB from 'pouchdb';
@@ -38,21 +37,15 @@ describe('ChapterSummaryDocumentStore', () => {
     let store: ChapterSummaryDocumentStore;
 
     beforeEach(async () => {
-        try {
-            await access(TEST_DB_PATH);
-            throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
-        } catch{ /* file does not exist; continue */ }
-        db = new PouchDB(TEST_DB_PATH);
+        db = new PouchDB(TEST_DB_PATH); // Create or open existing DB
+        await db.destroy();             // Delete it -- will clean up if there was already DB there
+        db = new PouchDB(TEST_DB_PATH); // Now create a new one which will be empty
         store = new ChapterSummaryDocumentStore({ db, summaryGenerator });
     });
 
     afterEach(async () => {
         if(db) {
-            try {
-                await db.destroy();
-            } catch{
-                // Ignore errors
-            }
+            await db.destroy();
         }
     });
 

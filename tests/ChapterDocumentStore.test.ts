@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join as pathJoin } from 'node:path';
 import { ChapterDocument, ChapterDocumentStore } from '../lib/ChapterDocumentStore';
@@ -36,20 +35,14 @@ describe('ChapterDocumentStore', () => {
             llm: RunnableLambda.from(_.constant('Concise generated summary')),
             targetSummarySize: 100
         });
-        try {
-            await access(TEST_DB_PATH);
-            throw new Error(`Test database file ${TEST_DB_PATH} already exists. Aborting.`);
-        } catch{ /* ignore error */ }
-        db = new PouchDB(TEST_DB_PATH);
+        db = new PouchDB(TEST_DB_PATH); // Create or open existing DB
+        await db.destroy();             // Delete it -- will clean up if there was already DB there
+        db = new PouchDB(TEST_DB_PATH); // Now create a new one which will be empty
     });
 
     afterEach(async () => {
         if(db) {
-            try {
-                await db.destroy();
-            } catch{
-                // Ignore errors
-            }
+            await db.destroy();
         }
     });
 
