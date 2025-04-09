@@ -81,7 +81,7 @@ export const qwen25_7bLLM = new ChatOpenAI({ model: 'qwen2.5-7b-instruct-1m', co
 export const qwen25_14bLLM = new ChatOpenAI({ model: 'qwen2.5-14b-instruct-1m', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
 export const qwen25_32bLLM = new ChatOpenAI({ model: 'qwen2.5-32b-instruct', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
 export const nemo_12b2407LLM = new ChatOpenAI({ model: 'mistral-nemo-instruct-2407', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
-export const mistralSmall_24b2501LLM = new ChatOpenAI({ model: 'mistral-small-24b-instruct-2501', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
+export const mistralSmall_24b2503LLM = new ChatOpenAI({ model: 'mistral-small-3.1-24b-instruct-2503', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
 
 // // MIT License
 export const phi4_14bLLM = new ChatOpenAI({ model: 'phi-4', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
