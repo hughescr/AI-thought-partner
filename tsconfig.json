@@ -22,6 +22,11 @@
             "bun",
             "jest"
         ],
+        "paths": {
+            "mistral-tokenizer-ts": [
+                "./node_modules/mistral-tokenizer-ts/dist/index.d.ts"
+            ],
+        }
     },
     "exclude": [
         "node_modules"
