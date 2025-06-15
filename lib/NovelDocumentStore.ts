@@ -103,11 +103,18 @@ export class NovelDocumentStore {
         await rm(storePath, { recursive: true, force: true }); // Remove any existing FAISS store
         const faiss = new FaissStore(this.embeddings, {});
 
-        // Process each chapter using a helper.
-        await Promise.all(_.map(chapters, (chapter, index) => this.processChapter(chapter, index + 1, novelDoc.metadata.novelID, faiss, chapterBar)));
-        // await this.processChapter(chapters[0], 1, novelDoc.metadata.novelID, faiss, chapterBar);
+        // Check if running under Bun runtime
+        if(process.versions.bun !== undefined) {
+            // Serialize the calls when running under Bun to prevent timeouts
+            for(let index = 0; index < chapters.length; index++) {
+                await this.processChapter(chapters[index], index + 1, novelDoc.metadata.novelID, faiss, chapterBar);
+            }
+        } else {
+            // When not running under Bun, we can parallelize
+            await Promise.all(_.map(chapters, (chapter, index) => this.processChapter(chapter, index + 1, novelDoc.metadata.novelID, faiss, chapterBar)));
+        }
 
-        chapterBar?.stop();
+        // await this.processChapter(chapters[0], 1, novelDoc.metadata.novelID, faiss, chapterBar);      chapterBar?.stop();
         if(chapterBar) {
             this.debugBar?.remove(chapterBar);
         }

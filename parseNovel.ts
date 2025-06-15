@@ -1,5 +1,5 @@
 import {
-    phi4_14bLLM as summarizerLLM,
+    deepseekR1_Qwen32bLLM as summarizerLLM,
     cachedSnowflakeArctic2Embeddings
 } from './lib/LLMs';
 
@@ -14,6 +14,15 @@ import _ from 'lodash';
 import { MultiBar, Presets as cliProgressPresets } from 'cli-progress';
 import { Command } from 'commander';
 import { logger } from '@hughescr/logger';
+import chalk from 'chalk';
+
+if(process.versions.bun === undefined) {
+    logger.info(chalk.greenBright('Running under Node, setting global dispatcher'));
+    const { setGlobalDispatcher, Agent } = await import('undici');
+    setGlobalDispatcher(new Agent({ headersTimeout: 0, bodyTimeout: 0 })); // ensure we wait for long ollama runs
+} else {
+    logger.warn(chalk.yellowBright('Running under Bun, not setting global dispatcher so LLMs might timeout'));
+}
 
 const program = new Command();
 program
