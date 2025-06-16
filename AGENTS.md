@@ -4,7 +4,15 @@
 - The code is developed with the bun runtime
 
 ## Code style guidelines
-- Check the eslint rules to understand style guidelines
+- TypeScript with strict type checking.
+- ES modules (`import`/`export`) with `"type": "module"` in `package.json`.
+- ESLint rules come from `@hughescr/eslint-config-default`.
+- camelCase naming for variables/functions and PascalCase for classes.
+- Unused variables prefixed with `_`.
+- Ignore errors with empty `catch` blocks if desired.
+- Tests use the Bun test framework (`import { describe } from 'bun:test'`).
+- Prefer Lodash utilities and `async/await` over raw Promises.
+- Document classes expose `metadata` and `pageContent`.
 - Verify style compliance with `bun lint`
 
 ## Testing Instructions
