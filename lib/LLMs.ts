@@ -71,33 +71,26 @@ export const snowflakeArctic2Embeddings = new OpenAIEmbeddings({ model: 'text-em
 export const cachedSnowflakeArctic2Embeddings = makeCachedEmbeddings(snowflakeArctic2Embeddings);
 export const mxBAIEmbeddings = new OpenAIEmbeddings({ model: 'text-embedding-mxbai-embed-large-v1', configuration: { baseURL: 'http://localhost:1234/v1' } });
 export const cachedMxBAIEmbeddings = makeCachedEmbeddings(mxBAIEmbeddings);
+export const qwen3_06_Embeddings = new OpenAIEmbeddings({ model: 'qwen3-embedding-0.6b', configuration: { baseURL: 'http://localhost:1234/v1' } });
+export const cachedQwen3_06_Embeddings = makeCachedEmbeddings(qwen3_06_Embeddings);
 
 // LLMs
 
 // Apache License 2.0
-// export const qwen25_1_5bLLM = new ChatOllama({ model: 'qwen2.5:1.5b-instruct-q6_k_l', ...commonOptions32k });
-// export const qwen25_3bLLM = new ChatOllama({ model: 'qwen2.5:3b-instruct-q6_k_l', ...commonOptions32k });
-export const qwen25_7bLLM = new ChatOpenAI({ model: 'qwen2.5-7b-instruct-1m', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
-export const qwen25_14bLLM = new ChatOpenAI({ model: 'qwen2.5-14b-instruct-1m', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
-export const qwen25_32bLLM = new ChatOpenAI({ model: 'qwen2.5-32b-instruct', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
+export const qwen3_0_6bLLM = new ChatOpenAI({ model: 'qwen3-0.6b', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
+export const qwen3_30bA3bLLM = new ChatOpenAI({ model: 'qwen3-30b-a3b-mlx', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
+export const deepseekR1_Qwen3_8bLLM = new ChatOpenAI({ model: 'deepseek/deepseek-r1-0528-qwen3-8b', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
 export const nemo_12b2407LLM = new ChatOpenAI({ model: 'mistral-nemo-instruct-2407', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
 export const mistralSmall_24b2503LLM = new ChatOpenAI({ model: 'mistral-small-3.1-24b-instruct-2503', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
 
 // // MIT License
-export const phi4_14bLLM = new ChatOpenAI({ model: 'phi-4', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
-// export const phi35_4bLLM = new ChatOllama({ model: 'phi3.5:3.8b-mini-instruct-q6_k_l', ...commonOptions32k });
-// export const phi3_14bLLM = new ChatOllama({ model: 'phi3:14b-medium-128k-instruct-q6_k_l', ...commonOptions32k });
 export const deepseekR1_Qwen1_5bLLM = new ChatOpenAI({ model: 'deepseek-r1-distill-qwen-1.5b', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
-export const deepseekR1_Qwen7bLLM = new ChatOpenAI({ model: 'deepseek-r1-distill-qwen-7b', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
-export const deepseekR1_Llama8bLLM = new ChatOpenAI({ model: 'deepseek-r1-distill-llama-8b', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
-export const deepseekR1_Qwen14bLLM = new ChatOpenAI({ model: 'deepseek-r1-distill-qwen-14b', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
 export const deepseekR1_Qwen32bLLM = new ChatOpenAI({ model: 'deepseek-r1-distill-qwen-32b-mlx', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
-export const deepseekR1_Llama70bLLM = new ChatOpenAI({ model: 'deepseek-r1-distill-llama-70b', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
 
 // // Llama Community License
 // export const llama32_3bLLM = new ChatOllama({ model: 'llama3.2:3b-instruct-q6_k_l', ...commonOptions32k });
 // export const llama31_8bLLM = new ChatOllama({ model: 'llama3.1:8b-instruct-q6_k_l', ...commonOptions64k });
-export const llama33_70bLLM = new ChatOpenAI({ model: 'llama-3.3-70b-instruct', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
+// export const llama33_70bLLM = new ChatOpenAI({ model: 'llama-3.3-70b-instruct', configuration: { baseURL: 'http://localhost:1234/v1' }, streaming: true });
 
 // // CC-Attribution-Non-Commercial
 // export const bespokeMinicheckLLM = new ChatOllama({ model: 'bespoke-minicheck:7b-q8_0', ...commonOptions32k });

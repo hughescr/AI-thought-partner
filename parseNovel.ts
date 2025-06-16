@@ -1,5 +1,5 @@
 import {
-    deepseekR1_Qwen32bLLM as summarizerLLM,
+    qwen3_30bA3bLLM as summarizerLLM,
     cachedSnowflakeArctic2Embeddings
 } from './lib/LLMs';
 

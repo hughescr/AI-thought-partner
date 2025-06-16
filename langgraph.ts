@@ -1,6 +1,6 @@
 import {
     cachedSnowflakeArctic2Embeddings as embeddings,
-    phi4_14bLLM as fastLLM,
+    qwen3_30bA3bLLM as fastLLM,
     deepseekR1_Qwen32bLLM as slowLLM,
     bgeV2M3Reranker as reranker
 } from './lib/LLMs';
