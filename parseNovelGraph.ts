@@ -1,6 +1,6 @@
 import {
     cachedSnowflakeArctic2Embeddings as embeddings,
-    llama33_70bLLM as LLM
+    qwen3_30bA3bLLM as LLM
 } from './lib/LLMs.ts';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
@@ -79,7 +79,7 @@ const chapterSplitter = new RecursiveCharacterTextSplitterSeparatorMod({
 });
 
 // NOVEL DATA
-const book = 'Christmas Town beta';
+const book = 'Christmas Town Full';
 
 interface NovelMetadata {
     title: string
