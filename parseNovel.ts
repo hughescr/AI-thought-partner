@@ -1,6 +1,6 @@
 import {
     qwen3_30bA3bLLM as summarizerLLM,
-    cachedSnowflakeArctic2Embeddings
+    cachedSnowflakeArctic2Embeddings as embeddings
 } from './lib/LLMs';
 
 import { NovelDocument, NovelDocumentStore } from './lib/NovelDocumentStore';
@@ -59,7 +59,7 @@ const bars = new MultiBar({
     hideCursor: false,
     format: '{bar} {percentage}% | {duration_formatted} | ETA: {eta_formatted} | {value}/{total} | {msg}',
 }, cliProgressPresets.shades_classic);
-const novelStore = new NovelDocumentStore(cachedSnowflakeArctic2Embeddings, { filePath: 'novels_db', summaryGenerator: summaryGenerator, debugBar: bars });
+const novelStore = new NovelDocumentStore(embeddings, { filePath: 'novels_db', summaryGenerator: summaryGenerator, debugBar: bars });
 if(!(await novelStore.getNovel(novel.metadata.title, novel.metadata.author))) {
     await novelStore.addNovel(novel);
 }

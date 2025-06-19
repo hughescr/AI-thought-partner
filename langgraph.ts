@@ -1,7 +1,7 @@
 import {
     cachedSnowflakeArctic2Embeddings as embeddings,
     qwen3_30bA3bLLM as fastLLM,
-    deepseekR1_Qwen32bLLM as slowLLM,
+    qwen3_30bA3bLLM as slowLLM,
     bgeV2M3Reranker as reranker
 } from './lib/LLMs';
 import { StringOutputParser } from '@langchain/core/output_parsers';
@@ -23,7 +23,7 @@ if(process.versions.bun === undefined) {
     logger.warn(chalk.yellowBright('Running under Bun, not setting global dispatcher so LLMs might timeout'));
 }
 
-const title = 'Christmas Town query version';
+const title = 'Christmas Town Full';
 const author = 'Erica S. Hughes';
 const genre = 'Young Adult';
 const store = new NovelDocumentStore(embeddings, { filePath: 'novels_db' });
@@ -296,9 +296,9 @@ const input =
     // `Active voice: Does the writing use active voice instead of passive voice whenever possible?`
     // `Vary sentence structure: Does the writing break up long sentences with shorter ones to create rhythm and variety?`
     // `Analyze the story from the point of view of a potential reader who purchases the book. Would they be likely to enjoy reading it?`
-    `Analyze the story from the point of view of a literary agent reading this book for the first time and trying to decide if they want to represent this author to publishers.`
+    // `Analyze the story from the point of view of a literary agent reading this book for the first time and trying to decide if they want to represent this author to publishers.`
     // `Provide suggestions on how to improve any confusing parts of the plot. If there are other narrative elements which should be revised and improved, point them out.`
-    // `List all the chapters in the book, and give a one-sentence summary of each chapter.`
+    `List all the chapters in the book, and give a one-sentence summary of each chapter.`
     // `What do you dislike the most about the book? What needs fixing most urgently?`
     // `Who is the ideal audience for this book? What will they enjoy about it? What might they dislike about it? How can the story be adjusted to make it appear to a wider audience?`
     // `Identify any repetitive or superfluous elements in the book.`
