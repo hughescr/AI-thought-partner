@@ -2,7 +2,7 @@
 
 ## Basics
 - The typescript code is developed with the bun runtime
-- The python code is developed using a `uv` environment which is in the `.venv` directory
+- The python code is developed using a `uv` environment; use `uv sync` to build the environment, `uv add` and `uv remove`, `uv run`, etc. for package management and running.
 
 ## Code style guidelines (use the correct guidelines per language)
 
@@ -20,8 +20,7 @@
 
 ### For python
 - Follow standard python rules
-- Use the `uv` environment, so `uv run...`, `uv pip install...` etc not just bare python
-- Maintain a list of packages which need to be installed in the standard way that `uv` specifies them.
+- Use the `uv` environment, so `uv run...`, `uv add...` etc not just bare python
 
 ## Testing Instructions
 - Find the CI plan in the .github/workflows folder if there is one.

@@ -1,0 +1,27 @@
+# pyproject.toml
+[project]
+name = "ai-thought-partner"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+dependencies = [
+    "spacy>=3.8",
+    # point directly at the wheel for the English transformer model
+    "en_core_web_trf @ https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.8.0/en_core_web_trf-3.8.0-py3-none-any.whl"
+]
+
+[project.optional-dependencies]     # groups if you want them
+dev = ["pytest", "ruff"]
+
+# pyproject.toml
+[[tool.uv.index]]
+name = "pytorch-nightly"
+url  = "https://download.pytorch.org/whl/nightly/cpu"
+explicit = true          # only use this index for packages that opt-in
+
+[tool.uv.sources]
+torch        = { index = "pytorch-nightly" }
+torchvision  = { index = "pytorch-nightly" }
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
