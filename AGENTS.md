@@ -19,7 +19,7 @@
 - Verify style compliance with `bun lint`
 
 ### For python
-- Use `uvx ruff check .` for linting
+- Use `uvx ruff check --fix .` for linting
 - Use `uvx pytest .` for testing
 - Use the `uv` environment, so `uv run...`, `uv add...` etc not just bare python
 

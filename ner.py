@@ -14,6 +14,8 @@ from collections.abc import Iterable, Sequence
 
 import spacy
 
+import spacy
+
 warnings.filterwarnings(
     "ignore",
     message="You are using `torch.load` with `weights_only=False`",
