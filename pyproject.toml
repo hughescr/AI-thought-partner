@@ -13,7 +13,6 @@ dependencies = [
 [project.optional-dependencies]     # groups if you want them
 dev = ["pytest", "ruff"]
 
-# pyproject.toml
 [[tool.uv.index]]
 name = "pytorch-nightly"
 url  = "https://download.pytorch.org/whl/nightly/cpu"
@@ -25,3 +24,7 @@ torchvision  = { index = "pytorch-nightly" }
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
+
+# [tool.ruff]
+
+# [tool.pytest]
