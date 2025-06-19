@@ -492,7 +492,7 @@ async function extractEntities(state: { novelChunk: { pageContent: string } }): 
     const pythonScript = 'ner.py'; // Path to your python script
 
     try {
-        const { stdout } = await execa('venv/bin/python', [pythonScript], { input: state.novelChunk.pageContent });
+        const { stdout } = await execa('uv', ['run', pythonScript], { input: state.novelChunk.pageContent });
         const entities = JSON.parse(stdout);
         logger.info(chalk.yellow(`Entities extracted: ${JSON.stringify(entities)}\n`));
         return { entities };
