@@ -1,9 +1,9 @@
+import io
 import json
 import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace
-import types
-import io
 
 # ruff: noqa: E402
 

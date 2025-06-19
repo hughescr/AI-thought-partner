@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import sys
 import warnings
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
 
 import spacy
 
