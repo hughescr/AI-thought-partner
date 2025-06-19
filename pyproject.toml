@@ -25,6 +25,18 @@ torchvision  = { index = "pytorch-nightly" }
 [tool.uv]
 index-strategy = "unsafe-best-match"
 
-# [tool.ruff]
+[tool.ruff]
+# Python 3.12 is required for this project
+target-version = "py312"
+# Match the existing style that favors line lengths around 120
+line-length = 120
 
-# [tool.pytest]
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I", "UP"]
+
+[tool.pytest.ini_options]
+# Simple output, show summary for skipped/xfail, treat xfails strictly
+addopts = "-ra -q"
+testpaths = ["tests"]
+xfail_strict = true
+filterwarnings = "error"
