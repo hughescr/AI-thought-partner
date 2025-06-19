@@ -22,6 +22,7 @@
 - Use `uvx ruff check --fix .` for linting
 - Use `uvx pytest .` for testing
 - Use the `uv` environment, so `uv run...`, `uv add...` etc not just bare python
+- Run `uvx mypy .` for static type checking
 
 ## Testing Instructions
 - Find the CI plan in the .github/workflows folder if there is one.

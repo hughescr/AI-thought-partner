@@ -11,8 +11,7 @@ import json
 import sys
 import warnings
 from collections.abc import Iterable, Sequence
-
-import spacy
+from typing import Any, TypedDict, cast
 
 import spacy
 
@@ -34,6 +33,18 @@ ENTITY_LABELS: list[str] = [
 ]
 
 
+class RawEntity(TypedDict):
+    text: str
+    label: str
+
+
+class EntityObj(TypedDict):
+    name: str
+    type: str
+    description: str
+    aliases: list[str]
+
+
 def map_spacy_label_to_type(label: str) -> str:
     """Map spaCy entity labels to coarser types."""
     if label == "PERSON":
@@ -51,7 +62,7 @@ def map_spacy_label_to_type(label: str) -> str:
     return "Concept"
 
 
-def extract_entities(doc: object, labels: Sequence[str] = ENTITY_LABELS) -> list[dict]:
+def extract_entities(doc: object, labels: Sequence[str] = ENTITY_LABELS) -> list[RawEntity]:
     """Return text/label pairs for matching entities in ``doc``."""
     return [
         {"text": ent.text, "label": ent.label_}
@@ -60,7 +71,7 @@ def extract_entities(doc: object, labels: Sequence[str] = ENTITY_LABELS) -> list
     ]
 
 
-def build_entity_objects(entities: Iterable[dict]) -> list[dict]:
+def build_entity_objects(entities: Iterable[RawEntity]) -> list[EntityObj]:
     """Convert raw entities to our structured representation."""
     objects = [
         {
@@ -80,10 +91,10 @@ def build_entity_objects(entities: Iterable[dict]) -> list[dict]:
     for obj in deduped:
         if isinstance(obj.get("aliases"), tuple):
             obj["aliases"] = list(obj["aliases"])
-    return deduped
+    return cast(list[EntityObj], deduped)
 
 
-def process_text(text: str, nlp=None) -> list[dict]:
+def process_text(text: str, nlp: Any | None = None) -> list[EntityObj]:
     """Run ``text`` through the spaCy pipeline and return entity objects."""
     if nlp is None:
         spacy.prefer_gpu()
@@ -93,7 +104,7 @@ def process_text(text: str, nlp=None) -> list[dict]:
     return build_entity_objects(ents)
 
 
-def main(text: str | None = None, nlp=None) -> list[dict]:
+def main(text: str | None = None, nlp: Any | None = None) -> list[EntityObj]:
     """Entry point used by the command line."""
     if text is None:
         text = sys.stdin.read()
