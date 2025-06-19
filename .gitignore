@@ -150,3 +150,6 @@ venv/
 # Ignore aider stuff other than config
 .aider*
 !.aider.conf.yml
+
+# Ignore python turds
+__pycache__
