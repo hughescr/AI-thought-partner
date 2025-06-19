@@ -1,7 +1,8 @@
-import sys
-import spacy
 import json
+import sys
 import warnings
+
+import spacy
 
 warnings.filterwarnings(
     "ignore",
