@@ -1,16 +1,19 @@
 import io
 import json
 import sys
-import types
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
+
+from pytest import CaptureFixture, MonkeyPatch
 
 # ruff: noqa: E402
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 # Provide a minimal stub for the ``spacy`` module so ``ner`` can be imported
-spacy_stub = types.SimpleNamespace(prefer_gpu=lambda: None, load=lambda _: None)
+spacy_stub = ModuleType("spacy")
+spacy_stub.prefer_gpu = lambda: None
+spacy_stub.load = lambda _: None
 sys.modules.setdefault("spacy", spacy_stub)
 
 import ner
@@ -23,15 +26,15 @@ class StubEnt:
 
 
 class StubNLP:
-    def __init__(self, ents):
-        self.doc = SimpleNamespace(ents=ents)
+    def __init__(self, ents: list[StubEnt]):
+        self.doc: SimpleNamespace = SimpleNamespace(ents=ents)
 
-    def __call__(self, text: str):
+    def __call__(self, text: str) -> SimpleNamespace:
         self.called_with = text
         return self.doc
 
 
-def test_map_spacy_label_to_type_all_branches():
+def test_map_spacy_label_to_type_all_branches() -> None:
     assert ner.map_spacy_label_to_type("PERSON") == "Person"
     assert ner.map_spacy_label_to_type("ORG") == "Organization"
     for lbl in ["LOC", "GPE", "FAC"]:
@@ -42,41 +45,44 @@ def test_map_spacy_label_to_type_all_branches():
     assert ner.map_spacy_label_to_type("OTHER") == "Concept"
 
 
-def test_extract_entities_filters_by_label():
+def test_extract_entities_filters_by_label() -> None:
     doc = SimpleNamespace(ents=[StubEnt("Alice", "PERSON"), StubEnt("ACME", "ORG"), StubEnt("foo", "NORP")])
     result = ner.extract_entities(doc)
     assert result == [{"text": "Alice", "label": "PERSON"}, {"text": "ACME", "label": "ORG"}]
 
 
-def test_build_entity_objects_and_deduplication():
-    ents = [{"text": "Alice", "label": "PERSON"}, {"text": "Alice", "label": "PERSON"}]
+def test_build_entity_objects_and_deduplication() -> None:
+    ents: list[ner.RawEntity] = [
+        {"text": "Alice", "label": "PERSON"},
+        {"text": "Alice", "label": "PERSON"},
+    ]
     objs = ner.build_entity_objects(ents)
     assert objs == [{"name": "Alice", "type": "Person", "description": "PERSON", "aliases": []}]
 
 
-def test_process_text_uses_nlp_and_returns_entities():
+def test_process_text_uses_nlp_and_returns_entities() -> None:
     stub_nlp = StubNLP([StubEnt("Alice", "PERSON")])
     output = ner.process_text("hello", nlp=stub_nlp)
     assert stub_nlp.called_with == "hello"
     assert output == [{"name": "Alice", "type": "Person", "description": "PERSON", "aliases": []}]
 
 
-def test_main_prints_json_and_returns_data(capsys):
+def test_main_prints_json_and_returns_data(capsys: CaptureFixture[str]) -> None:
     stub_nlp = StubNLP([StubEnt("Alice", "PERSON")])
     result = ner.main("hello", nlp=stub_nlp)
     captured = capsys.readouterr().out
     assert json.loads(captured) == result
 
 
-def test_process_text_loads_spacy_when_nlp_none(monkeypatch):
-    loaded = {}
+def test_process_text_loads_spacy_when_nlp_none(monkeypatch: MonkeyPatch) -> None:
+    loaded: dict[str, object] = {}
 
-    def fake_load(name):
+    def fake_load(name: str) -> StubNLP:
         loaded["name"] = name
         return StubNLP([StubEnt("Bob", "PERSON")])
 
-    monkeypatch.setattr(ner.spacy, "load", fake_load)
-    monkeypatch.setattr(ner.spacy, "prefer_gpu", lambda: loaded.setdefault("pref", True))
+    monkeypatch.setattr(ner.spacy, "load", fake_load)  # type: ignore[attr-defined]
+    monkeypatch.setattr(ner.spacy, "prefer_gpu", lambda: loaded.setdefault("pref", True))  # type: ignore[attr-defined]
 
     result = ner.process_text("hi")
     assert loaded["name"] == "en_core_web_trf"
@@ -84,7 +90,7 @@ def test_process_text_loads_spacy_when_nlp_none(monkeypatch):
     assert result == [{"name": "Bob", "type": "Person", "description": "PERSON", "aliases": []}]
 
 
-def test_main_reads_from_stdin(monkeypatch, capsys):
+def test_main_reads_from_stdin(monkeypatch: MonkeyPatch, capsys: CaptureFixture[str]) -> None:
     stub_nlp = StubNLP([StubEnt("Alice", "PERSON")])
     monkeypatch.setattr(sys, "stdin", io.StringIO("hello"))
     result = ner.main(nlp=stub_nlp)
